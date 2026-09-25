@@ -160,6 +160,12 @@ def segment_audio_file(
     strict_limit_duration: float = 25.0,
     new_chunk_threshold: float = 0.2,
     device: torch.device = torch.device("cpu"), # Device argument kept for compatibility
+    vad_threshold: float = 0.5,
+    vad_min_speech_ms: int = 300,
+    vad_max_speech_s: float = 20.0,
+    vad_min_silence_ms: int = 2000,
+    vad_window_samples: int = 512,
+    vad_speech_pad_ms: int = 250,
 ) -> Tuple[List[torch.Tensor], List[Tuple[float, float]]]:
     """
     Segments an audio waveform into smaller chunks based on speech activity.
@@ -184,13 +190,13 @@ def segment_audio_file(
     speech_timestamps_list = get_speech_timestamps(
         audio_tensor, # Use the tensor loaded by Silero's function
         model,
-        threshold=0.5, # You can adjust the VAD threshold if needed
-        min_speech_duration_ms=300, # Optional: filter very short speech chunks
-        max_speech_duration_s=20,   # Optional: cap long speech chunks before splitting
-        min_silence_duration_ms=2000, # Optional: define silence gaps between speech
-        window_size_samples=512,     # Silero's internal processing window
+        threshold=vad_threshold,
+        min_speech_duration_ms=vad_min_speech_ms,
+        max_speech_duration_s=vad_max_speech_s,
+        min_silence_duration_ms=vad_min_silence_ms,
+        window_size_samples=vad_window_samples,
         return_seconds=True,         # Crucial: returns timestamps in seconds
-        speech_pad_ms=250             # Optional: pad detected speech regions
+        speech_pad_ms=vad_speech_pad_ms
     )
 
     # The audio loaded by read_audio might be resampled to 16kHz by Silero internally.
