@@ -1,3 +1,6 @@
+> This repository packages the modified GigaAM transcription workflow. See
+> [README_TRANSCRIBER.md](README_TRANSCRIBER.md) for use and Windows builds.
+
 # GigaAM: the family of open-source acoustic models for speech processing
 
 <div align="center" style="line-height: 1;">
