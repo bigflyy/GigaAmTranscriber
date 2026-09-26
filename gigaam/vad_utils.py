@@ -255,9 +255,12 @@ def segment_audio_file(
             boundaries.append((start_time, end_time))
 
     # Iterate through the speech segments identified by Silero VAD
-    for speech_dict in speech_timestamps_list:
+    for index, speech_dict in enumerate(speech_timestamps_list):
         start = max(0.0, speech_dict['start'])
         end = speech_dict['end'] # No need to clip against audio length here, Silero handles it
+        if index == 0:
+            # Start at detected speech, rather than retaining all leading silence.
+            curr_start = curr_end = start
 
         # Check whether adding this region exceeds the preferred maximum span.
         potential_new_duration = curr_duration + (end - curr_end)
