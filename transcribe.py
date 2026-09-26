@@ -26,14 +26,29 @@ def format_segments(segments, include_timestamps=True) -> str:
     return "\n".join(lines) + ("\n" if lines else "")
 
 
+def transcript_paths(output: Path) -> tuple[Path, Path]:
+    """Return the plain-text path and its timestamped companion."""
+    return output, output.with_name(output.stem + "-timestamps.txt")
+
+
+def save_transcripts(output: Path, segments):
+    paths = transcript_paths(output)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    for path, timestamps in zip(paths, (False, True)):
+        path.write_text(format_segments(segments, timestamps), encoding="utf-8")
+    return paths
+
+
 def parser(advanced: bool = False) -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         description="Transcribe an audio or video file with GigaAM and Silero VAD."
     )
     p.add_argument("audio", nargs="?", type=Path, help="Input file; the GUI opens if omitted")
     p.add_argument("--gui", action="store_true", help="Open the graphical interface")
-    p.add_argument("-o", "--output", type=Path, help="Transcript path (default: beside input)")
-    p.add_argument("--no-timestamps", action="store_true", help="Save plain text without timestamps")
+    p.add_argument("-o", "--output", type=Path,
+                   help="Plain-text path; also saves <stem>-timestamps.txt (default: beside input)")
+    p.add_argument("--no-timestamps", action="store_true",
+                   help="Compatibility option: both text versions are always saved")
     p.add_argument("--advanced-help", action="store_true", help="Show advanced settings")
     hidden = None if advanced else argparse.SUPPRESS
     p.add_argument("--model", choices=("v3_e2e_rnnt", "v3_e2e_ctc"),
@@ -149,12 +164,15 @@ def run_transcription(audio: Path, output: Path, model_name="v3_e2e_rnnt",
                       progress_callback=None, result_callback=None,
                       include_timestamps=True, cpu_threads=4, cancel_callback=None,
                       stats_callback=None):
-    """Shared CLI/GUI pipeline; callbacks are invoked on the caller's thread."""
+    """Shared CLI/GUI pipeline; callbacks are invoked on the caller's thread.
+
+    Both text versions are saved. include_timestamps is accepted for old callers.
+    """
     status = status_callback or (lambda message: None)
     cancelled = cancel_callback or (lambda: False)
     if isinstance(cpu_threads, bool) or not isinstance(cpu_threads, int) or cpu_threads < 1:
         raise ValueError("Число потоков CPU должно быть целым числом не меньше 1")
-    if audio.resolve() == output.resolve():
+    if any(audio.resolve() == path.resolve() for path in transcript_paths(output)):
         raise ValueError("Текст нельзя записать поверх исходного аудиофайла")
     if cancelled():
         return []
@@ -195,9 +213,8 @@ def run_transcription(audio: Path, output: Path, model_name="v3_e2e_rnnt",
     # Cancellation before the first result must not erase an existing transcript.
     if cancelled() and not segments:
         return segments
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(format_segments(segments, include_timestamps), encoding="utf-8")
-    status(f"Сохранено фрагментов: {len(segments)}. Файл: {output}")
+    plain, timestamped = save_transcripts(output, segments)
+    status(f"Сохранено фрагментов: {len(segments)}. Файлы: {plain}; {timestamped}")
     return segments
 
 

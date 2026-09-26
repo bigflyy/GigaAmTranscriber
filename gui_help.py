@@ -41,7 +41,7 @@ HELP = {
         "The EXE directory must be writable to save defaults. If it is read-only, "
         "export a config to a writable folder and import it when needed, or move "
         "the portable app to a writable directory. Importing the timestamp preference "
-        "also updates the current result view and any completed transcript file. "
+        "updates the preview only. Both plain and timestamped TXT files are always saved. "
         "These presets apply to the GUI; CLI and Docker continue to use command-line flags."
     )),
     "model": ("Model", (

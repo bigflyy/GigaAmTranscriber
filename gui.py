@@ -10,7 +10,8 @@ import time
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-from transcribe import format_audio_stats, format_segments, positive_int, run_transcription
+from transcribe import (format_audio_stats, format_segments, positive_int,
+                        run_transcription, save_transcripts, transcript_paths)
 from gui_help import HELP, OVERVIEW, HoverHint
 from app_config import SETTINGS, default_config_path, read_config, validate_config, write_config
 
@@ -175,8 +176,8 @@ class TranscriberApp:
         for name, _, _, _ in SETTINGS:
             self.values[name].set(str(config[name]))
         self.include_timestamps.set(config["include_timestamps"])
-        if self.timestamps_changed() is not False:
-            self.status.set(f"Настройки загружены: {Path(path).name}")
+        self.timestamps_changed()
+        self.status.set(f"Настройки загружены: {Path(path).name}")
 
     def import_config(self):
         if self.running:
@@ -361,21 +362,18 @@ class TranscriberApp:
             self.eta.set(f"Затрачено времени: {hours:02d}:{minutes:02d}:{seconds:04.1f}")
 
     def timestamps_changed(self):
-        # Keep structured results intact; only the view and exported text change.
+        # Both file versions are saved independently; this checkbox changes only the preview.
         self.render_segments()
-        if self.saved_output is not None and not self.running:
-            return self.save_transcript()
 
     def save_transcript(self):
         try:
-            self.saved_output.write_text(
-                format_segments(self.segments, self.include_timestamps.get()), encoding="utf-8")
+            save_transcripts(self.saved_output, self.segments)
         except OSError as exc:
-            self.status.set("Не удалось сохранить файл. Текст доступен в окне.")
+            self.status.set("Не удалось сохранить оба файла. Текст доступен в окне.")
             messagebox.showerror("Ошибка сохранения", str(exc), parent=self.root)
             return False
-        self.status.set("Отменено. Частичный текст сохранён." if self.cancel_event.is_set()
-                        else "Готово. Текст сохранён.")
+        self.status.set("Отменено. Частичный текст сохранён в двух файлах." if self.cancel_event.is_set()
+                        else "Готово. Сохранены оба TXT-файла.")
         return True
 
     def start(self):
@@ -396,7 +394,6 @@ class TranscriberApp:
         output = audio.with_name(audio.stem + "-transcript.txt")
         model = "v3_e2e_rnnt" if self.model.get() == "RNNT" else "v3_e2e_ctc"
         device = self.device.get().lower()
-        include_timestamps = self.include_timestamps.get()
         cancel_event = self.cancel_event = threading.Event()
         self.run_started_at = time.monotonic()
         self.segments = []
@@ -408,7 +405,7 @@ class TranscriberApp:
         self.set_running(True)
         self.set_text("")
         self.status.set("Запуск…")
-        self.output.set(str(output))
+        self.output.set("\n".join(str(path) for path in transcript_paths(output)))
         self.bar.configure(mode="indeterminate")
         self.bar.start(12)
 
@@ -418,7 +415,7 @@ class TranscriberApp:
                     status_callback=lambda value: self.events.put(("status", value)),
                     progress_callback=lambda done, total: self.events.put(("progress", (done, total, time.monotonic()))),
                     result_callback=lambda item: self.events.put(("segment", item)),
-                    include_timestamps=include_timestamps, cpu_threads=cpu_threads,
+                    cpu_threads=cpu_threads,
                     cancel_callback=cancel_event.is_set,
                     stats_callback=lambda stats: self.events.put(("audio_stats", stats)))
                 self.events.put(("cancelled" if cancel_event.is_set() else "done", output))

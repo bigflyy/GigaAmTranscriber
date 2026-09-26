@@ -4,14 +4,25 @@ This repo contains a snapshot of a modified GigaAM package using Silero VAD.
 The original `giga.py` is kept as the baseline. `transcribe.py` is the
 standalone launcher. Run without arguments (or double-click the EXE) to open
 the minimal Russian GUI. Choose a file (**Выбрать файл…**) and click
-**Распознать**. The output is a normal UTF-8 `name-transcript.txt` file beside
-the input. Recognized text appears after each completed speech chunk.
+**Распознать**. Two UTF-8 TXT files are saved beside the input:
+
+- `name-transcript.txt`: plain text.
+- `name-transcript-timestamps.txt`: the same text with chunk timestamps.
+
+Recognized text appears after each completed speech chunk. Cancellation also
+saves both versions of the partial result. Cancelling before any chunks have
+been recognized leaves existing output files untouched.
 
 **Включить таймкоды** shows or hides timestamps immediately, including during
-transcription. After completion it also updates the saved text file. The
-original chunk boundaries remain in memory until the next file or closing
-the app, so toggling timestamps back on restores them. No regex or destructive
-editing of recognition results is used. The CLI supports `--no-timestamps`.
+transcription. It changes only the preview; both file versions are always
+saved. The original chunk boundaries remain in memory until the next file or
+closing the app, so toggling timestamps back on restores them. The CLI also
+saves both files. `-o report.txt` produces `report.txt` and
+`report-timestamps.txt`. The old `--no-timestamps` flag is accepted for
+compatibility; it no longer changes which versions are saved.
+
+The two-file behavior is implemented in source; existing EXEs and Docker
+images will get it when rebuilt.
 
 **Настройки** is collapsed initially. It contains RNNT/CTC model
 selection, device selection, Silero speech/silence/padding settings, and chunk
@@ -77,8 +88,8 @@ The file contains model, device, CPU threads, all editable VAD/chunk settings,
 and the timestamp checkbox. It contains no audio paths or transcripts.
 Changing fields or exiting does not overwrite a saved config. **Reset defaults**
 resets the model/VAD/thread controls for this session; saving afterward replaces
-the stored defaults. Importing the timestamp preference also updates the current
-result view and a completed transcript, just like toggling the checkbox.
+the stored defaults. Importing the timestamp preference updates the current
+preview only, just like toggling the checkbox.
 
 Files are UTF-8 JSON. See [gigaam-config.example.json](gigaam-config.example.json).
 Missing keys use built-in defaults; unknown keys, invalid values, and unsupported
@@ -200,8 +211,8 @@ docker run --rm --network none `
   gigaam-transcriber:cpu /data/recording.wav --device cpu
 ```
 
-The result is `C:\Audio\recording-transcript.txt`. Add `--no-timestamps`
-for plain text. Replace `C:\Audio` with your audio folder. The model folder
+After rebuilding from current source, results are `C:\Audio\recording-transcript.txt`
+and `C:\Audio\recording-transcript-timestamps.txt`. Replace `C:\Audio` with your audio folder. The model folder
 must contain `v3_e2e_rnnt.ckpt` and `v3_e2e_rnnt_tokenizer.model`; alternatively,
 mount the `models` folder from the unpacked Windows CPU release there.
 The image includes dependencies and FFmpeg; model weights are mounted
@@ -237,8 +248,9 @@ docker run --rm --gpus all --network none `
   gigaam-transcriber:cuda /data/recording.wav --device cuda
 ```
 
-Replace the audio folder and filename. The result is
-`C:\Audio\recording-transcript.txt`; add `--no-timestamps` for plain text.
+Replace the audio folder and filename. After rebuilding from current source,
+results are `C:\Audio\recording-transcript.txt` and
+`C:\Audio\recording-transcript-timestamps.txt`.
 As in the CPU example, the RNNT checkpoint and tokenizer must be present
 in the mounted model folder. Networking is disabled in this example,
 so downloading an uncached CTC model requires a different run command.
