@@ -111,6 +111,52 @@ CLI/Docker settings continue to use explicit command-line flags.
 
 ## Run from the existing CUDA environment
 
+### Multilingual models (source testing)
+
+The source app's **Model** selector offers four transcription models:
+
+| GUI option | CLI name | Output / download |
+| --- | --- | --- |
+| RNNT | `v3_e2e_rnnt` | Russian E2E, with punctuation; existing default |
+| CTC | `v3_e2e_ctc` | Russian E2E, with punctuation |
+| Multilingual CTC (220M) | `multilingual_ctc` | Lowercase text; about 883 MB checkpoint |
+| Multilingual CTC Large (600M) | `multilingual_large_ctc` | Lowercase text; about 2.34 GB checkpoint |
+
+Both multilingual models support Russian, English, Kazakh, Kyrgyz and Uzbek
+with a shared alphabet and no language selector. Mixed-language text is
+possible within a chunk, but accuracy needs evaluation on your recordings.
+They do not produce normal sentence punctuation, uppercase letters or digits.
+The SSL models are training backbones without transcription decoders and
+are not included in this selector. See the
+[official model card](https://huggingface.co/ai-sage/GigaAM-Multilingual).
+
+Open the current GUI from source:
+
+```powershell
+conda run --no-capture-output -n cuda-torch2 python transcribe.py
+```
+
+Or start with the smaller model on CPU:
+
+```powershell
+conda run --no-capture-output -n gigaam-cpu python transcribe.py recording.wav --model multilingual_ctc --device cpu
+```
+
+The first use downloads a missing model into `%USERPROFILE%\.cache\gigaam`;
+later runs work offline. Large downloads only when selected. Loading/downloading
+uses the activity indicator and cancellation takes effect after that stage.
+Config import/export supports all four model choices. Silero, chunk limits,
+streamed partial results, cancellation, and both TXT exports use the same pipeline.
+
+This addition is available in source; the v0.1.0 EXEs and Docker images still
+offer the two Russian models. No rebuild is required to test the source GUI.
+For a later build, `build_release.py --models` accepts any of the four CLI
+names. By default it still bundles the two Russian models; optional models
+download when first selected. Multilingual checkpoints contain their alphabet
+and require no separate tokenizer file.
+
+### Launch with the existing setup
+
 ```powershell
 conda run -n cuda-torch2 python transcribe.py "C:\path\to\audio.mp4"
 ```

@@ -7,6 +7,8 @@ from pathlib import Path
 import sys
 import tempfile
 
+from model_catalog import MODEL_CHOICES
+
 
 SETTINGS = (
     ("vad_threshold", "VAD threshold", float, 0.5),
@@ -45,8 +47,8 @@ def validate_config(data):
     config.update(data)
     if type(config["version"]) is not int or config["version"] != 1:
         raise ValueError("Неподдерживаемая версия конфигурации (ожидается version: 1).")
-    if config["model"] not in ("RNNT", "CTC"):
-        raise ValueError("Model: допустимы RNNT или CTC.")
+    if not isinstance(config["model"], str) or config["model"] not in MODEL_CHOICES:
+        raise ValueError("Model: допустимы " + ", ".join(MODEL_CHOICES) + ".")
     if config["device"] not in ("Auto", "CPU", "CUDA"):
         raise ValueError("Device: допустимы Auto, CPU или CUDA.")
     if type(config["cpu_threads"]) is not int or config["cpu_threads"] < 1:

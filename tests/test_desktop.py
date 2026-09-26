@@ -1,6 +1,7 @@
 """Focused release regressions; run with python -m unittest discover -s tests -p test_desktop.py."""
 
 import tempfile
+import io
 import threading
 import time
 import tkinter as tk
@@ -12,11 +13,24 @@ import torch
 
 import app_config
 import gui
+import gigaam
+import transcribe
+from model_catalog import MODEL_CHOICES, model_files
 from gigaam import vad_utils
 from transcribe import format_audio_stats, format_segments, save_transcripts, transcript_paths
 
 
 class ConfigTests(unittest.TestCase):
+    def test_multilingual_config_roundtrip_and_cli(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.json"
+            for label, model in MODEL_CHOICES.items():
+                with self.subTest(model=model):
+                    config = app_config.validate_config({"model": label})
+                    app_config.write_config(path, config)
+                    self.assertEqual(app_config.read_config(path)["model"], label)
+                    self.assertEqual(transcribe.parser().parse_args(["--model", model]).model, model)
+
     def test_defaults_and_legacy_config(self):
         config = app_config.validate_config({"min_duration": 15})
         self.assertNotIn("min_duration", config)
@@ -89,6 +103,47 @@ class ChunkTests(unittest.TestCase):
         self.assertNotIn("VAD", format_audio_stats(stats))
 
 
+class ModelFilesTests(unittest.TestCase):
+    def test_bundle_requirements_and_no_multilingual_tokenizer(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "models").mkdir()
+            with patch.object(transcribe, "__file__", str(root / "transcribe.py")):
+                for model in MODEL_CHOICES.values():
+                    with self.subTest(model=model):
+                        self.assertIsNone(transcribe.bundled_model_root(model))
+                        (root / "models" / f"{model}.ckpt").touch()
+                        if model.startswith("multilingual"):
+                            self.assertEqual(transcribe.bundled_model_root(model), root / "models")
+                            with patch.object(gigaam, "_download_file") as download:
+                                self.assertIsNone(gigaam._download_tokenizer(model, directory))
+                                download.assert_not_called()
+                        else:
+                            self.assertIsNone(transcribe.bundled_model_root(model))
+                            (root / "models" / model_files(model)[1]).touch()
+                            self.assertEqual(transcribe.bundled_model_root(model), root / "models")
+
+    def test_download_completion_and_interruption(self):
+        class Response(io.BytesIO):
+            def info(self):
+                return {"Content-Length": "6"}
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "model.ckpt"
+            with patch.object(gigaam.urllib.request, "urlopen", return_value=Response(b"abc")):
+                with self.assertRaises(OSError):
+                    gigaam._download_file("https://example.invalid/model", str(path))
+            self.assertFalse(path.exists())
+            self.assertEqual(list(Path(directory).iterdir()), [])
+            with patch.object(gigaam.urllib.request, "urlopen", return_value=Response(b"abcdef")):
+                gigaam._download_file("https://example.invalid/model", str(path))
+            self.assertEqual(path.read_bytes(), b"abcdef")
+            self.assertEqual(gigaam.hash_path(str(path)), "e80b5017098950fc58aad83c8c14978e")
+            with patch.object(gigaam.urllib.request, "urlopen") as download:
+                gigaam._download_file("https://example.invalid/model", str(path))
+                download.assert_not_called()
+
+
 class GuiTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -131,6 +186,20 @@ class GuiTests(unittest.TestCase):
             self.assertIn(key, gui.HELP)
         app.show_help()
         self.assertTrue(app.help_window.winfo_exists())
+
+    def test_model_selection_reaches_worker(self):
+        audio = self.folder / "sample.wav"
+        audio.touch()
+        self.app.file.set(str(audio))
+        for label, expected in MODEL_CHOICES.items():
+            with self.subTest(model=label), patch.object(gui, "run_transcription") as worker:
+                self.app.model.set(label)
+                self.app.save_default_config()
+                self.app.reset_defaults()
+                self.app.load_config(self.folder / "gigaam-config.json")
+                self.app.start()
+                self.wait_for(lambda: not self.app.running)
+                self.assertEqual(worker.call_args.args[2], expected)
 
     def test_streaming_keeps_scroll_and_selection(self):
         app = self.app

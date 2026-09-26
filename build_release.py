@@ -10,15 +10,19 @@ import shutil
 import subprocess
 import sys
 
+from model_catalog import MODEL_CHOICES, DEFAULT_BUNDLED_MODELS, model_files
+
 
 ROOT = Path(__file__).resolve().parent
-MODEL_NAMES = ("v3_e2e_rnnt", "v3_e2e_ctc")
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("edition", choices=("cpu", "cuda"))
     parser.add_argument("mode", choices=("onedir", "onefile", "all"))
+    parser.add_argument("--models", nargs="+", choices=tuple(MODEL_CHOICES.values()),
+                        default=DEFAULT_BUNDLED_MODELS,
+                        help="Models to bundle; defaults to Russian RNNT and CTC. Others download on first use.")
     parser.add_argument("--output-root", type=Path, default=ROOT / "dist",
                         help="Release root; use a new folder if older EXEs are running")
     args = parser.parse_args()
@@ -36,12 +40,12 @@ def main() -> int:
         parser.error("CUDA release requires a CUDA-enabled PyTorch installation")
 
     checkpoint_dir = Path.home() / ".cache" / "gigaam"
-    model_files = [
-        checkpoint_dir / f"{name}{suffix}"
-        for name in MODEL_NAMES
-        for suffix in (".ckpt", "_tokenizer.model")
+    bundle_files = [
+        checkpoint_dir / filename
+        for name in dict.fromkeys(args.models)
+        for filename in model_files(name)
     ]
-    missing = [str(path) for path in model_files if not path.is_file()]
+    missing = [str(path) for path in bundle_files if not path.is_file()]
     if missing:
         parser.error("Model files must be cached before building: " + ", ".join(missing))
 
@@ -73,7 +77,7 @@ def main() -> int:
             "--hidden-import=gigaam.vad_utils",
             f"--add-binary={ffmpeg}{os.pathsep}bin",
         ]
-        options.extend(f"--add-data={path}{os.pathsep}models" for path in model_files)
+        options.extend(f"--add-data={path}{os.pathsep}models" for path in bundle_files)
         options.append(f"--add-data={ROOT / 'LICENSE'}{os.pathsep}licenses/gigaam")
         ffmpeg_dir = Path(ffmpeg).parent.parent
         for filename in ("LICENSE", "README.txt"):

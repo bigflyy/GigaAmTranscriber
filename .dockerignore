@@ -4,6 +4,7 @@
 !gigaam/
 !gigaam/**
 !transcribe.py
+!model_catalog.py
 !LICENSE
 **/__pycache__/
 **/*.pyc

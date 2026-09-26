@@ -1,6 +1,7 @@
 import hashlib
 import logging
 import os
+import tempfile
 import urllib.request
 import warnings
 from typing import Optional, Tuple, Union
@@ -38,30 +39,39 @@ _MODEL_HASHES = {
     "v3_e2e_ctc": "367074d6498f426d960b25f49531cf68",
     "v3_e2e_rnnt": "2730de7545ac43ad256485a462b0a27a",
     "v3_ssl": "70cbf5ed7303a0ed242ddb257e9dc6a6",
+    "multilingual_ctc": "5379d887c53ccd9cb95981e2a1832720",
+    "multilingual_large_ctc": "79a9adde50dd7f35bbf70927cb6557d0",
 }
 
 
 def _download_file(file_url: str, file_path: str):
-    """Helper to download a file if not already cached."""
+    """Cache completed downloads atomically, so interruption cannot poison the cache."""
     if os.path.exists(file_path):
         return file_path
 
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
-    with urllib.request.urlopen(file_url) as source, open(file_path, "wb") as output:
-        with tqdm(
-            total=int(source.info().get("Content-Length", 0)),
-            ncols=80,
-            unit="iB",
-            unit_scale=True,
-            unit_divisor=1024,
-        ) as loop:
-            while True:
-                buffer = source.read(8192)
-                if not buffer:
-                    break
-
-                output.write(buffer)
-                loop.update(len(buffer))
+    temporary = None
+    try:
+        with urllib.request.urlopen(file_url, timeout=60) as source:
+            expected_size = int(source.info().get("Content-Length", 0))
+            with tempfile.NamedTemporaryFile(mode="wb", dir=os.path.dirname(file_path),
+                                             prefix=os.path.basename(file_path) + ".", suffix=".partial",
+                                             delete=False) as output:
+                temporary = output.name
+                received = 0
+                with tqdm(total=expected_size, ncols=80, unit="iB", unit_scale=True,
+                          unit_divisor=1024) as loop:
+                    while buffer := source.read(1024 * 1024):
+                        output.write(buffer)
+                        received += len(buffer)
+                        loop.update(len(buffer))
+                if expected_size and received != expected_size:
+                    raise OSError(f"Incomplete download: received {received} of {expected_size} bytes")
+        os.replace(temporary, file_path)
+        temporary = None
+    finally:
+        if temporary is not None:
+            os.remove(temporary)
 
     return file_path
 
@@ -94,7 +104,11 @@ def _download_tokenizer(model_name: str, download_root: str) -> Optional[str]:
 
 def hash_path(ckpt_path: str) -> str:
     """Calculate binary file hash for checksum"""
-    return hashlib.md5(open(ckpt_path, "rb").read()).hexdigest()
+    digest = hashlib.md5()
+    with open(ckpt_path, "rb") as checkpoint:
+        for block in iter(lambda: checkpoint.read(8 * 1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 def _normalize_device(device: Optional[Union[str, torch.device]]) -> torch.device:

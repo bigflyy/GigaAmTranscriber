@@ -14,6 +14,7 @@ from transcribe import (format_audio_stats, format_segments, positive_int,
                         run_transcription, save_transcripts, transcript_paths)
 from gui_help import HELP, OVERVIEW, HoverHint
 from app_config import SETTINGS, default_config_path, read_config, validate_config, write_config
+from model_catalog import MODEL_CHOICES
 
 
 class TranscriberApp:
@@ -80,8 +81,8 @@ class TranscriberApp:
         for column in (1, 3):
             self.advanced.columnconfigure(column, weight=1)
         self.setting_label("Model", "model", row=0, column=0, sticky="w")
-        model = ttk.Combobox(self.advanced, textvariable=self.model, values=("RNNT", "CTC"),
-                             state="readonly", width=12)
+        model = ttk.Combobox(self.advanced, textvariable=self.model, values=tuple(MODEL_CHOICES),
+                             state="readonly", width=29)
         model.grid(row=0, column=1, sticky="ew", padx=(8, 20), pady=3)
         self.add_help(model, "model")
         self.setting_label("Device", "device", row=0, column=2, sticky="w")
@@ -106,7 +107,7 @@ class TranscriberApp:
         self.controls.append(threads)
         self.setting_label("Silero: 1 thread; window size: 512 samples (fixed)", "silero_runtime",
             row=6, column=0, columnspan=4, sticky="w", pady=(6, 0))
-        ttk.Label(self.advanced, text="Default model: RNNT. Windows builds include RNNT and CTC.").grid(
+        ttk.Label(self.advanced, text="Default: RNNT. Multilingual models download on first use unless bundled.").grid(
             row=7, column=0, columnspan=4, sticky="w", pady=3)
         reset = ttk.Button(self.advanced, text="Reset defaults", command=self.reset_defaults)
         reset.grid(row=8, column=0, columnspan=2, sticky="w", pady=(5, 0))
@@ -392,7 +393,7 @@ class TranscriberApp:
             messagebox.showerror("Проверьте настройки", str(exc), parent=self.root)
             return
         output = audio.with_name(audio.stem + "-transcript.txt")
-        model = "v3_e2e_rnnt" if self.model.get() == "RNNT" else "v3_e2e_ctc"
+        model = MODEL_CHOICES[self.model.get()]
         device = self.device.get().lower()
         cancel_event = self.cancel_event = threading.Event()
         self.run_started_at = time.monotonic()

@@ -5,6 +5,8 @@ import os
 from pathlib import Path
 import sys
 
+from model_catalog import MODEL_CHOICES, model_files
+
 
 def format_time(seconds: float) -> str:
     hours = int(seconds // 3600)
@@ -51,7 +53,7 @@ def parser(advanced: bool = False) -> argparse.ArgumentParser:
                    help="Compatibility option: both text versions are always saved")
     p.add_argument("--advanced-help", action="store_true", help="Show advanced settings")
     hidden = None if advanced else argparse.SUPPRESS
-    p.add_argument("--model", choices=("v3_e2e_rnnt", "v3_e2e_ctc"),
+    p.add_argument("--model", choices=tuple(MODEL_CHOICES.values()),
                    default="v3_e2e_rnnt", help=hidden or "GigaAM model")
     p.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto",
                    help=hidden or "Inference device")
@@ -100,9 +102,7 @@ def choose_file() -> Path | None:
 
 def bundled_model_root(model_name: str) -> Path | None:
     root = Path(__file__).resolve().parent / "models"
-    checkpoint = root / f"{model_name}.ckpt"
-    tokenizer = root / f"{model_name}_tokenizer.model"
-    if checkpoint.is_file() and tokenizer.is_file():
+    if all((root / name).is_file() for name in model_files(model_name)):
         return root
     return None
 
