@@ -53,7 +53,10 @@ comparisons.
 - Public registry access: anonymous manifest requests for both editions;
   CPU image pulled without registry credentials, then both models run
   offline and compared with the local Docker build. Anonymous CUDA layer
-  downloads were also checked.
+  downloads were also checked. A full CUDA registry pull was stopped after
+  repeated slow transfers near 84% of its largest layer; CUDA inference was
+  verified with the locally built image, while the registry build passed
+  its CLI startup check in GitHub Actions.
 - GitHub release uploads: server-reported SHA-256 checked against each
   local asset. `SHA256SUMS.txt` and `cuda-parts.json` accompany the release.
 
