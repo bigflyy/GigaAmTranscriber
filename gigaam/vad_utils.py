@@ -167,6 +167,7 @@ def segment_audio_file(
     vad_window_samples: int = 512,
     vad_speech_pad_ms: int = 250,
     stats_callback=None,
+    vad_progress_callback=None,
 ) -> Tuple[List[torch.Tensor], List[Tuple[float, float]]]:
     """
     Segments an audio waveform into smaller chunks based on speech activity.
@@ -186,6 +187,18 @@ def segment_audio_file(
     # Load the Silero VAD model
     model = get_pipeline(device)
 
+    # Silero reports every 512-sample window. Emit whole percentages only,
+    # keeping the GUI queue bounded even for hours of audio.
+    last_percent = -1
+
+    def report_progress(percent):
+        nonlocal last_percent
+        percent = max(0, min(100, int(percent)))
+        if vad_progress_callback is not None and percent > last_percent:
+            last_percent = percent
+            vad_progress_callback(percent)
+
+    report_progress(0)
     # Get speech timestamps using Silero VAD
     # return_seconds=True ensures timestamps are in seconds, matching your original logic
     speech_timestamps_list = get_speech_timestamps(
@@ -197,8 +210,10 @@ def segment_audio_file(
         min_silence_duration_ms=vad_min_silence_ms,
         window_size_samples=vad_window_samples,
         return_seconds=True,         # Crucial: returns timestamps in seconds
-        speech_pad_ms=vad_speech_pad_ms
+        speech_pad_ms=vad_speech_pad_ms,
+        progress_tracking_callback=report_progress if vad_progress_callback is not None else None,
     )
+    report_progress(100)
 
     # The audio loaded by read_audio might be resampled to 16kHz by Silero internally.
     # However, get_speech_timestamps with return_seconds=True provides times relative

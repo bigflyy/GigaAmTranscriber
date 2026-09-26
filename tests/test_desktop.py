@@ -64,6 +64,19 @@ class ConfigTests(unittest.TestCase):
 
 
 class ChunkTests(unittest.TestCase):
+    def test_vad_progress_is_bounded_and_completes_without_speech(self):
+        events = []
+        def scan(*args, **kwargs):
+            for percent in (0.1, 0.9, 1, 50, 50.2, 99.9, 100):
+                kwargs["progress_tracking_callback"](percent)
+            return []
+        with patch.object(vad_utils, "load_audio", return_value=torch.zeros(16000)), \
+             patch.object(vad_utils, "get_pipeline"), \
+             patch.object(vad_utils, "get_speech_timestamps", side_effect=scan):
+            chunks, bounds = vad_utils.segment_audio_file("fixture", 16000, vad_progress_callback=events.append)
+        self.assertEqual(events, [0, 1, 50, 99, 100])
+        self.assertEqual((chunks, bounds), ([], []))
+
     def chunks(self, regions, **kwargs):
         wave = torch.zeros(120 * 16000)
         stats = []
@@ -217,6 +230,25 @@ class GuiTests(unittest.TestCase):
         self.root.update()
         self.assertEqual(app.text.index("@0,0"), top)
         self.assertEqual(app.text.tag_ranges("sel"), selection)
+
+    def test_vad_progress_transitions_to_recognition_and_respects_cancel(self):
+        app = self.app
+        app.events.put(("vad_progress", 37))
+        app.poll()
+        self.assertEqual(str(app.bar["mode"]), "determinate")
+        self.assertEqual(float(app.bar["value"]), 37)
+        self.assertEqual(app.status.get(), "Поиск речи: 37%")
+        app.events.put(("vad_progress", 100))
+        app.events.put(("progress", (0, 3, time.monotonic())))
+        app.poll()
+        self.assertEqual(float(app.bar["value"]), 0)
+        self.assertIn("0 из 3", app.status.get())
+        app.cancel_event.set()
+        app.status.set("Cancelling")
+        app.events.put(("vad_progress", 50))
+        app.poll()
+        self.assertEqual(app.status.get(), "Cancelling")
+        self.assertEqual(float(app.bar["value"]), 0)
 
     def test_cancel_preserves_both_outputs_and_restart_clears(self):
         app = self.app

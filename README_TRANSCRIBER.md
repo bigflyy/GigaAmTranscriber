@@ -66,7 +66,11 @@ The CLI and both Docker images accept, for example:
 conda run -n gigaam-cpu python transcribe.py recording.wav --device cpu --cpu-threads 8
 ```
 
-Loading and speech detection use an activity indicator. Transcription reports
+Silero percentage progress is available in source; v0.1.0 binaries need a rebuild
+to include it. Model loading and audio decoding use an activity indicator. During Silero's
+scan, **Поиск речи: N%** shows the percentage of audio samples scanned. At 100%,
+the app prepares the speech chunks; this is not yet transcription completion.
+The bar then starts over for transcription, which reports
 `100 × completed speech segments / total speech segments` after Silero has
 found and grouped speech. This is a chunk count, not a time estimate: chunks
 can take different amounts of time. The interface stays responsive while
@@ -76,7 +80,8 @@ the folder release starts faster.
 After the first completed chunk, **Осталось примерно** shows a countdown.
 At each completion the estimate is recalculated as the mean elapsed time per
 completed chunk multiplied by the remaining chunk count. Timing starts after
-model loading and VAD; those phases have no ETA. Unequal chunk lengths and
+model loading and VAD; those phases have no ETA (VAD has its own percentage).
+Unequal chunk lengths and
 initial warm-up can change the estimate. If a chunk takes longer than expected,
 the app displays **Уточняем оставшееся время…** until the next update.
 
@@ -163,7 +168,17 @@ Streaming, progress, audio statistics, chunk limits, both TXT exports, and
 thread restoration passed. The sample yielded Cyrillic-only output and one
 empty chunk; this is a functional smoke test, not evidence of mixed-language
 accuracy. The new multilingual models have not yet been tested on GPU,
-and the 600M checkpoint has not been downloaded or tested.
+and the 600M checkpoint has not been tested.
+
+Follow-up CPU validation: 20 desktop regressions passed, including VAD progress
+and its transition to recognition. A real short-file pipeline emitted 0–100%
+Silero progress. On two continuous 20-second excerpts with VAD bypassed, the
+local preprocessor and encoder produced exactly the same tensors as the
+official implementation using the same checkpoint state; decoded text also
+matched. This did not resolve the garbled opening of the first excerpt.
+These checks found no integration discrepancy on those excerpts, but are not
+a measured English or code-switching accuracy evaluation. Audio and diagnostic
+transcripts remain local and are excluded from Git.
 
 ### Launch with the existing setup
 

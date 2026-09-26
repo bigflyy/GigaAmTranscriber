@@ -17,7 +17,10 @@ OVERVIEW = (
     "Start with the defaults and change one setting at a time on a representative "
     "recording. Shorter chunks can show partial text sooner once VAD finishes, "
     "but the whole file is still scanned for speech before transcription starts. "
-    "Progress counts completed chunks. Remaining time is an estimate based on "
+    "During speech detection, progress is the percentage of audio windows "
+    "scanned by Silero. It does not include audio decoding or chunk preparation. "
+    "The bar starts over for recognition, where progress counts completed chunks. "
+    "Remaining time is an estimate based on "
     "completed chunks, so unequal chunk lengths can make it change."
 )
 

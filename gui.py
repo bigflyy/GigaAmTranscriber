@@ -415,6 +415,7 @@ class TranscriberApp:
                 run_transcription(audio, output, model, device, settings,
                     status_callback=lambda value: self.events.put(("status", value)),
                     progress_callback=lambda done, total: self.events.put(("progress", (done, total, time.monotonic()))),
+                    vad_progress_callback=lambda percent: self.events.put(("vad_progress", percent)),
                     result_callback=lambda item: self.events.put(("segment", item)),
                     cpu_threads=cpu_threads,
                     cancel_callback=cancel_event.is_set,
@@ -437,6 +438,14 @@ class TranscriberApp:
                     self.append_segment(value)
                 elif event == "audio_stats":
                     self.audio_stats.set(format_audio_stats(value))
+                elif event == "vad_progress":
+                    if not self.cancel_event.is_set():
+                        self.bar.stop()
+                        self.bar.configure(mode="determinate", value=value)
+                        self.estimated_finish_at = None
+                        self.eta.set("")
+                        self.status.set(f"Поиск речи: {value}%" if value < 100 else
+                                        "Поиск речи завершён. Подготовка фрагментов…")
                 elif event == "progress":
                     done, total, completed_at = value
                     if not self.cancel_event.is_set():

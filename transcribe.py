@@ -164,7 +164,7 @@ def run_transcription(audio: Path, output: Path, model_name="v3_e2e_rnnt",
                       device="auto", vad_kwargs=None, status_callback=None,
                       progress_callback=None, result_callback=None,
                       include_timestamps=True, cpu_threads=4, cancel_callback=None,
-                      stats_callback=None):
+                      stats_callback=None, vad_progress_callback=None):
     """Shared CLI/GUI pipeline; callbacks are invoked on the caller's thread.
 
     Both text versions are saved. include_timestamps is accepted for old callers.
@@ -210,6 +210,7 @@ def run_transcription(audio: Path, output: Path, model_name="v3_e2e_rnnt",
                                          cpu_threads=cpu_threads,
                                          cancel_callback=cancelled,
                                          stats_callback=report_stats,
+                                         vad_progress_callback=vad_progress_callback,
                                          **(vad_kwargs or {}))
     # Cancellation before the first result must not erase an existing transcript.
     if cancelled() and not segments:
