@@ -155,6 +155,16 @@ names. By default it still bundles the two Russian models; optional models
 download when first selected. Multilingual checkpoints contain their alphabet
 and require no separate tokenizer file.
 
+Initial validation (2026-09-26): 18 desktop regression tests passed. The
+220M checkpoint passed its official checksum and ran on CPU with 4 threads
+in the existing `gigaam-cpu` environment. A 30-second user-selected excerpt
+took 7.56 seconds including model loading and VAD (about 4x realtime).
+Streaming, progress, audio statistics, chunk limits, both TXT exports, and
+thread restoration passed. The sample yielded Cyrillic-only output and one
+empty chunk; this is a functional smoke test, not evidence of mixed-language
+accuracy. The new multilingual models have not yet been tested on GPU,
+and the 600M checkpoint has not been downloaded or tested.
+
 ### Launch with the existing setup
 
 ```powershell
