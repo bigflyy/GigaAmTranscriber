@@ -167,8 +167,7 @@ took 7.56 seconds including model loading and VAD (about 4x realtime).
 Streaming, progress, audio statistics, chunk limits, both TXT exports, and
 thread restoration passed. The sample yielded Cyrillic-only output and one
 empty chunk; this is a functional smoke test, not evidence of mixed-language
-accuracy. The new multilingual models have not yet been tested on GPU,
-and the 600M checkpoint has not been tested.
+accuracy. The new multilingual models have not yet been tested on GPU.
 
 Follow-up CPU validation: 20 desktop regressions passed, including VAD progress
 and its transition to recognition. A real short-file pipeline emitted 0–100%
@@ -179,6 +178,17 @@ matched. This did not resolve the garbled opening of the first excerpt.
 These checks found no integration discrepancy on those excerpts, but are not
 a measured English or code-switching accuracy evaluation. Audio and diagnostic
 transcripts remain local and are excluded from Git.
+
+Large-model CPU comparison (2026-09-27): the 600M checkpoint passed its
+official checksum. Both models transcribed the same four excerpts (160 seconds
+total) using identical default Silero boundaries and 4 CPU threads. Small took
+12.73 seconds (12.57x realtime); Large took 29.23 seconds (5.47x realtime),
+including audio decoding/VAD but excluding one-time model loading (2.29 and
+6.88 seconds respectively). Progress and streamed results passed for both.
+Large's English output looked more readable in one excerpt, but both models
+still produced garbled Cyrillic in other mixed-language sections. There is no
+verified reference transcript, so no word-error-rate claim is made. This is a
+single short run, not a controlled speed benchmark. No binaries were rebuilt.
 
 ### Launch with the existing setup
 
