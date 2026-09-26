@@ -15,9 +15,12 @@ def main() -> int:
     parser.add_argument("audio", type=Path, help="PCM WAV input")
     parser.add_argument("--device", choices=("cpu", "cuda"), required=True)
     parser.add_argument("--runs", type=int, default=2)
+    parser.add_argument("--cpu-threads", type=int, default=4)
     args = parser.parse_args()
     if args.runs < 1:
         parser.error("--runs must be at least 1")
+    if args.cpu_threads < 1:
+        parser.error("--cpu-threads must be at least 1")
     if args.device == "cuda" and not torch.cuda.is_available():
         parser.error("CUDA is unavailable")
 
@@ -34,7 +37,7 @@ def main() -> int:
         if args.device == "cuda":
             torch.cuda.synchronize()
         start = perf_counter()
-        segments = model.transcribe_longform(str(args.audio))
+        segments = model.transcribe_longform(str(args.audio), cpu_threads=args.cpu_threads)
         if args.device == "cuda":
             torch.cuda.synchronize()
         elapsed = perf_counter() - start
@@ -49,6 +52,8 @@ def main() -> int:
         "device": args.device,
         "torch": torch.__version__,
         "torch_threads_after_transcription": torch.get_num_threads(),
+        "gigaam_cpu_threads": args.cpu_threads if args.device == "cpu" else None,
+        "silero_threads": 1,
         "model": "v3_e2e_rnnt",
         "encoder_dtype": str(model._dtype),
         "audio_seconds": round(audio_seconds, 3),

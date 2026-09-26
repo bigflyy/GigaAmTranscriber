@@ -1,14 +1,16 @@
 """Minimal Tk interface; all model work runs outside the UI thread."""
 
+from argparse import ArgumentTypeError
 from pathlib import Path
 import math
+import os
 import queue
 import threading
 import time
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-from transcribe import format_segments, run_transcription
+from transcribe import format_segments, positive_int, run_transcription
 
 
 # These values match the imported file-based transcription path.
@@ -38,6 +40,7 @@ class TranscriberApp:
         self.file = tk.StringVar()
         self.model = tk.StringVar(value="RNNT")
         self.device = tk.StringVar(value="Авто")
+        self.cpu_threads = tk.StringVar(value="4")
         self.status = tk.StringVar(value="Выберите аудио- или видеофайл.")
         self.output = tk.StringVar(value="Текст будет сохранён рядом с исходным файлом.")
         self.include_timestamps = tk.BooleanVar(value=True)
@@ -96,7 +99,12 @@ class TranscriberApp:
             field = ttk.Entry(self.advanced, textvariable=self.values[name], width=12)
             field.grid(row=row + 1, column=column + 1, sticky="ew", padx=(8, 20 if pair == 0 else 0), pady=3)
             self.controls.append(field)
-        ttk.Label(self.advanced, text="Окно Silero: 512 отсчётов (фиксировано моделью)").grid(
+        ttk.Label(self.advanced, text="Потоки GigaAM (CPU)").grid(row=5, column=2, sticky="w", pady=3)
+        threads = ttk.Spinbox(self.advanced, textvariable=self.cpu_threads,
+                              from_=1, to=max(4, os.cpu_count() or 1), width=12)
+        threads.grid(row=5, column=3, sticky="ew", padx=(8, 0), pady=3)
+        self.controls.append(threads)
+        ttk.Label(self.advanced, text="Silero: 1 поток; окно 512 отсчётов (фиксировано моделью)").grid(
             row=6, column=0, columnspan=4, sticky="w", pady=(6, 0))
         ttk.Label(self.advanced, text="По умолчанию — RNNT. CTC скачивается при первом запуске.").grid(
             row=7, column=0, columnspan=4, sticky="w", pady=3)
@@ -142,6 +150,7 @@ class TranscriberApp:
     def reset_defaults(self):
         self.model.set("RNNT")
         self.device.set("Авто")
+        self.cpu_threads.set("4")
         for name, _, _, default in SETTINGS:
             self.values[name].set(str(default))
 
@@ -231,6 +240,10 @@ class TranscriberApp:
             if not audio.is_file():
                 raise ValueError("Выберите существующий аудио- или видеофайл")
             settings = self.settings()
+            try:
+                cpu_threads = positive_int(self.cpu_threads.get())
+            except ArgumentTypeError:
+                raise ValueError("Число потоков CPU должно быть целым числом не меньше 1") from None
         except ValueError as exc:
             messagebox.showerror("Проверьте настройки", str(exc), parent=self.root)
             return
@@ -256,7 +269,7 @@ class TranscriberApp:
                     status_callback=lambda value: self.events.put(("status", value)),
                     progress_callback=lambda done, total: self.events.put(("progress", (done, total, time.monotonic()))),
                     result_callback=lambda item: self.events.put(("segment", item)),
-                    include_timestamps=include_timestamps)
+                    include_timestamps=include_timestamps, cpu_threads=cpu_threads)
                 self.events.put(("done", output))
             except Exception as exc:
                 self.events.put(("error", str(exc)))

@@ -40,6 +40,8 @@ def parser(advanced: bool = False) -> argparse.ArgumentParser:
                    default="v3_e2e_rnnt", help=hidden or "GigaAM model")
     p.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto",
                    help=hidden or "Inference device")
+    p.add_argument("--cpu-threads", type=positive_int, default=4,
+                   help=hidden or "GigaAM CPU threads (default: 4); Silero stays at 1")
     options = (
         ("max-duration", float, "max_duration", "Maximum preferred segment length in seconds"),
         ("min-duration", float, "min_duration", "Minimum preferred segment length in seconds"),
@@ -55,6 +57,16 @@ def parser(advanced: bool = False) -> argparse.ArgumentParser:
     for flag, kind, dest, description in options:
         p.add_argument(f"--{flag}", type=kind, dest=dest, help=hidden or description)
     return p
+
+
+def positive_int(value: str) -> int:
+    try:
+        number = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError("Expected a positive integer") from None
+    if number < 1:
+        raise argparse.ArgumentTypeError("Expected a positive integer")
+    return number
 
 
 def choose_file() -> Path | None:
@@ -110,7 +122,7 @@ def main(argv: list[str] | None = None) -> int:
     output = (args.output or audio.with_name(audio.stem + "-transcript.txt")).expanduser().resolve()
     run_transcription(audio, output, args.model, args.device, make_vad_kwargs(args),
                       status_callback=lambda message: print(message, flush=True),
-                      include_timestamps=not args.no_timestamps)
+                      include_timestamps=not args.no_timestamps, cpu_threads=args.cpu_threads)
     if picked and sys.stdin and sys.stdin.isatty():
         input("Press Enter to close...")
     return 0
@@ -119,9 +131,11 @@ def main(argv: list[str] | None = None) -> int:
 def run_transcription(audio: Path, output: Path, model_name="v3_e2e_rnnt",
                       device="auto", vad_kwargs=None, status_callback=None,
                       progress_callback=None, result_callback=None,
-                      include_timestamps=True):
+                      include_timestamps=True, cpu_threads=4):
     """Shared CLI/GUI pipeline; callbacks are invoked on the caller's thread."""
     status = status_callback or (lambda message: None)
+    if isinstance(cpu_threads, bool) or not isinstance(cpu_threads, int) or cpu_threads < 1:
+        raise ValueError("Число потоков CPU должно быть целым числом не меньше 1")
     if audio.resolve() == output.resolve():
         raise ValueError("Текст нельзя записать поверх исходного аудиофайла")
     status("Подготовка к распознаванию...")
@@ -144,6 +158,7 @@ def run_transcription(audio: Path, output: Path, model_name="v3_e2e_rnnt",
     status("Поиск речи с помощью Silero VAD...")
     segments = model.transcribe_longform(str(audio), progress_callback=progress_callback,
                                          result_callback=result_callback,
+                                         cpu_threads=cpu_threads,
                                          **(vad_kwargs or {}))
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(format_segments(segments, include_timestamps), encoding="utf-8")

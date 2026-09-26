@@ -148,7 +148,8 @@ class GigaAMASR(GigaAM):
 
     @torch.inference_mode()
     def transcribe_longform(
-        self, wav_file: str, progress_callback=None, result_callback=None, **kwargs
+        self, wav_file: str, progress_callback=None, result_callback=None,
+        cpu_threads: int = 4, **kwargs
     ) -> List[Dict[str, Union[str, Tuple[float, float]]]]:
         """
         Transcribes a long audio file by splitting it into segments and
@@ -156,25 +157,35 @@ class GigaAMASR(GigaAM):
         """
         from .vad_utils import segment_audio_file
 
-        transcribed_segments = []
-        segments, boundaries = segment_audio_file(
-            wav_file, SAMPLE_RATE, device=self._device, **kwargs
-        )
-        if progress_callback is not None:
-            progress_callback(0, len(segments))
-        for segment, segment_boundaries in zip(segments, boundaries):
-            wav = segment.to(self._device).unsqueeze(0).to(self._dtype)
-            length = torch.full([1], wav.shape[-1], device=self._device)
-            encoded, encoded_len = self.forward(wav, length)
-            result = self.decoding.decode(self.head, encoded, encoded_len)[0]
-            transcribed_segments.append(
-                {"transcription": result, "boundaries": segment_boundaries}
+        if isinstance(cpu_threads, bool) or not isinstance(cpu_threads, int) or cpu_threads < 1:
+            raise ValueError("cpu_threads must be a positive integer")
+        previous_threads = torch.get_num_threads()
+        try:
+            # Silero benefits from one thread; its import also changes this global setting.
+            torch.set_num_threads(1)
+            transcribed_segments = []
+            segments, boundaries = segment_audio_file(
+                wav_file, SAMPLE_RATE, device=self._device, **kwargs
             )
-            if result_callback is not None:
-                result_callback(transcribed_segments[-1])
+            torch.set_num_threads(cpu_threads if self._device.type == "cpu" else 1)
             if progress_callback is not None:
-                progress_callback(len(transcribed_segments), len(segments))
-        return transcribed_segments
+                progress_callback(0, len(segments))
+            for segment, segment_boundaries in zip(segments, boundaries):
+                wav = segment.to(self._device).unsqueeze(0).to(self._dtype)
+                length = torch.full([1], wav.shape[-1], device=self._device)
+                encoded, encoded_len = self.forward(wav, length)
+                result = self.decoding.decode(self.head, encoded, encoded_len)[0]
+                transcribed_segments.append(
+                    {"transcription": result, "boundaries": segment_boundaries}
+                )
+                if result_callback is not None:
+                    result_callback(transcribed_segments[-1])
+                if progress_callback is not None:
+                    progress_callback(len(transcribed_segments), len(segments))
+            return transcribed_segments
+        finally:
+            # Avoid leaking the selected count into the next transcription or VAD call.
+            torch.set_num_threads(previous_threads)
     @torch.inference_mode()
     def transcribe_longform_from_tensor( # New method name
         self, audio_tensor: torch.Tensor, sr: int, **kwargs # Accept tensor and its rate
