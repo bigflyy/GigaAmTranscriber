@@ -1,5 +1,20 @@
-> This repository packages the modified GigaAM transcription workflow. See
-> [README_TRANSCRIBER.md](README_TRANSCRIBER.md) for use and Windows builds.
+# GigaAM Transcriber — Downloads
+
+- **[Windows CPU / CUDA release](https://github.com/bigflyy/GigaAmTranscriber/releases/latest)** — portable Russian GUI, RNNT and CTC included.
+- **[Docker CPU / CUDA: installation and commands](DOCKER.md)** — command-line images with a reusable model cache.
+- **[User guide and building from source](README_TRANSCRIBER.md)**.
+
+The CPU release is one EXE. The CUDA EXE exceeds GitHub's per-file size limit:
+download both `.part` files, `cuda-parts.json`, `Join-CUDA.ps1` and `Join-CUDA.cmd`
+into one folder, then double-click **Join-CUDA.cmd**. It checks the downloads
+and creates one **GigaAmTranscriber-CUDA.exe**. No Python or Conda is required.
+
+Both Windows editions include both models and FFmpeg. Every transcription saves
+plain text and a separate timestamped TXT. Advanced settings support JSON presets.
+
+---
+
+Upstream GigaAM documentation follows.
 
 # GigaAM: the family of open-source acoustic models for speech processing
 

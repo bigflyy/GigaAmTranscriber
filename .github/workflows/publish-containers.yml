@@ -7,8 +7,6 @@ on:
         description: Version tag (for example v0.1.0)
         required: true
         default: v0.1.0
-  release:
-    types: [published]
 
 permissions:
   contents: read
@@ -32,7 +30,7 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EDITION: ${{ matrix.edition }}
           TORCH_VARIANT: ${{ matrix.torch_variant }}
-          VERSION: ${{ inputs.version || github.event.release.tag_name }}
+          VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
           image="ghcr.io/${GITHUB_REPOSITORY,,}"

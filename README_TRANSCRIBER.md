@@ -22,8 +22,7 @@ saves both files. `-o report.txt` produces `report.txt` and
 `report-timestamps.txt`. The old `--no-timestamps` flag is accepted for
 compatibility; it no longer changes which versions are saved.
 
-The two-file behavior is implemented in source; existing EXEs and Docker
-images will get it when rebuilt.
+The v0.1.0 Windows release and current Docker images include this behavior.
 
 **Настройки** is collapsed initially. It contains RNNT/CTC model
 selection, device selection, Silero speech/silence/padding settings, and chunk
@@ -86,8 +85,7 @@ the app displays **Уточняем оставшееся время…** until t
 The GUI loads **gigaam-config.json** next to the EXE on startup. With Python
 source, it looks beside `gui.py`. The location is independent of the working
 directory and of a one-file EXE's temporary extraction directory. Without a
-config, the original defaults apply. These source changes will be included
-in the next rebuild; existing EXEs have not been rebuilt yet.
+config, the built-in defaults apply. Both Windows release formats support it.
 
 Open **Настройки** to use:
 
@@ -156,9 +154,8 @@ the default. Cache both models before building (the command above downloads
 only missing files). CTC adds approximately **422 MiB of uncompressed model
 files**; the final single-EXE size increase depends on compression.
 
-**Pending rebuild:** existing EXEs still bundle only RNNT. CTC is already
-cached locally and the packaging change is ready for the next build; it has
-not been added to the old EXEs. Python source can use either cached model now.
+The v0.1.0 CPU and CUDA releases bundle both models. Older EXEs created before
+this release may include RNNT only.
 
 The older Russian GUI without the remaining-time estimate also exists at
 `dist/cpu/onefile-ru/GigaAmTranscriber.exe`. Use the normal `onedir` / `onefile`
@@ -188,21 +185,22 @@ Size and startup time will change with the installed PyTorch and FFmpeg versions
 
 ## Build inputs and Git
 
-`build_release.py` reads `v3_e2e_rnnt.ckpt` and its tokenizer from the user's
-`~/.cache/gigaam` and locates `ffmpeg.exe` on `PATH`. Run the original script
-once to populate the GigaAM cache if the files are missing. Models, temporary
+`build_release.py` reads both `v3_e2e_rnnt` and `v3_e2e_ctc` checkpoints and
+tokenizers from the user's `~/.cache/gigaam` and locates `ffmpeg.exe` on `PATH`.
+Run the two-model caching command above if the files are missing. Models, temporary
 transcripts, build directories, and release binaries are excluded from Git.
 
 The imported `requirements.txt` and `setup.py` were retained from the source
 snapshot; they include packages unrelated to this transcriber. Use
 `requirements-cpu.txt` for the CPU build.
 
-The current build script bundles a Gyan FFmpeg 8.0.1 full build, which is
-GPLv3. Before publicly distributing binary releases, review the FFmpeg
-[license and source requirements](https://www.ffmpeg.org/legal.html) for that
-binary. Generated release files are kept out of Git.
+The current build script bundles a Gyan FFmpeg 8.0.1 full build, licensed as
+GPLv3. See [third-party notices and source links](THIRD_PARTY_NOTICES.md).
+Generated release files are kept out of Git.
 
 ## Docker: CPU command-line version
+
+For published CPU/CUDA images and setup commands, see **[DOCKER.md](DOCKER.md)**.
 
 The Docker image is a headless Linux CPU runner, without the Windows GUI.
 It was built and tested locally in about four minutes, including a real

@@ -1,5 +1,8 @@
 # Local build and speed measurements
 
+The size/startup table below describes an earlier RNNT-only build. For the
+v0.1.0 release with both RNNT and CTC, see [release verification](RELEASE_TESTS.md).
+
 Measured on 2026-09-26, Windows, AMD Ryzen 7 7840HS (8 cores / 16 logical
 processors), NVIDIA GeForce RTX 4070 Laptop GPU (8 GiB), driver 581.29.
 These measurements describe this machine and sample, not a performance guarantee.
