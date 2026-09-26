@@ -1,0 +1,9 @@
+*
+!Dockerfile
+!requirements-cpu.txt
+!gigaam/
+!gigaam/**
+!transcribe.py
+!LICENSE
+**/__pycache__/
+**/*.pyc
