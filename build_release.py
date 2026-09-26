@@ -19,6 +19,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("edition", choices=("cpu", "cuda"))
     parser.add_argument("mode", choices=("onedir", "onefile", "all"))
+    parser.add_argument("--output-root", type=Path, default=ROOT / "dist",
+                        help="Release root; use a new folder if older EXEs are running")
     args = parser.parse_args()
 
     if sys.platform != "win32":
@@ -50,7 +52,7 @@ def main() -> int:
     for mode in modes:
         base = ROOT / "build" / args.edition / mode
         base.mkdir(parents=True, exist_ok=True)
-        release = ROOT / "dist" / args.edition / mode
+        release = args.output_root.resolve() / args.edition / mode
         release.mkdir(parents=True, exist_ok=True)
         options = [
             str(ROOT / "transcribe.py"),

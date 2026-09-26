@@ -1,8 +1,10 @@
 """Minimal Tk interface; all model work runs outside the UI thread."""
 
 from pathlib import Path
+import math
 import queue
 import threading
+import time
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
@@ -41,6 +43,9 @@ class TranscriberApp:
         self.include_timestamps = tk.BooleanVar(value=True)
         self.segments = []
         self.saved_output = None
+        self.eta = tk.StringVar()
+        self.progress_started_at = None
+        self.estimated_finish_at = None
         self.values = {name: tk.StringVar(value=str(default))
                        for name, _, _, default in SETTINGS}
         self.controls = []
@@ -105,6 +110,7 @@ class TranscriberApp:
         self.bar = ttk.Progressbar(progress, mode="determinate", maximum=100)
         self.bar.pack(fill="x")
         ttk.Label(progress, textvariable=self.status, wraplength=700).pack(anchor="w", pady=(5, 0))
+        ttk.Label(progress, textvariable=self.eta, wraplength=700).pack(anchor="w")
         preview = ttk.Frame(body)
         preview.grid(row=5, column=0, sticky="nsew")
         preview.columnconfigure(0, weight=1)
@@ -163,9 +169,40 @@ class TranscriberApp:
 
     def set_running(self, running):
         self.running = running
+        if not running:
+            self.estimated_finish_at = None
+            self.eta.set("")
         for widget in self.controls:
             state = "disabled" if running else ("readonly" if isinstance(widget, ttk.Combobox) else "normal")
             widget.configure(state=state)
+
+    def update_eta(self, done, total, completed_at):
+        if done == 0:
+            # Model loading and VAD are excluded from segment timing.
+            self.progress_started_at = completed_at
+            self.estimated_finish_at = None
+        if done >= total:
+            self.estimated_finish_at = None
+            self.eta.set("Распознавание завершено. Сохранение…")
+        elif done and self.progress_started_at is not None:
+            seconds_per_segment = (completed_at - self.progress_started_at) / done
+            self.estimated_finish_at = completed_at + seconds_per_segment * (total - done)
+        else:
+            self.eta.set("Оценка времени появится после первого фрагмента.")
+
+    def refresh_eta(self):
+        if not self.running or self.estimated_finish_at is None:
+            return
+        seconds = math.ceil(self.estimated_finish_at - time.monotonic())
+        if seconds <= 0:
+            self.eta.set("Уточняем оставшееся время…")
+            return
+        hours, seconds = divmod(seconds, 3600)
+        minutes, seconds = divmod(seconds, 60)
+        duration = f"{minutes:02d}:{seconds:02d}"
+        if hours:
+            duration = f"{hours:02d}:" + duration
+        self.eta.set(f"Осталось примерно: {duration}")
 
     def render_segments(self):
         self.set_text(format_segments(self.segments, self.include_timestamps.get()))
@@ -203,6 +240,9 @@ class TranscriberApp:
         include_timestamps = self.include_timestamps.get()
         self.segments = []
         self.saved_output = None
+        self.progress_started_at = None
+        self.estimated_finish_at = None
+        self.eta.set("Оценка времени появится после первого фрагмента.")
         self.set_running(True)
         self.set_text("")
         self.status.set("Запуск…")
@@ -214,7 +254,7 @@ class TranscriberApp:
             try:
                 run_transcription(audio, output, model, device, settings,
                     status_callback=lambda value: self.events.put(("status", value)),
-                    progress_callback=lambda done, total: self.events.put(("progress", (done, total))),
+                    progress_callback=lambda done, total: self.events.put(("progress", (done, total, time.monotonic()))),
                     result_callback=lambda item: self.events.put(("segment", item)),
                     include_timestamps=include_timestamps)
                 self.events.put(("done", output))
@@ -233,7 +273,8 @@ class TranscriberApp:
                     self.segments.append(value)
                     self.render_segments()
                 elif event == "progress":
-                    done, total = value
+                    done, total, completed_at = value
+                    self.update_eta(done, total, completed_at)
                     self.bar.stop()
                     self.bar.configure(mode="determinate", value=100 * done / max(total, 1))
                     self.status.set(f"Распознано фрагментов: {done} из {total}…")
@@ -254,6 +295,7 @@ class TranscriberApp:
                     messagebox.showerror("Ошибка распознавания", value, parent=self.root)
         except queue.Empty:
             pass
+        self.refresh_eta()
         self.root.after(100, self.poll)
 
     def close(self):
