@@ -1,0 +1,47 @@
+name: Publish CPU and CUDA containers
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version tag (for example v0.1.0)
+        required: true
+        default: v0.1.0
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - edition: cpu
+            torch_variant: cpu
+          - edition: cuda
+            torch_variant: cu124
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Build, smoke-test and publish
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EDITION: ${{ matrix.edition }}
+          TORCH_VARIANT: ${{ matrix.torch_variant }}
+          VERSION: ${{ inputs.version || github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          docker build --build-arg "TORCH_VARIANT=$TORCH_VARIANT" \
+            --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --label "org.opencontainers.image.description=GigaAM Transcriber $EDITION command-line image; RNNT and CTC models use a mounted cache" \
+            -t "$image:$VERSION-$EDITION" -t "$image:$EDITION" .
+          docker run --rm "$image:$VERSION-$EDITION" --advanced-help
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker push "$image:$VERSION-$EDITION"
+          docker push "$image:$EDITION"
