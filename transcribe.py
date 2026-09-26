@@ -152,8 +152,8 @@ def format_audio_stats(stats):
         return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
     return (
-        f"Аудио: {duration('total_seconds')} · Речь по VAD: {duration('speech_seconds')} · "
-        f"Без речи по VAD: {duration('nonspeech_seconds')}\n"
+        f"Аудио: {duration('total_seconds')} · Речь: {duration('speech_seconds')} · "
+        f"Без речи: {duration('nonspeech_seconds')}\n"
         f"На распознавание: {duration('retained_seconds')} · "
         f"Пропущено: {duration('filtered_seconds')}"
     )
