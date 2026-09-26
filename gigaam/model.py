@@ -155,12 +155,12 @@ class GigaAMASR(GigaAM):
         Transcribes a long audio file by splitting it into segments and
         then transcribing each segment.
         """
-        from .vad_utils import segment_audio_file
-
         if isinstance(cpu_threads, bool) or not isinstance(cpu_threads, int) or cpu_threads < 1:
             raise ValueError("cpu_threads must be a positive integer")
         previous_threads = torch.get_num_threads()
         try:
+            from .vad_utils import segment_audio_file
+
             # Silero benefits from one thread; its import also changes this global setting.
             torch.set_num_threads(1)
             transcribed_segments = []
