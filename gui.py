@@ -51,6 +51,7 @@ class TranscriberApp:
         self.eta = tk.StringVar()
         self.audio_stats = tk.StringVar()
         self.progress_started_at = None
+        self.run_started_at = None
         self.estimated_finish_at = None
         self.values = {name: tk.StringVar(value=str(default))
                        for name, _, _, default in SETTINGS}
@@ -299,6 +300,13 @@ class TranscriberApp:
     def render_segments(self):
         self.set_text(format_segments(self.segments, self.include_timestamps.get()), preserve_view=True)
 
+    def show_elapsed(self):
+        if self.run_started_at is not None:
+            elapsed = max(0.0, time.monotonic() - self.run_started_at)
+            minutes, seconds = divmod(round(elapsed, 1), 60)
+            hours, minutes = divmod(int(minutes), 60)
+            self.eta.set(f"Затрачено времени: {hours:02d}:{minutes:02d}:{seconds:04.1f}")
+
     def timestamps_changed(self):
         # Keep structured results intact; only the view and exported text change.
         self.render_segments()
@@ -337,6 +345,7 @@ class TranscriberApp:
         device = self.device.get().lower()
         include_timestamps = self.include_timestamps.get()
         cancel_event = self.cancel_event = threading.Event()
+        self.run_started_at = time.monotonic()
         self.segments = []
         self.saved_output = None
         self.audio_stats.set("")
@@ -395,6 +404,7 @@ class TranscriberApp:
                         self.save_transcript()
                     else:
                         self.status.set("Отменено. Нет распознанных фрагментов.")
+                    self.show_elapsed()
                 elif event == "done":
                     self.bar.stop()
                     self.bar.configure(mode="determinate", value=100)
@@ -403,11 +413,13 @@ class TranscriberApp:
                     if not self.segments:
                         self.set_text("Речь не обнаружена.")
                     self.save_transcript()
+                    self.show_elapsed()
                 elif event == "error":
                     self.bar.stop()
                     self.bar.configure(mode="determinate", value=0)
                     self.set_running(False)
                     self.status.set("Ошибка распознавания. Полученный текст сохранён в окне.")
+                    self.show_elapsed()
                     messagebox.showerror("Ошибка распознавания", value, parent=self.root)
         except queue.Empty:
             pass
