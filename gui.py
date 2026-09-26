@@ -10,7 +10,7 @@ import time
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-from transcribe import format_segments, positive_int, run_transcription
+from transcribe import format_audio_stats, format_segments, positive_int, run_transcription
 from gui_help import HELP, OVERVIEW, HoverHint
 
 
@@ -49,6 +49,7 @@ class TranscriberApp:
         self.segments = []
         self.saved_output = None
         self.eta = tk.StringVar()
+        self.audio_stats = tk.StringVar()
         self.progress_started_at = None
         self.estimated_finish_at = None
         self.values = {name: tk.StringVar(value=str(default))
@@ -131,6 +132,15 @@ class TranscriberApp:
         self.bar.pack(fill="x")
         ttk.Label(progress, textvariable=self.status, wraplength=700).pack(anchor="w", pady=(5, 0))
         ttk.Label(progress, textvariable=self.eta, wraplength=700).pack(anchor="w")
+        stats_label = ttk.Label(progress, textvariable=self.audio_stats, wraplength=700)
+        stats_label.pack(anchor="w")
+        self.help_hints.append(HoverHint(stats_label, "Audio duration and VAD filtering",
+            "Durations use HH:MM:SS and describe the entire file. Speech is the combined "
+            "duration of Silero VAD speech regions, including configured speech padding. "
+            "Non-speech means VAD did not identify speech; it may include noise or music. "
+            "Recognition chunks can retain pauses between speech regions, so the amount "
+            "actually skipped may differ from the non-speech duration. These figures "
+            "describe planned audio coverage, not completed transcription, even after cancellation."))
         preview = ttk.Frame(body)
         preview.grid(row=5, column=0, sticky="nsew")
         preview.columnconfigure(0, weight=1)
@@ -329,6 +339,7 @@ class TranscriberApp:
         cancel_event = self.cancel_event = threading.Event()
         self.segments = []
         self.saved_output = None
+        self.audio_stats.set("")
         self.progress_started_at = None
         self.estimated_finish_at = None
         self.eta.set("Оценка времени появится после первого фрагмента.")
@@ -346,7 +357,8 @@ class TranscriberApp:
                     progress_callback=lambda done, total: self.events.put(("progress", (done, total, time.monotonic()))),
                     result_callback=lambda item: self.events.put(("segment", item)),
                     include_timestamps=include_timestamps, cpu_threads=cpu_threads,
-                    cancel_callback=cancel_event.is_set)
+                    cancel_callback=cancel_event.is_set,
+                    stats_callback=lambda stats: self.events.put(("audio_stats", stats)))
                 self.events.put(("cancelled" if cancel_event.is_set() else "done", output))
             except Exception as exc:
                 self.events.put(("error", str(exc)))
@@ -363,6 +375,8 @@ class TranscriberApp:
                 elif event == "segment":
                     self.segments.append(value)
                     self.append_segment(value)
+                elif event == "audio_stats":
+                    self.audio_stats.set(format_audio_stats(value))
                 elif event == "progress":
                     done, total, completed_at = value
                     if not self.cancel_event.is_set():

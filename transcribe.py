@@ -128,10 +128,27 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
+def format_audio_stats(stats):
+    """VAD coverage and the actual amount retained by the existing chunker."""
+    def duration(key):
+        seconds = round(stats[key])
+        hours, seconds = divmod(seconds, 3600)
+        minutes, seconds = divmod(seconds, 60)
+        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+    return (
+        f"Аудио: {duration('total_seconds')} · Речь по VAD: {duration('speech_seconds')} · "
+        f"Без речи по VAD: {duration('nonspeech_seconds')}\n"
+        f"На распознавание: {duration('retained_seconds')} · "
+        f"Пропущено: {duration('filtered_seconds')}"
+    )
+
+
 def run_transcription(audio: Path, output: Path, model_name="v3_e2e_rnnt",
                       device="auto", vad_kwargs=None, status_callback=None,
                       progress_callback=None, result_callback=None,
-                      include_timestamps=True, cpu_threads=4, cancel_callback=None):
+                      include_timestamps=True, cpu_threads=4, cancel_callback=None,
+                      stats_callback=None):
     """Shared CLI/GUI pipeline; callbacks are invoked on the caller's thread."""
     status = status_callback or (lambda message: None)
     cancelled = cancel_callback or (lambda: False)
@@ -163,10 +180,17 @@ def run_transcription(audio: Path, output: Path, model_name="v3_e2e_rnnt",
     if cancelled():
         return []
     status("Поиск речи с помощью Silero VAD...")
+    def report_stats(stats):
+        if stats_callback is not None:
+            stats_callback(stats)
+        else:
+            status(format_audio_stats(stats))
+
     segments = model.transcribe_longform(str(audio), progress_callback=progress_callback,
                                          result_callback=result_callback,
                                          cpu_threads=cpu_threads,
                                          cancel_callback=cancelled,
+                                         stats_callback=report_stats,
                                          **(vad_kwargs or {}))
     # Cancellation before the first result must not erase an existing transcript.
     if cancelled() and not segments:

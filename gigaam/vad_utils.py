@@ -166,6 +166,7 @@ def segment_audio_file(
     vad_min_silence_ms: int = 2000,
     vad_window_samples: int = 512,
     vad_speech_pad_ms: int = 250,
+    stats_callback=None,
 ) -> Tuple[List[torch.Tensor], List[Tuple[float, float]]]:
     """
     Segments an audio waveform into smaller chunks based on speech activity.
@@ -277,5 +278,25 @@ def segment_audio_file(
     # After processing all speech segments, if there's a remaining chunk to finalize
     if curr_duration > new_chunk_threshold:
         _update_segments(curr_start, curr_end, curr_duration)
+
+    if stats_callback is not None:
+        total = audio_tensor.numel() / sr
+        # Silero's second-based timestamps are rounded and include speech padding.
+        # Clip and merge them so rounded/overlapping regions are not double-counted.
+        speech = 0.0
+        previous_end = 0.0
+        for region in sorted(speech_timestamps_list, key=lambda item: item['start']):
+            start = max(previous_end, min(total, max(0.0, region['start'])))
+            end = min(total, max(start, region['end']))
+            speech += end - start
+            previous_end = end
+        retained = min(total, sum(segment.numel() for segment in segments) / sr)
+        stats_callback({
+            "total_seconds": total,
+            "speech_seconds": speech,
+            "nonspeech_seconds": max(0.0, total - speech),
+            "retained_seconds": retained,
+            "filtered_seconds": max(0.0, total - retained),
+        })
 
     return segments, boundaries

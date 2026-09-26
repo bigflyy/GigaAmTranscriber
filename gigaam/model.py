@@ -149,7 +149,7 @@ class GigaAMASR(GigaAM):
     @torch.inference_mode()
     def transcribe_longform(
         self, wav_file: str, progress_callback=None, result_callback=None,
-        cpu_threads: int = 4, cancel_callback=None, **kwargs
+        cpu_threads: int = 4, cancel_callback=None, stats_callback=None, **kwargs
     ) -> List[Dict[str, Union[str, Tuple[float, float]]]]:
         """
         Transcribes a long audio file by splitting it into segments and
@@ -171,7 +171,7 @@ class GigaAMASR(GigaAM):
             torch.set_num_threads(1)
             transcribed_segments = []
             segments, boundaries = segment_audio_file(
-                wav_file, SAMPLE_RATE, device=self._device, **kwargs
+                wav_file, SAMPLE_RATE, device=self._device, stats_callback=stats_callback, **kwargs
             )
             torch.set_num_threads(cpu_threads if self._device.type == "cpu" else 1)
             if progress_callback is not None:
