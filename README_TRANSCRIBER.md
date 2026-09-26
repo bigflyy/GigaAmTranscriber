@@ -15,12 +15,20 @@ editing of recognition results is used. The CLI supports `--no-timestamps`.
 
 **Настройки** is collapsed initially. It contains RNNT/CTC model
 selection, device selection, Silero speech/silence/padding settings, and chunk
-lengths. **Сбросить настройки** restores the original model/VAD settings and
+lengths. Technical labels inside the panel are in English; the main interface
+is in Russian. **Reset defaults** restores the original model/VAD settings and
 the current default of **4 GigaAM CPU threads**. Silero 6.2.1 fixes
 the analysis window to 512 samples at 16 kHz; its old window-size argument
 has no effect, so this value is shown read-only.
 
-**Потоки GigaAM (CPU)** controls PyTorch's intra-operation CPU thread count
+Hover over a setting label or input for detailed English help. Each hint
+explains the purpose, units, default, examples and tradeoffs. Click a label
+marked **(?)** to keep its description open in a scrollable window, or use
+**Parameter help** to read the complete guide. The guide explains the VAD
+stage, chunk grouping, soft versus hard limits, CPU threads and model/device
+selection. Help is available while transcription is running.
+
+**GigaAM CPU threads** controls PyTorch's intra-operation CPU thread count
 for GigaAM recognition. The default is 4; 1 restores the original single-thread
 behavior. Silero runs with one thread independently, then the selected count
 is applied to GigaAM when using CPU. CUDA inference ignores this CPU setting.

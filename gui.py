@@ -11,19 +11,20 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 from transcribe import format_segments, positive_int, run_transcription
+from gui_help import HELP, OVERVIEW, HoverHint
 
 
 # These values match the imported file-based transcription path.
 SETTINGS = (
-    ("vad_threshold", "Порог речи", float, 0.5),
-    ("vad_min_speech_ms", "Минимум речи (мс)", int, 300),
-    ("vad_max_speech_s", "Максимум речи (с)", float, 20),
-    ("vad_min_silence_ms", "Минимум тишины (мс)", int, 2000),
-    ("vad_speech_pad_ms", "Отступы речи (мс)", int, 250),
-    ("new_chunk_threshold", "Минимум фрагмента (с)", float, 0.2),
-    ("max_duration", "Желаемый максимум (с)", float, 24),
-    ("min_duration", "Желаемый минимум (с)", float, 15),
-    ("strict_limit_duration", "Жёсткий предел (с)", float, 25),
+    ("vad_threshold", "VAD threshold", float, 0.5),
+    ("vad_min_speech_ms", "VAD min speech (ms)", int, 300),
+    ("vad_max_speech_s", "VAD max speech (s)", float, 20),
+    ("vad_min_silence_ms", "VAD min silence (ms)", int, 2000),
+    ("vad_speech_pad_ms", "VAD speech padding (ms)", int, 250),
+    ("new_chunk_threshold", "Min chunk duration (s)", float, 0.2),
+    ("max_duration", "Preferred max chunk (s)", float, 24),
+    ("min_duration", "Preferred min chunk (s)", float, 15),
+    ("strict_limit_duration", "Hard chunk limit (s)", float, 25),
 )
 
 
@@ -39,7 +40,7 @@ class TranscriberApp:
         self.advanced_visible = False
         self.file = tk.StringVar()
         self.model = tk.StringVar(value="RNNT")
-        self.device = tk.StringVar(value="Авто")
+        self.device = tk.StringVar(value="Auto")
         self.cpu_threads = tk.StringVar(value="4")
         self.status = tk.StringVar(value="Выберите аудио- или видеофайл.")
         self.output = tk.StringVar(value="Текст будет сохранён рядом с исходным файлом.")
@@ -52,6 +53,8 @@ class TranscriberApp:
         self.values = {name: tk.StringVar(value=str(default))
                        for name, _, _, default in SETTINGS}
         self.controls = []
+        self.help_hints = []
+        self.help_window = None
 
         body = ttk.Frame(root, padding=12)
         body.pack(fill="both", expand=True)
@@ -79,38 +82,44 @@ class TranscriberApp:
         ttk.Checkbutton(actions, text="Включить таймкоды", variable=self.include_timestamps,
                         command=self.timestamps_changed).pack(side="left", padx=8)
 
-        self.advanced = ttk.LabelFrame(body, text="Дополнительные настройки", padding=10)
+        self.advanced = ttk.LabelFrame(body, text="Advanced settings", padding=10)
         self.advanced.grid(row=3, column=0, sticky="ew", pady=(0, 10))
         for column in (1, 3):
             self.advanced.columnconfigure(column, weight=1)
-        ttk.Label(self.advanced, text="Модель").grid(row=0, column=0, sticky="w")
+        self.setting_label("Model", "model", row=0, column=0, sticky="w")
         model = ttk.Combobox(self.advanced, textvariable=self.model, values=("RNNT", "CTC"),
                              state="readonly", width=12)
         model.grid(row=0, column=1, sticky="ew", padx=(8, 20), pady=3)
-        ttk.Label(self.advanced, text="Устройство").grid(row=0, column=2, sticky="w")
+        self.add_help(model, "model")
+        self.setting_label("Device", "device", row=0, column=2, sticky="w")
         device = ttk.Combobox(self.advanced, textvariable=self.device,
-                              values=("Авто", "CPU", "CUDA"), state="readonly", width=12)
+                              values=("Auto", "CPU", "CUDA"), state="readonly", width=12)
         device.grid(row=0, column=3, sticky="ew", padx=(8, 0), pady=3)
+        self.add_help(device, "device")
         self.controls.extend((model, device))
         for index, (name, label, _, _) in enumerate(SETTINGS):
             row, pair = divmod(index, 2)
             column = pair * 2
-            ttk.Label(self.advanced, text=label).grid(row=row + 1, column=column, sticky="w", pady=3)
+            self.setting_label(label, name, row=row + 1, column=column, sticky="w", pady=3)
             field = ttk.Entry(self.advanced, textvariable=self.values[name], width=12)
             field.grid(row=row + 1, column=column + 1, sticky="ew", padx=(8, 20 if pair == 0 else 0), pady=3)
+            self.add_help(field, name)
             self.controls.append(field)
-        ttk.Label(self.advanced, text="Потоки GigaAM (CPU)").grid(row=5, column=2, sticky="w", pady=3)
+        self.setting_label("GigaAM CPU threads", "cpu_threads", row=5, column=2, sticky="w", pady=3)
         threads = ttk.Spinbox(self.advanced, textvariable=self.cpu_threads,
                               from_=1, to=max(4, os.cpu_count() or 1), width=12)
         threads.grid(row=5, column=3, sticky="ew", padx=(8, 0), pady=3)
+        self.add_help(threads, "cpu_threads")
         self.controls.append(threads)
-        ttk.Label(self.advanced, text="Silero: 1 поток; окно 512 отсчётов (фиксировано моделью)").grid(
+        self.setting_label("Silero: 1 thread; window size: 512 samples (fixed)", "silero_runtime",
             row=6, column=0, columnspan=4, sticky="w", pady=(6, 0))
-        ttk.Label(self.advanced, text="По умолчанию — RNNT. CTC скачивается при первом запуске.").grid(
+        ttk.Label(self.advanced, text="Default model: RNNT. CTC downloads on first use.").grid(
             row=7, column=0, columnspan=4, sticky="w", pady=3)
-        reset = ttk.Button(self.advanced, text="Сбросить настройки", command=self.reset_defaults)
-        reset.grid(row=8, column=0, columnspan=4, sticky="w", pady=(5, 0))
+        reset = ttk.Button(self.advanced, text="Reset defaults", command=self.reset_defaults)
+        reset.grid(row=8, column=0, columnspan=2, sticky="w", pady=(5, 0))
         self.controls.append(reset)
+        ttk.Button(self.advanced, text="Parameter help", command=self.show_help).grid(
+            row=8, column=2, columnspan=2, sticky="w", pady=(5, 0))
         self.advanced.grid_remove()
 
         progress = ttk.Frame(body)
@@ -131,12 +140,54 @@ class TranscriberApp:
         ttk.Label(body, textvariable=self.output, wraplength=700).grid(row=6, column=0, sticky="w", pady=(8, 0))
         self.root.after(100, self.poll)
 
+    def add_help(self, widget, key):
+        self.help_hints.append(HoverHint(widget, *HELP[key]))
+
+    def setting_label(self, text, key, **grid):
+        label = ttk.Label(self.advanced, text=text + " (?)", cursor="hand2")
+        label.grid(**grid)
+        self.add_help(label, key)
+        label.bind("<Button-1>", lambda _event: self.show_help(key), add="+")
+
+    def show_help(self, key=None):
+        for hint in self.help_hints:
+            hint.hide()
+        if self.help_window is not None and self.help_window.winfo_exists():
+            self.help_window.destroy()
+        window = self.help_window = tk.Toplevel(self.root)
+        window.title("Advanced settings — Parameter help")
+        window.geometry("760x650")
+        window.minsize(540, 360)
+        window.transient(self.root)
+        window.bind("<Escape>", lambda _event: window.destroy())
+        body = ttk.Frame(window, padding=12)
+        body.pack(fill="both", expand=True)
+        body.rowconfigure(0, weight=1)
+        body.columnconfigure(0, weight=1)
+        text = tk.Text(body, wrap="word", font=("Segoe UI", 10), padx=12, pady=10)
+        text.grid(row=0, column=0, sticky="nsew")
+        scroll = ttk.Scrollbar(body, command=text.yview)
+        scroll.grid(row=0, column=1, sticky="ns")
+        text.configure(yscrollcommand=scroll.set)
+        text.tag_configure("heading", font=("Segoe UI", 12, "bold"), spacing1=12, spacing3=6)
+        entries = [(key, HELP[key])] if key else list(HELP.items())
+        if key is None:
+            text.insert("end", OVERVIEW + "\n\n")
+        for _, (title, description) in entries:
+            text.insert("end", title + "\n", "heading")
+            text.insert("end", description + "\n\n")
+        text.configure(state="disabled")
+        ttk.Button(body, text="Close", command=window.destroy).grid(row=1, column=0, sticky="e", pady=(10, 0))
+        text.focus_set()
+
     def browse(self):
         name = filedialog.askopenfilename(parent=self.root, title="Выберите аудио или видео")
         if name:
             self.file.set(name)
 
     def toggle_advanced(self):
+        for hint in self.help_hints:
+            hint.hide()
         self.advanced_visible = not self.advanced_visible
         if self.advanced_visible:
             self.advanced.grid()
@@ -149,7 +200,7 @@ class TranscriberApp:
 
     def reset_defaults(self):
         self.model.set("RNNT")
-        self.device.set("Авто")
+        self.device.set("Auto")
         self.cpu_threads.set("4")
         for name, _, _, default in SETTINGS:
             self.values[name].set(str(default))
@@ -164,7 +215,7 @@ class TranscriberApp:
             if not (0 <= value < float("inf")):
                 raise ValueError(f"«{label}»: введите конечное неотрицательное число")
             if name == "vad_threshold" and not 0 < value <= 1:
-                raise ValueError("Порог речи должен быть больше 0 и не больше 1")
+                raise ValueError("VAD threshold должен быть больше 0 и не больше 1")
             if name in ("max_duration", "min_duration", "strict_limit_duration", "vad_max_speech_s") and value == 0:
                 raise ValueError(f"«{label}»: значение должно быть больше 0")
             result[name] = value
@@ -243,13 +294,13 @@ class TranscriberApp:
             try:
                 cpu_threads = positive_int(self.cpu_threads.get())
             except ArgumentTypeError:
-                raise ValueError("Число потоков CPU должно быть целым числом не меньше 1") from None
+                raise ValueError("GigaAM CPU threads: введите целое число не меньше 1") from None
         except ValueError as exc:
             messagebox.showerror("Проверьте настройки", str(exc), parent=self.root)
             return
         output = audio.with_name(audio.stem + "-transcript.txt")
         model = "v3_e2e_rnnt" if self.model.get() == "RNNT" else "v3_e2e_ctc"
-        device = {"Авто": "auto", "CPU": "cpu", "CUDA": "cuda"}[self.device.get()]
+        device = self.device.get().lower()
         include_timestamps = self.include_timestamps.get()
         self.segments = []
         self.saved_output = None

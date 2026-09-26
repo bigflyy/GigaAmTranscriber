@@ -120,6 +120,9 @@ To compare another machine, repeat the benchmark with
   completed a real GUI transcription at eight. The CPU folder EXE accepted
   `--cpu-threads 8` and produced the reference transcript with a minimal PATH.
   CPU and GPU Docker images were refreshed and passed transcription checks.
+- Advanced settings help: English labels and unchanged default values were
+  checked; hover hints, clickable parameter descriptions and the scrollable
+  full guide were exercised and visually inspected.
 
 CUDA artifacts refer to the earlier English GUI build. Further CUDA rebuilds
 were deferred at the user's request; the Russian interface and incremental
