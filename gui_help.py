@@ -96,10 +96,13 @@ HELP = {
         "length and does not pad short speech to make it longer."
     )),
     "vad_max_speech_s": ("VAD max speech (s)", (
-        "Default: 20 seconds.\n\n"
+        "Default: 25 seconds.\n\n"
         "Limits the length of a speech region produced by Silero. When a long "
-        "stretch of speech reaches this limit, Silero looks for a suitable short "
-        "silence near the split; if none is available, it cuts the region anyway.\n\n"
+        "stretch of speech reaches this limit, Silero 6.2.1 prefers the longest "
+        "qualifying pause already detected within the region. If no suitable pause "
+        "is available, it cuts at the current analysis frame. It does not wait "
+        "indefinitely for a future pause. Its internal limit reserves space for "
+        "speech padding and one analysis window.\n\n"
         "Lower values create more VAD regions and more opportunities for the "
         "grouping step to form short chunks. Higher values allow longer speech "
         "regions before VAD splits them. A forced split can occur inside a word "
@@ -148,31 +151,17 @@ HELP = {
         "It is not a confidence threshold or a required sentence length."
     )),
     "max_duration": ("Preferred max chunk (s)", (
-        "Default: 24 seconds.\n\n"
+        "Default: 25 seconds.\n\n"
         "A grouping target for the final chunks sent to GigaAM. Before adding "
         "the next VAD region, the app checks whether the resulting time span "
         "would exceed this value. If the current chunk is large enough to keep, "
         "it finishes that chunk and starts the next one. Gaps between regions "
         "count toward the span.\n\n"
         "For example, adding a region that extends a 16-second chunk to 27 "
-        "seconds would normally start a new chunk with the default of 24. "
+        "seconds would normally start a new chunk with the default of 25. "
         "A single long VAD region can still exceed this preferred target; Hard "
         "chunk limit is the separate final safeguard. Smaller targets generally "
         "mean more chunks and shorter per-chunk waits, with more decoding overhead."
-    )),
-    "min_duration": ("Preferred min chunk (s)", (
-        "Default: 15 seconds.\n\n"
-        "A soft grouping target. Once the current accumulated chunk exceeds "
-        "this duration, the next VAD region begins a new chunk instead of being "
-        "added to the current one. This makes the app prefer speech-region "
-        "boundaries after it has collected enough audio.\n\n"
-        "It is not an enforced minimum: chunks can be shorter because the "
-        "preferred maximum is reached, the file ends, or the hard limit splits "
-        "a long chunk. For example, a 16-second accumulated chunk will normally "
-        "be finalized before the next region when this setting is 15.\n\n"
-        "Lower values tend to create more, shorter chunks; higher values let "
-        "more regions accumulate. A useful starting relationship is preferred "
-        "min <= preferred max <= hard limit, as in the defaults 15 / 24 / 25."
     )),
     "strict_limit_duration": ("Hard chunk limit (s)", (
         "Default: 25 seconds.\n\n"

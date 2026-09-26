@@ -28,10 +28,21 @@ images will get it when rebuilt.
 **Настройки** is collapsed initially. It contains RNNT/CTC model
 selection, device selection, Silero speech/silence/padding settings, and chunk
 lengths. Technical labels inside the panel are in English; the main interface
-is in Russian. **Reset defaults** restores the original model/VAD settings and
+is in Russian. **Reset defaults** restores the built-in model/VAD settings and
 the current default of **4 GigaAM CPU threads**. Silero 6.2.1 fixes
 the analysis window to 512 samples at 16 kHz; its old window-size argument
 has no effect, so this value is shown read-only.
+
+File transcription combines VAD regions while their total span fits
+**Preferred max chunk**. The former **Preferred min chunk** early-stop rule
+has been removed. For example, adjacent 16-second and 4-second regions now
+form one 20-second chunk. Existing configs containing `min_duration` still
+load; that key is ignored and omitted on the next save. The old CLI
+`--min-duration` option is also accepted but ignored. **VAD max speech**,
+**Preferred max chunk**, and **Hard chunk limit** now all default to **25 seconds**.
+The tiny-chunk cutoff remains 0.2 seconds. An existing saved config still takes
+precedence; **Reset defaults** applies these defaults in the GUI, and
+**Save as default** persists them.
 
 Hover over a setting label or input for detailed English help. Each hint
 explains the purpose, units, default, examples and tradeoffs. Click a label
@@ -108,8 +119,9 @@ conda run -n cuda-torch2 python transcribe.py "C:\path\to\audio.mp4"
 
 `transcribe.py --help` shows normal use. `transcribe.py --advanced-help` shows
 the optional model, device, CPU thread count, segmentation and Silero VAD
-parameters. Model and VAD defaults retain the values from the original
-modified package; GigaAM CPU inference now defaults to 4 threads. For example:
+parameters. The three duration limits now default to 25 seconds, and GigaAM
+CPU inference defaults to 4 threads. Other VAD defaults retain the original
+modified package's values. For example:
 
 ```powershell
 conda run -n cuda-torch2 python transcribe.py "C:\path\to\audio.wav" --device cpu --vad-threshold 0.6

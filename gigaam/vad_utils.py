@@ -155,14 +155,14 @@ def segment_audio_tensor(
 def segment_audio_file(
     wav_file: str,
     sr: int, # Note: Silero VAD natively supports 8000Hz and 16000Hz. Your input sr must match.
-    max_duration: float = 24.0,
-    min_duration: float = 15.0,
+    max_duration: float = 25.0,
+    min_duration: float = 15.0, # Legacy argument, ignored by file chunk grouping.
     strict_limit_duration: float = 25.0,
     new_chunk_threshold: float = 0.2,
     device: torch.device = torch.device("cpu"), # Device argument kept for compatibility
     vad_threshold: float = 0.5,
     vad_min_speech_ms: int = 300,
-    vad_max_speech_s: float = 20.0,
+    vad_max_speech_s: float = 25.0,
     vad_min_silence_ms: int = 2000,
     vad_window_samples: int = 512,
     vad_speech_pad_ms: int = 250,
@@ -259,14 +259,11 @@ def segment_audio_file(
         start = max(0.0, speech_dict['start'])
         end = speech_dict['end'] # No need to clip against audio length here, Silero handles it
 
-        # Check if adding this segment exceeds the max/min duration thresholds
+        # Check whether adding this region exceeds the preferred maximum span.
         potential_new_duration = curr_duration + (end - curr_end)
         
-        # If the current accumulated chunk is significant AND adding the next segment
-        # would exceed limits, finalize the current chunk.
-        if curr_duration > new_chunk_threshold and (
-            potential_new_duration > max_duration or curr_duration > min_duration
-        ):
+        # Keep adding regions while their combined span fits the preferred maximum.
+        if curr_duration > new_chunk_threshold and potential_new_duration > max_duration:
             _update_segments(curr_start, curr_end, curr_duration)
             # Start a new chunk from the beginning of the current segment
             curr_start = start

@@ -57,9 +57,10 @@ def parser(advanced: bool = False) -> argparse.ArgumentParser:
                    help=hidden or "Inference device")
     p.add_argument("--cpu-threads", type=positive_int, default=4,
                    help=hidden or "GigaAM CPU threads (default: 4); Silero stays at 1")
+    # Keep older CLI invocations working; the preferred-min rule has been removed.
+    p.add_argument("--min-duration", type=float, help=argparse.SUPPRESS)
     options = (
         ("max-duration", float, "max_duration", "Maximum preferred segment length in seconds"),
-        ("min-duration", float, "min_duration", "Minimum preferred segment length in seconds"),
         ("strict-limit-duration", float, "strict_limit_duration", "Hard segment length limit in seconds"),
         ("new-chunk-threshold", float, "new_chunk_threshold", "Minimum duration to keep a chunk"),
         ("vad-threshold", float, "vad_threshold", "Silero speech probability threshold"),
@@ -108,7 +109,7 @@ def bundled_model_root(model_name: str) -> Path | None:
 
 def make_vad_kwargs(args: argparse.Namespace) -> dict:
     names = (
-        "max_duration", "min_duration", "strict_limit_duration", "new_chunk_threshold",
+        "max_duration", "strict_limit_duration", "new_chunk_threshold",
         "vad_threshold", "vad_min_speech_ms", "vad_max_speech_s", "vad_min_silence_ms",
         "vad_window_samples", "vad_speech_pad_ms",
     )

@@ -284,7 +284,7 @@ class TranscriberApp:
                 raise ValueError(f"«{label}»: введите конечное неотрицательное число")
             if name == "vad_threshold" and not 0 < value <= 1:
                 raise ValueError("VAD threshold должен быть больше 0 и не больше 1")
-            if name in ("max_duration", "min_duration", "strict_limit_duration", "vad_max_speech_s") and value == 0:
+            if name in ("max_duration", "strict_limit_duration", "vad_max_speech_s") and value == 0:
                 raise ValueError(f"«{label}»: значение должно быть больше 0")
             result[name] = value
         return result

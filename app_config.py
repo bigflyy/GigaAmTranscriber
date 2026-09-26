@@ -11,12 +11,11 @@ import tempfile
 SETTINGS = (
     ("vad_threshold", "VAD threshold", float, 0.5),
     ("vad_min_speech_ms", "VAD min speech (ms)", int, 300),
-    ("vad_max_speech_s", "VAD max speech (s)", float, 20),
+    ("vad_max_speech_s", "VAD max speech (s)", float, 25),
     ("vad_min_silence_ms", "VAD min silence (ms)", int, 2000),
     ("vad_speech_pad_ms", "VAD speech padding (ms)", int, 250),
     ("new_chunk_threshold", "Min chunk duration (s)", float, 0.2),
-    ("max_duration", "Preferred max chunk (s)", float, 24),
-    ("min_duration", "Preferred min chunk (s)", float, 15),
+    ("max_duration", "Preferred max chunk (s)", float, 25),
     ("strict_limit_duration", "Hard chunk limit (s)", float, 25),
 )
 
@@ -37,6 +36,8 @@ def validate_config(data):
     """Validate the entire document before applying anything; missing keys use defaults."""
     if not isinstance(data, dict):
         raise ValueError("Конфигурация должна быть объектом JSON.")
+    # Earlier presets contained this retired grouping target. Accept and discard it.
+    data = {key: value for key, value in data.items() if key != "min_duration"}
     config = defaults()
     unknown = data.keys() - config.keys()
     if unknown:
@@ -52,7 +53,7 @@ def validate_config(data):
         raise ValueError("CPU threads: требуется целое число не меньше 1.")
     if type(config["include_timestamps"]) is not bool:
         raise ValueError("include_timestamps: требуется true или false.")
-    positive = {"max_duration", "min_duration", "strict_limit_duration", "vad_max_speech_s"}
+    positive = {"max_duration", "strict_limit_duration", "vad_max_speech_s"}
     for name, label, kind, _ in SETTINGS:
         value = config[name]
         if type(value) not in (int, float) or (kind is int and type(value) is not int):
