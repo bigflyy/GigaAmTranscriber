@@ -7,3 +7,4 @@ models/
 *.ckpt
 *.transcript.txt
 *-transcript.txt
+gigaam-config.json

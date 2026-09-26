@@ -12,20 +12,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from transcribe import format_audio_stats, format_segments, positive_int, run_transcription
 from gui_help import HELP, OVERVIEW, HoverHint
-
-
-# These values match the imported file-based transcription path.
-SETTINGS = (
-    ("vad_threshold", "VAD threshold", float, 0.5),
-    ("vad_min_speech_ms", "VAD min speech (ms)", int, 300),
-    ("vad_max_speech_s", "VAD max speech (s)", float, 20),
-    ("vad_min_silence_ms", "VAD min silence (ms)", int, 2000),
-    ("vad_speech_pad_ms", "VAD speech padding (ms)", int, 250),
-    ("new_chunk_threshold", "Min chunk duration (s)", float, 0.2),
-    ("max_duration", "Preferred max chunk (s)", float, 24),
-    ("min_duration", "Preferred min chunk (s)", float, 15),
-    ("strict_limit_duration", "Hard chunk limit (s)", float, 25),
-)
+from app_config import SETTINGS, default_config_path, read_config, validate_config, write_config
 
 
 class TranscriberApp:
@@ -125,6 +112,15 @@ class TranscriberApp:
         self.controls.append(reset)
         ttk.Button(self.advanced, text="Parameter help", command=self.show_help).grid(
             row=8, column=2, columnspan=2, sticky="w", pady=(5, 0))
+        configs = ttk.Frame(self.advanced)
+        configs.grid(row=9, column=0, columnspan=4, sticky="w", pady=(8, 0))
+        for label, command in (("Import config…", self.import_config),
+                               ("Export config…", self.export_config),
+                               ("Save as default", self.save_default_config)):
+            button = ttk.Button(configs, text=label, command=command)
+            button.pack(side="left", padx=(0, 8))
+            self.controls.append(button)
+            self.add_help(button, "config")
         self.advanced.grid_remove()
 
         progress = ttk.Frame(body)
@@ -153,6 +149,63 @@ class TranscriberApp:
         self.text.configure(yscrollcommand=scroll.set)
         ttk.Label(body, textvariable=self.output, wraplength=700).grid(row=6, column=0, sticky="w", pady=(8, 0))
         self.root.after(100, self.poll)
+        self.load_config(default_config_path(), automatic=True)
+
+    def current_config(self):
+        return validate_config({"model": self.model.get(), "device": self.device.get(),
+            "cpu_threads": positive_int(self.cpu_threads.get()),
+            "include_timestamps": self.include_timestamps.get(), **self.settings()})
+
+    def load_config(self, path, automatic=False):
+        if self.running:
+            return
+        try:
+            config = read_config(path)
+        except FileNotFoundError:
+            if automatic:
+                return
+            messagebox.showerror("Ошибка конфигурации", f"Файл не найден: {path}", parent=self.root)
+            return
+        except (OSError, ValueError) as exc:
+            messagebox.showerror("Ошибка конфигурации", f"{path}\n{exc}\nНастройки не изменены.", parent=self.root)
+            return
+        self.model.set(config["model"])
+        self.device.set(config["device"])
+        self.cpu_threads.set(str(config["cpu_threads"]))
+        for name, _, _, _ in SETTINGS:
+            self.values[name].set(str(config[name]))
+        self.include_timestamps.set(config["include_timestamps"])
+        if self.timestamps_changed() is not False:
+            self.status.set(f"Настройки загружены: {Path(path).name}")
+
+    def import_config(self):
+        if self.running:
+            return
+        path = filedialog.askopenfilename(parent=self.root, title="Импорт настроек",
+                                          filetypes=[("JSON config", "*.json")])
+        if path:
+            self.load_config(Path(path))
+
+    def save_config(self, path):
+        if self.running:
+            return
+        try:
+            write_config(path, self.current_config())
+        except (OSError, ValueError, ArgumentTypeError) as exc:
+            messagebox.showerror("Ошибка сохранения настроек", str(exc), parent=self.root)
+            return
+        self.status.set(f"Настройки сохранены: {path}")
+
+    def save_default_config(self):
+        self.save_config(default_config_path())
+
+    def export_config(self):
+        if self.running:
+            return
+        path = filedialog.asksaveasfilename(parent=self.root, title="Экспорт настроек",
+            defaultextension=".json", initialfile="gigaam-config.json", filetypes=[("JSON config", "*.json")])
+        if path:
+            self.save_config(Path(path))
 
     def add_help(self, widget, key):
         self.help_hints.append(HoverHint(widget, *HELP[key]))
@@ -311,7 +364,7 @@ class TranscriberApp:
         # Keep structured results intact; only the view and exported text change.
         self.render_segments()
         if self.saved_output is not None and not self.running:
-            self.save_transcript()
+            return self.save_transcript()
 
     def save_transcript(self):
         try:

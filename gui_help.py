@@ -22,6 +22,28 @@ OVERVIEW = (
 )
 
 HELP = {
+    "config": ("Configuration files", (
+        "On startup, the GUI automatically loads gigaam-config.json beside the EXE. "
+        "Both one-folder and one-file releases use the EXE directory, including when "
+        "launched through a shortcut. Running Python source uses the source directory. "
+        "If no file exists, the original defaults are used.\n\n"
+        "Save as default writes all current model, device, CPU thread, VAD, chunk and "
+        "timestamp settings to that file for the next launch. It replaces the previous "
+        "saved defaults. Export config saves a named preset anywhere you choose. "
+        "Import config applies a preset to the current session; use Save as default "
+        "after importing if you want it to load automatically next time.\n\n"
+        "Files are editable UTF-8 JSON with version 1. Missing settings use the "
+        "original defaults. Unknown keys, invalid values and unsupported versions "
+        "are rejected together, leaving current settings intact. Settings are not "
+        "saved automatically when you adjust a field or exit. Reset defaults changes "
+        "the model/VAD/thread controls in this session; save afterward to replace "
+        "your stored defaults.\n\n"
+        "The EXE directory must be writable to save defaults. If it is read-only, "
+        "export a config to a writable folder and import it when needed, or move "
+        "the portable app to a writable directory. Importing the timestamp preference "
+        "also updates the current result view and any completed transcript file. "
+        "These presets apply to the GUI; CLI and Docker continue to use command-line flags."
+    )),
     "model": ("Model", (
         "Default: RNNT (v3_e2e_rnnt).\n\n"
         "Selects the GigaAM speech-recognition model that turns detected speech "

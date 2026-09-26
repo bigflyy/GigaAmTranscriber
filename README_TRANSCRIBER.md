@@ -58,6 +58,36 @@ model loading and VAD; those phases have no ETA. Unequal chunk lengths and
 initial warm-up can change the estimate. If a chunk takes longer than expected,
 the app displays **Уточняем оставшееся время…** until the next update.
 
+## Saved GUI settings
+
+The GUI loads **gigaam-config.json** next to the EXE on startup. With Python
+source, it looks beside `gui.py`. The location is independent of the working
+directory and of a one-file EXE's temporary extraction directory. Without a
+config, the original defaults apply. These source changes will be included
+in the next rebuild; existing EXEs have not been rebuilt yet.
+
+Open **Настройки** to use:
+
+- **Save as default**: save current settings next to the EXE for future launches.
+- **Export config…**: save a named preset to any folder.
+- **Import config…**: apply a preset now; use **Save as default** to keep it for
+  future launches.
+
+The file contains model, device, CPU threads, all editable VAD/chunk settings,
+and the timestamp checkbox. It contains no audio paths or transcripts.
+Changing fields or exiting does not overwrite a saved config. **Reset defaults**
+resets the model/VAD/thread controls for this session; saving afterward replaces
+the stored defaults. Importing the timestamp preference also updates the current
+result view and a completed transcript, just like toggling the checkbox.
+
+Files are UTF-8 JSON. See [gigaam-config.example.json](gigaam-config.example.json).
+Missing keys use built-in defaults; unknown keys, invalid values, and unsupported
+versions are rejected without partially applying settings. A broken startup
+config displays an error and leaves the app usable with built-in defaults.
+If the EXE folder is read-only, export elsewhere and import that file, or move
+the portable app to a writable folder. Config loading applies to the GUI;
+CLI/Docker settings continue to use explicit command-line flags.
+
 ## Run from the existing CUDA environment
 
 ```powershell
