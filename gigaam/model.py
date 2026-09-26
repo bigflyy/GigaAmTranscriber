@@ -149,18 +149,24 @@ class GigaAMASR(GigaAM):
     @torch.inference_mode()
     def transcribe_longform(
         self, wav_file: str, progress_callback=None, result_callback=None,
-        cpu_threads: int = 4, **kwargs
+        cpu_threads: int = 4, cancel_callback=None, **kwargs
     ) -> List[Dict[str, Union[str, Tuple[float, float]]]]:
         """
         Transcribes a long audio file by splitting it into segments and
         then transcribing each segment.
+        Cancellation is checked between stages/chunks; completed chunks are returned.
         """
         if isinstance(cpu_threads, bool) or not isinstance(cpu_threads, int) or cpu_threads < 1:
             raise ValueError("cpu_threads must be a positive integer")
+        cancelled = cancel_callback or (lambda: False)
+        if cancelled():
+            return []
         previous_threads = torch.get_num_threads()
         try:
             from .vad_utils import segment_audio_file
 
+            if cancelled():
+                return []
             # Silero benefits from one thread; its import also changes this global setting.
             torch.set_num_threads(1)
             transcribed_segments = []
@@ -171,6 +177,8 @@ class GigaAMASR(GigaAM):
             if progress_callback is not None:
                 progress_callback(0, len(segments))
             for segment, segment_boundaries in zip(segments, boundaries):
+                if cancelled():
+                    break
                 wav = segment.to(self._device).unsqueeze(0).to(self._dtype)
                 length = torch.full([1], wav.shape[-1], device=self._device)
                 encoded, encoded_len = self.forward(wav, length)

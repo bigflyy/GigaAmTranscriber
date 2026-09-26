@@ -131,13 +131,16 @@ def main(argv: list[str] | None = None) -> int:
 def run_transcription(audio: Path, output: Path, model_name="v3_e2e_rnnt",
                       device="auto", vad_kwargs=None, status_callback=None,
                       progress_callback=None, result_callback=None,
-                      include_timestamps=True, cpu_threads=4):
+                      include_timestamps=True, cpu_threads=4, cancel_callback=None):
     """Shared CLI/GUI pipeline; callbacks are invoked on the caller's thread."""
     status = status_callback or (lambda message: None)
+    cancelled = cancel_callback or (lambda: False)
     if isinstance(cpu_threads, bool) or not isinstance(cpu_threads, int) or cpu_threads < 1:
         raise ValueError("Число потоков CPU должно быть целым числом не меньше 1")
     if audio.resolve() == output.resolve():
         raise ValueError("Текст нельзя записать поверх исходного аудиофайла")
+    if cancelled():
+        return []
     status("Подготовка к распознаванию...")
     # GigaAM's audio loader calls the external ffmpeg command.
     bundled_bin = Path(__file__).resolve().parent / "bin"
@@ -147,6 +150,8 @@ def run_transcription(audio: Path, output: Path, model_name="v3_e2e_rnnt",
     import gigaam
     import torch
 
+    if cancelled():
+        return []
     device = device if device != "auto" else ("cuda" if torch.cuda.is_available() else "cpu")
     if device == "cuda" and not torch.cuda.is_available():
         raise ValueError("CUDA недоступна на этом компьютере. Выберите CPU.")
@@ -155,11 +160,17 @@ def run_transcription(audio: Path, output: Path, model_name="v3_e2e_rnnt",
     model_root = bundled_model_root(model_name)
     model = gigaam.load_model(model_name, device=device,
                               download_root=str(model_root) if model_root else None)
+    if cancelled():
+        return []
     status("Поиск речи с помощью Silero VAD...")
     segments = model.transcribe_longform(str(audio), progress_callback=progress_callback,
                                          result_callback=result_callback,
                                          cpu_threads=cpu_threads,
+                                         cancel_callback=cancelled,
                                          **(vad_kwargs or {}))
+    # Cancellation before the first result must not erase an existing transcript.
+    if cancelled() and not segments:
+        return segments
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(format_segments(segments, include_timestamps), encoding="utf-8")
     status(f"Сохранено фрагментов: {len(segments)}. Файл: {output}")

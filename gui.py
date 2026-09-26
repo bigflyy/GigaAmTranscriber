@@ -37,6 +37,7 @@ class TranscriberApp:
         self.root.protocol("WM_DELETE_WINDOW", self.close)
         self.events = queue.Queue()
         self.running = False
+        self.cancel_event = threading.Event()
         self.advanced_visible = False
         self.file = tk.StringVar()
         self.model = tk.StringVar(value="RNNT")
@@ -77,6 +78,8 @@ class TranscriberApp:
         self.start_button = ttk.Button(actions, text="Распознать", command=self.start)
         self.start_button.pack(side="left")
         self.controls.append(self.start_button)
+        self.cancel_button = ttk.Button(actions, text="Отмена", command=self.cancel, state="disabled")
+        self.cancel_button.pack(side="left", padx=(8, 0))
         self.advanced_button = ttk.Button(actions, text="Настройки >", command=self.toggle_advanced)
         self.advanced_button.pack(side="left", padx=8)
         ttk.Checkbutton(actions, text="Включить таймкоды", variable=self.include_timestamps,
@@ -239,12 +242,21 @@ class TranscriberApp:
 
     def set_running(self, running):
         self.running = running
+        self.cancel_button.configure(state="normal" if running else "disabled")
         if not running:
             self.estimated_finish_at = None
             self.eta.set("")
         for widget in self.controls:
             state = "disabled" if running else ("readonly" if isinstance(widget, ttk.Combobox) else "normal")
             widget.configure(state=state)
+
+    def cancel(self):
+        if self.running:
+            self.cancel_event.set()
+            self.cancel_button.configure(state="disabled")
+            self.estimated_finish_at = None
+            self.eta.set("")
+            self.status.set("Остановка после текущего этапа… Полученный текст останется в окне.")
 
     def update_eta(self, done, total, completed_at):
         if done == 0:
@@ -291,10 +303,13 @@ class TranscriberApp:
             self.status.set("Не удалось сохранить файл. Текст доступен в окне.")
             messagebox.showerror("Ошибка сохранения", str(exc), parent=self.root)
             return False
-        self.status.set("Готово. Текст сохранён.")
+        self.status.set("Отменено. Частичный текст сохранён." if self.cancel_event.is_set()
+                        else "Готово. Текст сохранён.")
         return True
 
     def start(self):
+        if self.running:
+            return
         try:
             audio = Path(self.file.get()).expanduser().resolve()
             if not audio.is_file():
@@ -311,6 +326,7 @@ class TranscriberApp:
         model = "v3_e2e_rnnt" if self.model.get() == "RNNT" else "v3_e2e_ctc"
         device = self.device.get().lower()
         include_timestamps = self.include_timestamps.get()
+        cancel_event = self.cancel_event = threading.Event()
         self.segments = []
         self.saved_output = None
         self.progress_started_at = None
@@ -329,8 +345,9 @@ class TranscriberApp:
                     status_callback=lambda value: self.events.put(("status", value)),
                     progress_callback=lambda done, total: self.events.put(("progress", (done, total, time.monotonic()))),
                     result_callback=lambda item: self.events.put(("segment", item)),
-                    include_timestamps=include_timestamps, cpu_threads=cpu_threads)
-                self.events.put(("done", output))
+                    include_timestamps=include_timestamps, cpu_threads=cpu_threads,
+                    cancel_callback=cancel_event.is_set)
+                self.events.put(("cancelled" if cancel_event.is_set() else "done", output))
             except Exception as exc:
                 self.events.put(("error", str(exc)))
 
@@ -341,16 +358,29 @@ class TranscriberApp:
             while True:
                 event, value = self.events.get_nowait()
                 if event == "status":
-                    self.status.set(value)
+                    if not self.cancel_event.is_set():
+                        self.status.set(value)
                 elif event == "segment":
                     self.segments.append(value)
                     self.append_segment(value)
                 elif event == "progress":
                     done, total, completed_at = value
-                    self.update_eta(done, total, completed_at)
+                    if not self.cancel_event.is_set():
+                        self.update_eta(done, total, completed_at)
                     self.bar.stop()
                     self.bar.configure(mode="determinate", value=100 * done / max(total, 1))
-                    self.status.set(f"Распознано фрагментов: {done} из {total}…")
+                    if not self.cancel_event.is_set():
+                        self.status.set(f"Распознано фрагментов: {done} из {total}…")
+                elif event == "cancelled":
+                    self.bar.stop()
+                    if str(self.bar["mode"]) == "indeterminate":
+                        self.bar.configure(mode="determinate", value=0)
+                    self.set_running(False)
+                    if self.segments:
+                        self.saved_output = value
+                        self.save_transcript()
+                    else:
+                        self.status.set("Отменено. Нет распознанных фрагментов.")
                 elif event == "done":
                     self.bar.stop()
                     self.bar.configure(mode="determinate", value=100)
