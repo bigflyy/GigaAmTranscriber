@@ -1,4 +1,6 @@
 import warnings
+import os
+import subprocess
 from subprocess import CalledProcessError, run
 from typing import Tuple
 
@@ -31,7 +33,8 @@ def load_audio(audio_path: str, sample_rate: int = SAMPLE_RATE) -> Tensor:
         "-",
     ]
     try:
-        audio = run(cmd, capture_output=True, check=True).stdout
+        audio = run(cmd, capture_output=True, check=True,
+                    creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0).stdout
     except CalledProcessError as exc:
         raise RuntimeError("Failed to load audio") from exc
 

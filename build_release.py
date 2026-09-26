@@ -55,11 +55,13 @@ def main() -> int:
         options = [
             str(ROOT / "transcribe.py"),
             f"--{mode}",
+            "--windowed",
             "--noconfirm",
             "--name=GigaAmTranscriber",
             f"--paths={ROOT}",
             f"--distpath={release}",
-            f"--workpath={base / 'work'}",
+            # Both formats share analysis/PYZ caches; only the final archive differs.
+            f"--workpath={ROOT / 'build' / args.edition / 'work'}",
             f"--specpath={base}",
             "--collect-data=silero_vad",
             "--hidden-import=gigaam.encoder",
@@ -69,6 +71,12 @@ def main() -> int:
             f"--add-binary={ffmpeg}{os.pathsep}bin",
         ]
         options.extend(f"--add-data={path}{os.pathsep}models" for path in model_files)
+        options.append(f"--add-data={ROOT / 'LICENSE'}{os.pathsep}licenses/gigaam")
+        ffmpeg_dir = Path(ffmpeg).parent.parent
+        for filename in ("LICENSE", "README.txt"):
+            notice = ffmpeg_dir / filename
+            if notice.is_file():
+                options.append(f"--add-data={notice}{os.pathsep}licenses/ffmpeg")
         print(f"Building {args.edition} {mode} release from {sys.executable}", flush=True)
         subprocess.run([sys.executable, "-m", "PyInstaller", *options], check=True, cwd=ROOT)
     return 0
