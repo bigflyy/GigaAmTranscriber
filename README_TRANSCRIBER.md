@@ -113,6 +113,7 @@ untouched.
 conda create -n gigaam-cpu python=3.12 pip -y
 conda run -n gigaam-cpu python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.5.1 torchaudio==2.5.1
 conda run -n gigaam-cpu python -m pip install -r requirements-cpu.txt
+conda run -n gigaam-cpu python -c "import gigaam; gigaam.load_model('v3_e2e_rnnt', device='cpu'); gigaam.load_model('v3_e2e_ctc', device='cpu')"
 conda run -n gigaam-cpu python build_release.py cpu all
 ```
 
@@ -124,10 +125,16 @@ conda run -n gigaam-cpu python build_release.py cpu onedir
 
 The release directories are `dist/cpu/onedir/GigaAmTranscriber/` and
 `dist/cpu/onefile/GigaAmTranscriber.exe`. The one-folder directory can be
-zipped and unpacked on another Windows computer. Both builds include the
-default RNNT model, its tokenizer, Silero data, and `ffmpeg.exe`, so the
-default transcription path works offline. The advanced CTC choice downloads
-its model on first use unless you package that model separately.
+zipped and unpacked on another Windows computer. The build recipe now includes
+both `v3_e2e_rnnt` and `v3_e2e_ctc`, their tokenizers, Silero data, and
+`ffmpeg.exe` in both formats. Both model choices will work offline. RNNT stays
+the default. Cache both models before building (the command above downloads
+only missing files). CTC adds approximately **422 MiB of uncompressed model
+files**; the final single-EXE size increase depends on compression.
+
+**Pending rebuild:** existing EXEs still bundle only RNNT. CTC is already
+cached locally and the packaging change is ready for the next build; it has
+not been added to the old EXEs. Python source can use either cached model now.
 
 The older Russian GUI without the remaining-time estimate also exists at
 `dist/cpu/onefile-ru/GigaAmTranscriber.exe`. Use the normal `onedir` / `onefile`

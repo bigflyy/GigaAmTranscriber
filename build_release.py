@@ -12,7 +12,7 @@ import sys
 
 
 ROOT = Path(__file__).resolve().parent
-MODEL_NAME = "v3_e2e_rnnt"
+MODEL_NAMES = ("v3_e2e_rnnt", "v3_e2e_ctc")
 
 
 def main() -> int:
@@ -37,8 +37,9 @@ def main() -> int:
 
     checkpoint_dir = Path.home() / ".cache" / "gigaam"
     model_files = [
-        checkpoint_dir / f"{MODEL_NAME}.ckpt",
-        checkpoint_dir / f"{MODEL_NAME}_tokenizer.model",
+        checkpoint_dir / f"{name}{suffix}"
+        for name in MODEL_NAMES
+        for suffix in (".ckpt", "_tokenizer.model")
     ]
     missing = [str(path) for path in model_files if not path.is_file()]
     if missing:

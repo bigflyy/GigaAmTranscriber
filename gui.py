@@ -105,7 +105,7 @@ class TranscriberApp:
         self.controls.append(threads)
         self.setting_label("Silero: 1 thread; window size: 512 samples (fixed)", "silero_runtime",
             row=6, column=0, columnspan=4, sticky="w", pady=(6, 0))
-        ttk.Label(self.advanced, text="Default model: RNNT. CTC downloads on first use.").grid(
+        ttk.Label(self.advanced, text="Default model: RNNT. Windows builds include RNNT and CTC.").grid(
             row=7, column=0, columnspan=4, sticky="w", pady=3)
         reset = ttk.Button(self.advanced, text="Reset defaults", command=self.reset_defaults)
         reset.grid(row=8, column=0, columnspan=2, sticky="w", pady=(5, 0))

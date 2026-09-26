@@ -51,9 +51,9 @@ HELP = {
         "CTC uses Connectionist Temporal Classification. These are alternative "
         "recognition models, and their wording, punctuation and speed can differ. "
         "Neither choice changes the Silero detection settings.\n\n"
-        "The Windows release includes RNNT and its tokenizer, so the default "
-        "model works offline. CTC is downloaded and cached on first use; this "
-        "requires an internet connection and additional disk space. Select RNNT "
+        "Windows builds include both RNNT and CTC checkpoints and tokenizers, "
+        "so both choices work offline. Running Python source uses the local model "
+        "cache; a missing model is downloaded on first use. Select RNNT "
         "to reproduce the original setup. Compare both models on your own audio "
         "if you want to choose based on transcription quality."
     )),
