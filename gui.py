@@ -221,11 +221,21 @@ class TranscriberApp:
             result[name] = value
         return result
 
-    def set_text(self, value):
+    def set_text(self, value, preserve_view=False):
+        top = self.text.index("@0,0") if preserve_view else "1.0"
         self.text.configure(state="normal")
         self.text.delete("1.0", "end")
         self.text.insert("1.0", value)
         self.text.configure(state="disabled")
+        self.text.yview(top)
+
+    def append_segment(self, segment):
+        # Append without rebuilding existing text, moving the viewport or clearing selection.
+        top = self.text.index("@0,0")
+        self.text.configure(state="normal")
+        self.text.insert("end-1c", format_segments([segment], self.include_timestamps.get()))
+        self.text.configure(state="disabled")
+        self.text.yview(top)
 
     def set_running(self, running):
         self.running = running
@@ -265,8 +275,7 @@ class TranscriberApp:
         self.eta.set(f"Осталось примерно: {duration}")
 
     def render_segments(self):
-        self.set_text(format_segments(self.segments, self.include_timestamps.get()))
-        self.text.see("end")
+        self.set_text(format_segments(self.segments, self.include_timestamps.get()), preserve_view=True)
 
     def timestamps_changed(self):
         # Keep structured results intact; only the view and exported text change.
@@ -335,7 +344,7 @@ class TranscriberApp:
                     self.status.set(value)
                 elif event == "segment":
                     self.segments.append(value)
-                    self.render_segments()
+                    self.append_segment(value)
                 elif event == "progress":
                     done, total, completed_at = value
                     self.update_eta(done, total, completed_at)
@@ -347,7 +356,6 @@ class TranscriberApp:
                     self.bar.configure(mode="determinate", value=100)
                     self.set_running(False)
                     self.saved_output = value
-                    self.render_segments()
                     if not self.segments:
                         self.set_text("Речь не обнаружена.")
                     self.save_transcript()
