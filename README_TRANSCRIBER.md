@@ -3,17 +3,26 @@
 This repo contains a snapshot of a modified GigaAM package using Silero VAD.
 The original `giga.py` is kept as the baseline. `transcribe.py` is the
 standalone launcher. Run without arguments (or double-click the EXE) to open
-the minimal GUI. Choose a file and click **Transcribe**. The output is a UTF-8
-`*.transcript.txt` file beside the input, also displayed in the window.
+the minimal Russian GUI. Choose a file (**Выбрать файл…**) and click
+**Распознать**. The output is a normal UTF-8 `name-transcript.txt` file beside
+the input. Recognized text appears after each completed speech chunk.
 
-**Advanced settings** is collapsed initially. It contains RNNT/CTC model
+**Включить таймкоды** shows or hides timestamps immediately, including during
+transcription. After completion it also updates the saved text file. The
+original chunk boundaries remain in memory until the next file or closing
+the app, so toggling timestamps back on restores them. No regex or destructive
+editing of recognition results is used. The CLI supports `--no-timestamps`.
+
+**Настройки** is collapsed initially. It contains RNNT/CTC model
 selection, device selection, Silero speech/silence/padding settings, and chunk
-lengths. Reset defaults restores the original settings. Silero 6.2.1 fixes
+lengths. **Сбросить настройки** restores the original settings. Silero 6.2.1 fixes
 the analysis window to 512 samples at 16 kHz; its old window-size argument
 has no effect, so this value is shown read-only.
 
 Loading and speech detection use an activity indicator. Transcription reports
-completed segments out of the total. The interface stays responsive while
+`100 × completed speech segments / total speech segments` after Silero has
+found and grouped speech. This is a chunk count, not a time estimate: chunks
+can take different amounts of time. The interface stays responsive while
 the worker runs. The one-file EXE extracts before the window can appear;
 the folder release starts faster.
 
@@ -57,9 +66,14 @@ default RNNT model, its tokenizer, Silero data, and `ffmpeg.exe`, so the
 default transcription path works offline. The advanced CTC choice downloads
 its model on first use unless you package that model separately.
 
-Measured locally on 2026-09-25: the CPU folder is 1.02 GiB unpacked and the
-CPU single EXE is 626 MiB. The single EXE extracts its contents on launch;
-one short sample took about 33 seconds end to end on the build computer.
+For the current local Russian GUI release, the single EXE is at
+`dist/cpu/onefile-ru/GigaAmTranscriber.exe`: the older EXE was running and
+Windows prevented replacing it. Close running copies before rebuilding
+into the normal `onefile` location.
+
+See [local release measurements](BENCHMARK.md) for package sizes, startup
+checks, and CPU versus GPU transcription speed. The single EXE extracts its
+contents on every launch.
 
 ## Build from the existing CUDA environment
 
@@ -76,9 +90,7 @@ requires a suitable NVIDIA GPU and driver. Always test the release outside the
 development environment; changing the developer's `PATH` or installed Python
 packages can mask missing bundled files.
 
-Measured locally on 2026-09-25: the CUDA-capable folder is 4.99 GiB unpacked.
-It was tested on both CUDA and a forced CPU fallback. Size and startup time
-will change with the installed PyTorch and FFmpeg versions.
+Size and startup time will change with the installed PyTorch and FFmpeg versions.
 
 ## Build inputs and Git
 
@@ -95,3 +107,32 @@ The current build script bundles a Gyan FFmpeg 8.0.1 full build, which is
 GPLv3. Before publicly distributing binary releases, review the FFmpeg
 [license and source requirements](https://www.ffmpeg.org/legal.html) for that
 binary. Generated release files are kept out of Git.
+
+## Docker: CPU command-line version
+
+The Docker image is a headless Linux CPU runner, without the Windows GUI.
+It was built and tested locally in about four minutes, including a real
+transcription with networking disabled. Building elsewhere can take longer
+depending on downloads. Docker must be installed and running.
+
+Build:
+
+```powershell
+docker build -t gigaam-transcriber:cpu .
+```
+
+Run in PowerShell, using the existing model cache and a folder containing audio:
+
+```powershell
+docker run --rm --network none `
+  --mount "type=bind,source=$env:USERPROFILE\.cache\gigaam,target=/app/models,readonly" `
+  --mount "type=bind,source=C:\Audio,target=/data" `
+  gigaam-transcriber:cpu /data/recording.wav --device cpu
+```
+
+The result is `C:\Audio\recording-transcript.txt`. Add `--no-timestamps`
+for plain text. Replace `C:\Audio` with your audio folder. The model folder
+must contain `v3_e2e_rnnt.ckpt` and `v3_e2e_rnnt_tokenizer.model`; alternatively,
+mount the `models` folder from the unpacked Windows CPU release there.
+The image includes dependencies and FFmpeg; model weights are mounted
+separately and are not downloaded when using this offline command.
