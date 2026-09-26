@@ -50,13 +50,11 @@ comparisons.
 - Packaged GUI startup and clean shutdown, with screenshots inspected.
 - CPU and CUDA Docker images: both models with `--network none`, mounted
   model cache, actual GPU use for CUDA, and both TXT outputs.
-- Public registry access: anonymous manifest requests for both editions;
-  CPU image pulled without registry credentials, then both models run
-  offline and compared with the local Docker build. Anonymous CUDA layer
-  downloads were also checked. A full CUDA registry pull was stopped after
-  repeated slow transfers near 84% of its largest layer; CUDA inference was
-  verified with the locally built image, while the registry build passed
-  its CLI startup check in GitHub Actions.
+- Public registry access: anonymous manifest requests and full image pulls
+  without registry credentials for both editions. Both RNNT and CTC ran
+  offline from each downloaded image, with GPU inference for CUDA and text
+  matching the local Docker builds. The CUDA pull needed retries after a
+  slow transfer, then completed successfully.
 - GitHub release uploads: server-reported SHA-256 checked against each
   local asset. `SHA256SUMS.txt` and `cuda-parts.json` accompany the release.
 
