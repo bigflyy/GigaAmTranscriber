@@ -44,20 +44,60 @@ The GUI currently loads GigaAM for each file, so allow model loading time
 in addition to these inference figures. CUDA was synchronized around timing.
 
 Silero 6.2.1 calls `torch.set_num_threads(1)` on import in both environments.
-That existing behavior was preserved. These results therefore do not
+That existing behavior was preserved for the original measurements above.
+The app now exposes a separate GigaAM CPU thread count, defaulting to 4.
+The original results therefore do not
 represent tuned multicore CPU performance. Builds and smoke tests had
 finished before the benchmark; each device benchmark ran sequentially.
 
 Reproduce with your own PCM WAV:
 
 ```powershell
-conda run -n cuda-torch2 python benchmark.py recording.wav --device cpu --runs 2
+conda run -n cuda-torch2 python benchmark.py recording.wav --device cpu --cpu-threads 1 --runs 2
 conda run -n cuda-torch2 python benchmark.py recording.wav --device cuda --runs 2
-conda run -n gigaam-cpu python benchmark.py recording.wav --device cpu --runs 2
+conda run -n gigaam-cpu python benchmark.py recording.wav --device cpu --cpu-threads 1 --runs 2
 ```
 
 The private audio is excluded from Git. Sample SHA-256:
 `13c3a08f25177f9999a5af90df31a2a73fa0641b79f34a3a2b97723d4f99d80f`.
+
+## GigaAM CPU thread comparison
+
+A later sequential sweep used the same 60-second sample and CPU environment
+(PyTorch 2.5.1+cpu). Silero used one thread throughout; only GigaAM inference
+changed. No packaging builds were running during the sweep. Each row has two
+consecutive runs with the same loaded model; initialization and model loading
+are excluded. The total includes FFmpeg decoding and VAD (roughly 1–1.4 s).
+
+| GigaAM threads | First run | Second run | Second-run x realtime |
+| ---: | ---: | ---: | ---: |
+| 1 | 12.575 s | 13.123 s | 4.57x |
+| 2 | 8.702 s | 8.239 s | 7.28x |
+| 4 (new default) | 6.379 s | 6.698 s | 8.96x |
+| 8 | 4.631 s | 4.636 s | 12.94x |
+| 16 | 5.299 s | 4.944 s | 12.13x |
+
+Eight threads gave about **44% higher throughput than four** on the second
+run, or about **31% less elapsed time**. Text and segment boundaries were
+identical across all ten runs. This is a small local comparison, not a
+universal optimal thread count. Conditions differed from the earlier CPU/GPU
+baseline, so compare rows within this sweep rather than mixing the tables.
+A follow-up using the implemented setting, in reverse order, measured
+4.156 s at 8 threads and 10.563 s at 1 thread with matching output.
+
+The default is **4**, as requested; choose **8** manually to try the faster
+setting on this CPU. Silero remains at 1 because its maintainers note that
+additional threads can hurt VAD performance:
+[Silero thread-count explanation](https://github.com/snakers4/silero-vad/discussions/484).
+The implementation was checked to use one thread during VAD, the selected
+number during recognition, and restore the previous count after success
+and deliberately triggered failure.
+An additional fresh-process check confirmed that the first Silero import
+also restores the caller's original thread count and that omitted options
+select four GigaAM CPU threads.
+
+To compare another machine, repeat the benchmark with
+`--device cpu --cpu-threads 4` and `--device cpu --cpu-threads 8`.
 
 ## Verification scope
 
@@ -76,6 +116,10 @@ The private audio is excluded from Git. Sample SHA-256:
 - Remaining-time update: real CPU transcription displayed an ETA after the
   first chunk and cleared it on completion. The layout was visually checked;
   both CPU package formats were rebuilt and passed GUI startup again.
+- Thread-count update: the Russian settings defaulted to four threads and
+  completed a real GUI transcription at eight. The CPU folder EXE accepted
+  `--cpu-threads 8` and produced the reference transcript with a minimal PATH.
+  CPU and GPU Docker images were refreshed and passed transcription checks.
 
 CUDA artifacts refer to the earlier English GUI build. Further CUDA rebuilds
 were deferred at the user's request; the Russian interface and incremental

@@ -15,9 +15,26 @@ editing of recognition results is used. The CLI supports `--no-timestamps`.
 
 **Настройки** is collapsed initially. It contains RNNT/CTC model
 selection, device selection, Silero speech/silence/padding settings, and chunk
-lengths. **Сбросить настройки** restores the original settings. Silero 6.2.1 fixes
+lengths. **Сбросить настройки** restores the original model/VAD settings and
+the current default of **4 GigaAM CPU threads**. Silero 6.2.1 fixes
 the analysis window to 512 samples at 16 kHz; its old window-size argument
 has no effect, so this value is shown read-only.
+
+**Потоки GigaAM (CPU)** controls PyTorch's intra-operation CPU thread count
+for GigaAM recognition. The default is 4; 1 restores the original single-thread
+behavior. Silero runs with one thread independently, then the selected count
+is applied to GigaAM when using CPU. CUDA inference ignores this CPU setting.
+The previous PyTorch thread count is restored after transcription, including
+on errors. This changes a process-wide PyTorch setting; the desktop app runs
+one transcription at a time. It does not reserve a fixed set of CPU cores.
+
+On the local Ryzen 7 7840HS, 8 threads were faster than 4, while 16 were slower
+than 8. More threads are not always faster; see [measurements](BENCHMARK.md).
+The CLI and both Docker images accept, for example:
+
+```powershell
+conda run -n gigaam-cpu python transcribe.py recording.wav --device cpu --cpu-threads 8
+```
 
 Loading and speech detection use an activity indicator. Transcription reports
 `100 × completed speech segments / total speech segments` after Silero has
@@ -40,8 +57,9 @@ conda run -n cuda-torch2 python transcribe.py "C:\path\to\audio.mp4"
 ```
 
 `transcribe.py --help` shows normal use. `transcribe.py --advanced-help` shows
-the optional model, device, segmentation and Silero VAD parameters. Omitted
-parameters retain the values from the original modified package. For example:
+the optional model, device, CPU thread count, segmentation and Silero VAD
+parameters. Model and VAD defaults retain the values from the original
+modified package; GigaAM CPU inference now defaults to 4 threads. For example:
 
 ```powershell
 conda run -n cuda-torch2 python transcribe.py "C:\path\to\audio.wav" --device cpu --vad-threshold 0.6
