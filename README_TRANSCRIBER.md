@@ -26,6 +26,13 @@ can take different amounts of time. The interface stays responsive while
 the worker runs. The one-file EXE extracts before the window can appear;
 the folder release starts faster.
 
+After the first completed chunk, **Осталось примерно** shows a countdown.
+At each completion the estimate is recalculated as the mean elapsed time per
+completed chunk multiplied by the remaining chunk count. Timing starts after
+model loading and VAD; those phases have no ETA. Unequal chunk lengths and
+initial warm-up can change the estimate. If a chunk takes longer than expected,
+the app displays **Уточняем оставшееся время…** until the next update.
+
 ## Run from the existing CUDA environment
 
 ```powershell
@@ -66,10 +73,10 @@ default RNNT model, its tokenizer, Silero data, and `ffmpeg.exe`, so the
 default transcription path works offline. The advanced CTC choice downloads
 its model on first use unless you package that model separately.
 
-For the current local Russian GUI release, the single EXE is at
-`dist/cpu/onefile-ru/GigaAmTranscriber.exe`: the older EXE was running and
-Windows prevented replacing it. Close running copies before rebuilding
-into the normal `onefile` location.
+The older Russian GUI without the remaining-time estimate also exists at
+`dist/cpu/onefile-ru/GigaAmTranscriber.exe`. Use the normal `onedir` / `onefile`
+paths for the latest release. Close running copies before rebuilding, or
+pass `--output-root dist/new-release` to write both formats to a new location.
 
 See [local release measurements](BENCHMARK.md) for package sizes, startup
 checks, and CPU versus GPU transcription speed. The single EXE extracts its
@@ -136,3 +143,46 @@ must contain `v3_e2e_rnnt.ckpt` and `v3_e2e_rnnt_tokenizer.model`; alternatively
 mount the `models` folder from the unpacked Windows CPU release there.
 The image includes dependencies and FFmpeg; model weights are mounted
 separately and are not downloaded when using this offline command.
+
+## Docker: NVIDIA GPU command-line version
+
+Docker Desktop must be running. The container processes one file and exits;
+there is no background application server or web interface to start.
+On Windows, GPU containers require Docker Desktop's WSL 2 backend and a
+compatible NVIDIA driver; see the official
+[Docker GPU setup instructions](https://docs.docker.com/desktop/features/gpu/).
+On Linux, configure the
+[NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html).
+
+Build from this repository:
+
+```powershell
+docker build --build-arg TORCH_VARIANT=cu124 -t gigaam-transcriber:cuda .
+```
+
+The same Dockerfile defaults to CPU; `TORCH_VARIANT=cu124` installs the
+[official PyTorch 2.5.1 CUDA 12.4 wheels](https://docs.pytorch.org/get-started/previous-versions/).
+CUDA dependencies are included in the image; the NVIDIA driver comes from
+the host. GPU builds download considerably more than CPU builds.
+
+Run in PowerShell:
+
+```powershell
+docker run --rm --gpus all --network none `
+  --mount "type=bind,source=$env:USERPROFILE\.cache\gigaam,target=/app/models,readonly" `
+  --mount "type=bind,source=C:\Audio,target=/data" `
+  gigaam-transcriber:cuda /data/recording.wav --device cuda
+```
+
+Replace the audio folder and filename. The result is
+`C:\Audio\recording-transcript.txt`; add `--no-timestamps` for plain text.
+As in the CPU example, the RNNT checkpoint and tokenizer must be present
+in the mounted model folder. Networking is disabled in this example,
+so downloading an uncached CTC model requires a different run command.
+
+`--gpus all` exposes the GPU to the container. `--device cuda` makes the
+application report an error if CUDA is unavailable instead of silently
+using CPU. To use this larger image on CPU, omit `--gpus all` and pass
+`--device cpu`. Image tags here are local build outputs, not published
+Docker Hub images; build them on each machine or transfer them with
+`docker save` / `docker load` along with the separate model files.

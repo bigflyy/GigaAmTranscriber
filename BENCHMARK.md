@@ -8,7 +8,7 @@ These measurements describe this machine and sample, not a performance guarantee
 
 | Release | Folder size | Single EXE size | Folder GUI startup | Single EXE GUI startup |
 | --- | ---: | ---: | ---: | ---: |
-| CPU (Russian GUI) | 1.02 GiB | 626.43 MiB | 2.20 s | 23.66 s |
+| CPU (Russian GUI with ETA) | 1.02 GiB | 626.43 MiB | 2.45 s | 26.11 s |
 | CUDA with CPU fallback | 4.99 GiB | 3.13 GiB | 2.09 s | 129.39 s |
 
 Sizes include the RNNT checkpoint, tokenizer, Silero data, FFmpeg, Python,
@@ -73,15 +73,27 @@ The private audio is excluded from Git. Sample SHA-256:
   and toggling back restored the original boundaries without loss.
 - Updated CPU folder EXE: default `-transcript.txt` naming and plain-text
   export matched the reference. Both updated CPU packages passed GUI startup.
+- Remaining-time update: real CPU transcription displayed an ETA after the
+  first chunk and cleared it on completion. The layout was visually checked;
+  both CPU package formats were rebuilt and passed GUI startup again.
 
 CUDA artifacts refer to the earlier English GUI build. Further CUDA rebuilds
 were deferred at the user's request; the Russian interface and incremental
-text display are released for CPU first. The updated CPU single EXE is in
-`dist/cpu/onefile-ru/` because running copies locked the older `onefile` EXE.
+text display are released for CPU first. The latest CPU single EXE, including
+the remaining-time estimate, is in `dist/cpu/onefile/`. The `onefile-ru`
+directory contains the earlier build without ETA.
 
 The Linux CPU Docker image was also built and tested with a mounted model
 cache and networking disabled. Its plain-text output matched the source
 sample. This Docker check was functional, not a speed benchmark.
+
+The CUDA Docker image (`gigaam-transcriber:cuda`, PyTorch 2.5.1+cu124) was
+built and tested with `--gpus all --device cuda` on the RTX 4070 Laptop GPU.
+It transcribed the sample offline using the mounted RNNT model cache;
+its plain-text output matched the CPU reference. The same image also
+passed with `--device cpu` and no GPU exposed. Docker reported image sizes
+of 9.46 GB for CUDA and 2.05 GB for CPU; the separately mounted model weights
+are excluded. These are functional checks, not Docker throughput benchmarks.
 
 Testing was performed on the build computer, not a separate clean Windows
 installation. CTC selection is implemented but its model was not downloaded
