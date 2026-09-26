@@ -29,7 +29,7 @@ def default_config_path():
 
 def defaults():
     return {"version": 1, "model": "RNNT", "device": "Auto", "cpu_threads": 4,
-            "include_timestamps": True,
+            "include_timestamps": False,
             **{name: default for name, _, _, default in SETTINGS}}
 
 

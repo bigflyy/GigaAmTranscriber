@@ -13,7 +13,8 @@ Recognized text appears after each completed speech chunk. Cancellation also
 saves both versions of the partial result. Cancelling before any chunks have
 been recognized leaves existing output files untouched.
 
-**Включить таймкоды** shows or hides timestamps immediately, including during
+**Включить таймкоды** is off by default (a saved config can override it).
+It shows or hides timestamps immediately, including during
 transcription. It changes only the preview; both file versions are always
 saved. The original chunk boundaries remain in memory until the next file or
 closing the app, so toggling timestamps back on restores them. The CLI also

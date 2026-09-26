@@ -3,7 +3,7 @@
   "model": "RNNT",
   "device": "Auto",
   "cpu_threads": 4,
-  "include_timestamps": true,
+  "include_timestamps": false,
   "vad_threshold": 0.5,
   "vad_min_speech_ms": 300,
   "vad_max_speech_s": 20.0,

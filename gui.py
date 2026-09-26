@@ -33,7 +33,7 @@ class TranscriberApp:
         self.cpu_threads = tk.StringVar(value="4")
         self.status = tk.StringVar(value="Выберите аудио- или видеофайл.")
         self.output = tk.StringVar(value="Текст будет сохранён рядом с исходным файлом.")
-        self.include_timestamps = tk.BooleanVar(value=True)
+        self.include_timestamps = tk.BooleanVar(value=False)
         self.segments = []
         self.saved_output = None
         self.eta = tk.StringVar()
