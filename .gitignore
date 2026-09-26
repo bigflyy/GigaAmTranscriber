@@ -6,3 +6,4 @@ dist/
 models/
 *.ckpt
 *.transcript.txt
+*-transcript.txt

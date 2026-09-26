@@ -15,6 +15,17 @@ def format_time(seconds: float) -> str:
     return f"{minutes:02d}:{rest:06.3f}"
 
 
+def format_segments(segments, include_timestamps=True) -> str:
+    lines = []
+    for item in segments:
+        text = item["transcription"]
+        if include_timestamps:
+            start, end = item["boundaries"]
+            text = f"[{format_time(start)} - {format_time(end)}] {text}"
+        lines.append(text)
+    return "\n".join(lines) + ("\n" if lines else "")
+
+
 def parser(advanced: bool = False) -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         description="Transcribe an audio or video file with GigaAM and Silero VAD."
@@ -22,6 +33,7 @@ def parser(advanced: bool = False) -> argparse.ArgumentParser:
     p.add_argument("audio", nargs="?", type=Path, help="Input file; the GUI opens if omitted")
     p.add_argument("--gui", action="store_true", help="Open the graphical interface")
     p.add_argument("-o", "--output", type=Path, help="Transcript path (default: beside input)")
+    p.add_argument("--no-timestamps", action="store_true", help="Save plain text without timestamps")
     p.add_argument("--advanced-help", action="store_true", help="Show advanced settings")
     hidden = None if advanced else argparse.SUPPRESS
     p.add_argument("--model", choices=("v3_e2e_rnnt", "v3_e2e_ctc"),
@@ -95,9 +107,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Input file does not exist: {audio}", file=sys.stderr)
         return 2
 
-    output = (args.output or audio.with_name(audio.stem + ".transcript.txt")).expanduser().resolve()
+    output = (args.output or audio.with_name(audio.stem + "-transcript.txt")).expanduser().resolve()
     run_transcription(audio, output, args.model, args.device, make_vad_kwargs(args),
-                      status_callback=lambda message: print(message, flush=True))
+                      status_callback=lambda message: print(message, flush=True),
+                      include_timestamps=not args.no_timestamps)
     if picked and sys.stdin and sys.stdin.isatty():
         input("Press Enter to close...")
     return 0
@@ -105,12 +118,13 @@ def main(argv: list[str] | None = None) -> int:
 
 def run_transcription(audio: Path, output: Path, model_name="v3_e2e_rnnt",
                       device="auto", vad_kwargs=None, status_callback=None,
-                      progress_callback=None):
+                      progress_callback=None, result_callback=None,
+                      include_timestamps=True):
     """Shared CLI/GUI pipeline; callbacks are invoked on the caller's thread."""
     status = status_callback or (lambda message: None)
     if audio.resolve() == output.resolve():
-        raise ValueError("The transcript must not overwrite the input audio")
-    status("Preparing transcription...")
+        raise ValueError("Текст нельзя записать поверх исходного аудиофайла")
+    status("Подготовка к распознаванию...")
     # GigaAM's audio loader calls the external ffmpeg command.
     bundled_bin = Path(__file__).resolve().parent / "bin"
     if (bundled_bin / "ffmpeg.exe").is_file():
@@ -121,23 +135,19 @@ def run_transcription(audio: Path, output: Path, model_name="v3_e2e_rnnt",
 
     device = device if device != "auto" else ("cuda" if torch.cuda.is_available() else "cpu")
     if device == "cuda" and not torch.cuda.is_available():
-        raise ValueError("CUDA was requested but is unavailable on this computer.")
+        raise ValueError("CUDA недоступна на этом компьютере. Выберите CPU.")
 
-    status(f"Loading {model_name} on {device} (uncached models download on first use)...")
+    status(f"Загрузка {model_name} ({device}). При первом использовании модель может скачиваться...")
     model_root = bundled_model_root(model_name)
     model = gigaam.load_model(model_name, device=device,
                               download_root=str(model_root) if model_root else None)
-    status("Finding speech with Silero VAD...")
+    status("Поиск речи с помощью Silero VAD...")
     segments = model.transcribe_longform(str(audio), progress_callback=progress_callback,
+                                         result_callback=result_callback,
                                          **(vad_kwargs or {}))
-    lines = [
-        f"[{format_time(start)} - {format_time(end)}] {item['transcription']}"
-        for item in segments
-        for start, end in [item["boundaries"]]
-    ]
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
-    status(f"Saved {len(lines)} segments to {output}")
+    output.write_text(format_segments(segments, include_timestamps), encoding="utf-8")
+    status(f"Сохранено фрагментов: {len(segments)}. Файл: {output}")
     return segments
 
 
