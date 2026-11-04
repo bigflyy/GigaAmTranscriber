@@ -40,9 +40,9 @@ Findings and measurements behind this plan are in [HANDOFF.md](../../HANDOFF.md)
 
 - [x] **R1** Owner confirms the new build works; recreate the dev venv and run the test suite
 - [x] **R2** Commit the rewrite in small steps (export tools, engine, CLI and GUI, requirements, build, removal, Docker, docs, plan)
-- [ ] **R3** Push to main
-- [ ] **R4** Publish the v0.2.0 GitHub release with the four assets; check the uploaded checksums
-- [ ] **R5** Run "Publish CPU and CUDA containers" with v0.2.0; check both images pass
+- [x] **R3** Push to main
+- [x] **R4** Publish the v0.2.0 GitHub release with the four assets; check the uploaded checksums
+- [x] **R5** Run "Publish CPU and CUDA containers" with v0.2.0; check both images pass
 
 ### Stage E: Speaker diarization
 

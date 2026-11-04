@@ -1,6 +1,6 @@
 # Handoff: state and findings
 
-Last updated 2026-11-04. The plan is in [docs/plans/01-onnx-runtime-rewrite.md](docs/plans/01-onnx-runtime-rewrite.md).
+Last updated 2026-11-05. The plan is in [docs/plans/01-onnx-runtime-rewrite.md](docs/plans/01-onnx-runtime-rewrite.md).
 
 ## Decisions (approved by the owner on 2026-11-04)
 
@@ -10,13 +10,30 @@ Last updated 2026-11-04. The plan is in [docs/plans/01-onnx-runtime-rewrite.md](
 - Release v0.2.0: one Windows zip (GUI + console CLI, RNNT and CTC bundled),
   updated Docker images. Speaker diarization is NOT part of it (owner: not now).
 - Old builds in `dist/` may be deleted once the new build is verified.
-- Commit and publish the release only after the owner has seen the new build work.
-  Nothing of the rewrite is committed yet.
+- Commit and publish the release only after the owner has seen the new build work
+  (owner confirmed in session 3).
+
+## Release v0.2.0 (session 3, 2026-11-04): published
+
+- Dev venv recreated (scratchpad `venv-app` of session 3); 261 passed, 1 skipped
+  (the parity test, which needs `GIGAAM_PARITY_AUDIO` / `GIGAAM_PARITY_REFERENCE`).
+- Rewrite committed in 9 commits (8c4135e..eba7650) and pushed to main.
+- GitHub release v0.2.0 at eba7650, marked Latest:
+  https://github.com/bigflyy/GigaAmTranscriber/releases/tag/v0.2.0
+  Four assets uploaded; GitHub's SHA-256 digests match SHA256SUMS.txt, and a fresh
+  download of all assets passed `sha256sum -c` (the first `gh release download` of the
+  zip broke off with an HTTP/2 stream error; `curl -C -` resumed it).
+- Workflow "Publish CPU and CUDA containers" run 41867784548 with v0.2.0: both jobs
+  passed. Pushed `ghcr.io/bigflyy/gigaamtranscriber:v0.2.0-cpu` / `:cpu`
+  (sha256:73cf43eb...) and `:v0.2.0-cuda` / `:cuda` (sha256:c615b94f...).
+  The workflow smoke test runs `--version` and transcribes a 2 s silent file offline
+  with RNNT and CTC: it proves the image starts and loads both models without network,
+  but the encoder does not run on speech there. Real speech was checked only on the
+  locally built CPU image (session 2). The CUDA image is still not GPU-tested.
+- Remaining work: plan items B2 (fp16 on DirectML), B6 (downloads of extra models),
+  and Stage E (speaker diarization, owner: not now).
 
 ## State of the rewrite (session 2, 2026-11-04)
-
-All work is still uncommitted; the owner wants to see the new build before any
-commit or release. Planned commit order is at the end of this section.
 
 Done and verified in session 2:
 
@@ -60,19 +77,10 @@ Done and verified in session 2:
   is the built-in `http.docker.internal:3128` in "system" mode (Windows proxy is off). The
   owner chose to leave Docker Desktop settings as they are.
 - `dist/` deleted (owner approved; v0.1.0 assets are all on the GitHub release).
-- NEXT: the owner looks at the build (`build/app/GigaAmTranscriber/GigaAmTranscriber.exe`
-  or the zip). Only after the owner confirms: commit in the planned order, push, publish
-  the v0.2.0 release with the four assets and RELEASE_NOTES.md as the body, then run the
-  container workflow with version v0.2.0 and check both images.
-
-Dev venv: scratchpad `venv-app` of session 2 (may be gone); recreate with
+Dev venv: scratchpad `venv-app` of session 3 (may be gone); recreate with
 `uv venv venv-app --python C:\Users\User\.conda\envs\cuda-torch2\python.exe` and
 `uv pip install -r requirements-build.txt`. Run the build with that venv's python.
 
-Planned commits (small, no Claude attribution): export tools; engine + tests;
-CLI and GUI; requirements; Windows build; removal of the torch-era app; Docker;
-docs; plan, handoff and experiments. Then the v0.2.0 GitHub release with the four
-assets from `build/release/`, then the container workflow.
 
 ## Measurements (2026-11-04, Ryzen 7 7840HS, RTX 4070 Laptop 8 GB)
 
