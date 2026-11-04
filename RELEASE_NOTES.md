@@ -1,66 +1,76 @@
-# GigaAM Transcriber v0.1.0
+# GigaAM Transcriber v0.2.0
 
-Portable Windows x64 transcription app with a Russian interface and English
-advanced settings/help. Both RNNT and CTC models are bundled for offline use.
+The app is rewritten on ONNX Runtime. PyTorch is gone from the app: one
+Windows download for every GPU and the CPU, a few seconds to start, and
+transcription several times faster. The recognised text is the same as in v0.1.
 
-## Windows downloads
+## Windows download
 
-- **CPU:** download `GigaAmTranscriber-CPU.exe` and run it. No Python, Conda,
-  FFmpeg installation, or model download is needed.
-- **CUDA:** download **all** `GigaAmTranscriber-CUDA.exe.partXX` files, plus
-  `cuda-parts.json`, `Join-CUDA.ps1`, and `Join-CUDA.cmd` into the same directory.
-  Double-click **Join-CUDA.cmd**. It verifies SHA-256 checksums and reconstructs
-  `GigaAmTranscriber-CUDA.exe`. Run that EXE normally afterward; the parts can
-  be deleted. An NVIDIA GPU and compatible driver are needed for CUDA mode.
-  The CUDA app also supports CPU mode.
+Download **`GigaAmTranscriber-v0.2.0-windows-x64.zip`** (about 920 MB), unzip
+it anywhere and run **`GigaAmTranscriber.exe`**. `gigaam-cli.exe` in the same
+folder is the command line. No Python, CUDA, FFmpeg or model download is needed.
 
-GitHub limits each asset to under 2 GiB, so CUDA is distributed in parts.
-Allow free disk space for the downloaded parts, the assembled EXE, and the
-temporary extraction performed by a single-file PyInstaller executable.
-First launch can take tens of seconds. These EXEs are not code-signed.
+- One build for all computers: **Авто** uses any DirectX 12 GPU (NVIDIA, AMD,
+  Intel) through DirectML and falls back to the CPU. No CUDA install, no split
+  download, no join script.
+- A folder instead of a single EXE: nothing is unpacked to a temporary folder at
+  every launch. The window opens in about 1 s and the model is ready 2-3 s
+  later (v0.1: 27 s for the CPU EXE and over 100 s for the CUDA EXE before the
+  window appeared).
+- These EXEs are not code-signed; Windows SmartScreen may ask for confirmation.
 
-## Features
+## Faster
 
-- File selection, streaming partial results, progress and estimated remaining time.
-- Cancellation retains and saves partial text. Total elapsed time appears afterward.
-- Plain `name-transcript.txt` and timestamped `name-transcript-timestamps.txt`.
-- Timestamp checkbox affects only the preview; it is off by default.
-- No forced auto-scroll when new text arrives.
-- Total duration, speech/non-speech duration, and actual skipped audio.
-- RNNT/CTC, CPU/CUDA selection, four CPU threads by default, single-thread Silero VAD.
-- VAD max speech, preferred max chunk, and hard limit default to 25 seconds.
-- Removed the preferred-min early-cut rule; corrected leading-silence retention.
-- Import/export settings and `gigaam-config.json` beside the EXE for startup defaults.
+On a 7.5-minute lecture (Ryzen 7 7840HS, RTX 4070 Laptop):
 
-Existing saved configs override defaults. Use **Reset defaults → Save as default**
-to adopt the current defaults. Rename the supplied example config to
-`gigaam-config.json` only if you want to use its values as your startup preset.
+| | v0.1 (PyTorch) | v0.2 (ONNX Runtime) |
+| --- | ---: | ---: |
+| GPU, first file after start | 38 s (CUDA) | 5-7 s (DirectML) |
+| CPU, 8 threads | 40 s | 25 s |
+| Model ready after start | 11-15 s | 2-3 s |
+
+The model now starts loading when the window opens and stays loaded between
+files. The speech search overlaps with recognition, the audio is decoded once,
+and the RNNT decoder no longer runs its network on every frame.
+Details: [BENCHMARK.md](https://github.com/bigflyy/GigaAmTranscriber/blob/main/BENCHMARK.md).
+
+## New
+
+- **SRT subtitles** and **JSON with word times** in addition to TXT and timestamped TXT.
+- **Word timestamps** from the decoders (40 ms steps), used by SRT and JSON.
+- The command line takes several files and wildcards (`gigaam-cli.exe *.mp3`),
+  `--formats`, `--out-dir`, and the speech search settings as flags.
+- Simpler settings window: model, device, CPU threads and output formats.
+  The speech search settings are in `gigaam-config.json` (see
+  `gigaam-config.example.json`); v0.1 settings files still load.
+
+## Same results
+
+The speech search and chunking are ported exactly from v0.1 (Silero VAD 6.2.1
+and the same grouping). On the 7.5-minute test file all 932 words and all 26
+chunk boundaries are identical to v0.1, on the GPU and on the CPU.
 
 ## Docker
 
-CPU: `ghcr.io/bigflyy/gigaamtranscriber:cpu`
+CPU: `ghcr.io/bigflyy/gigaamtranscriber:cpu` · CUDA: `ghcr.io/bigflyy/gigaamtranscriber:cuda`
+(versioned: `v0.2.0-cpu`, `v0.2.0-cuda`).
 
-CUDA: `ghcr.io/bigflyy/gigaamtranscriber:cuda`
+The models are now inside the images: no model volume or download step.
+Some flags changed (`--device gpu`, `--threads`, `--model RNNT|CTC`).
+[Docker commands](https://github.com/bigflyy/GigaAmTranscriber/blob/main/DOCKER.md).
 
-Versioned tags: `v0.1.0-cpu` and `v0.1.0-cuda`.
+## Not in this release
 
-**[Docker setup, model download, and copy-and-paste commands](https://github.com/bigflyy/GigaAmTranscriber/blob/main/DOCKER.md)**
+- Only the Russian v3 RNNT and CTC models are included. The multilingual
+  models need a model download step in the app, which is planned.
+- Speaker diarization (who speaks when) is planned for a later release.
 
-Docker images are headless Linux amd64 runners. Model weights use a mounted
-cache, rather than being embedded in the image.
+## Downloads
 
-## Verification
+- `GigaAmTranscriber-v0.2.0-windows-x64.zip` - the app.
+- `THIRD_PARTY_LICENSES.zip` - licences of the bundled components (also inside the app folder).
+- `FFmpeg-8.0.1-source.zip` - source of the bundled FFmpeg build (GPLv3).
+- `SHA256SUMS.txt` - checksums of the files above.
 
-Regression checks cover configuration, chunking, leading silence, GUI controls,
-scroll preservation, cancellation, elapsed time and both TXT exports. Both
-models are tested on CPU and CUDA. Packaged apps are tested without Conda or
-FFmpeg on PATH, with an empty user model cache and downloads blocked. CPU and
-CUDA Docker images are tested with `--network none` and mounted models.
-
-`SHA256SUMS.txt` contains release asset checksums. The CUDA manifest also contains
-the expected hash of the reconstructed executable.
-
-[Verification details](https://github.com/bigflyy/GigaAmTranscriber/blob/main/RELEASE_TESTS.md)
-and [third-party notices](https://github.com/bigflyy/GigaAmTranscriber/blob/main/THIRD_PARTY_NOTICES.md)
-are available in the repository. License notices and the bundled FFmpeg source
-revision are supplied as companion release downloads.
+[Verification](https://github.com/bigflyy/GigaAmTranscriber/blob/main/RELEASE_TESTS.md)
+· [Third-party notices](https://github.com/bigflyy/GigaAmTranscriber/blob/main/THIRD_PARTY_NOTICES.md)

@@ -1,202 +1,155 @@
-# GigaAM Transcriber — Downloads
+# GigaAM Transcriber
 
-- **[Windows CPU / CUDA release](https://github.com/bigflyy/GigaAmTranscriber/releases/latest)** — portable Russian GUI, RNNT and CTC included.
-- **[Docker CPU / CUDA: installation and commands](DOCKER.md)** — command-line images with a reusable model cache.
-- **[User guide and building from source](README_TRANSCRIBER.md)**.
+Offline transcription of Russian speech from audio and video files, with the
+[GigaAM v3](https://github.com/salute-developers/GigaAM) models. A Windows app
+(window and command line) and Linux Docker images.
 
-The CPU release is one EXE. The CUDA EXE exceeds GitHub's per-file size limit:
-download both `.part` files, `cuda-parts.json`, `Join-CUDA.ps1` and `Join-CUDA.cmd`
-into one folder, then double-click **Join-CUDA.cmd**. It checks the downloads
-and creates one **GigaAmTranscriber-CUDA.exe**. No Python or Conda is required.
+Since v0.2.0 the app runs on [ONNX Runtime](https://onnxruntime.ai/) instead of
+PyTorch: the download is a quarter of the old CUDA build, it starts in a few
+seconds, and it uses any DirectX 12 GPU (NVIDIA, AMD, Intel) through DirectML,
+with the CPU as fallback. A 7.5-minute lecture takes about 5 s on a laptop GPU
+and about 25 s on the CPU; see [BENCHMARK.md](BENCHMARK.md).
 
-Both Windows editions include both models and FFmpeg. Every transcription saves
-plain text and a separate timestamped TXT. Advanced settings support JSON presets.
+## Downloads
 
----
+- **Windows:** [`GigaAmTranscriber-v0.2.0-windows-x64.zip`](https://github.com/bigflyy/GigaAmTranscriber/releases/latest)
+  (about 920 MB, 1.2 GB unpacked). Unzip it anywhere and run `GigaAmTranscriber.exe`.
+  No Python, CUDA, FFmpeg or model download is needed; both models are inside.
+- **Docker (Linux, command line):** CPU and NVIDIA CUDA images, see [DOCKER.md](DOCKER.md).
 
-Upstream GigaAM documentation follows.
+## Using the app
 
-# GigaAM: the family of open-source acoustic models for speech processing
+Choose a file and press **Распознать**. The model loads in the background as
+soon as the window opens and stays loaded between files. Text appears while the
+file is processed; **Отмена** stops and keeps the finished part. Results are
+saved beside the source file:
 
-<div align="center" style="line-height: 1;">
+| Format | File | Contents |
+| --- | --- | --- |
+| `txt` | `name-transcript.txt` | plain text, one line per speech fragment |
+| `timestamps` | `name-transcript-timestamps.txt` | the same lines with `[start - end]` times |
+| `srt` | `name-transcript.srt` | subtitles, short cues built from word times |
+| `json` | `name-transcript.json` | segments and every word with its start and end time |
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![arXiv](https://img.shields.io/badge/arXiv-2506.01192-b31b1b.svg)](https://arxiv.org/abs/2506.01192)
-[![HuggingFace](https://img.shields.io/badge/🤗%20HuggingFace-Models-yellow.svg)](https://huggingface.co/ai-sage/GigaAM-v3)
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/salute-developers/GigaAM/blob/main/colab_example.ipynb)
+TXT and timestamped TXT are on by default; **Настройки** chooses the formats,
+the model (RNNT by default, or CTC), the device
+(Авто, GPU, CPU) and CPU threads. **Сохранить как настройки по умолчанию** writes
+them to `gigaam-config.json` beside the app.
 
-</div>
+The command line uses the same models and settings file:
 
-<hr>
-
-![plot](./assets/gigaam_scheme.svg)
-
-## Latest News
-* 2025/11 — GigaAM-v3: **30%** WER reduction on new data domains; GigaAM-v3-e2e: end-to-end transcription support (**70:30** win in Side-by-Side vs Whisper-large-v3)
-* 2025/06 — Our [research paper on GigaAM](https://arxiv.org/abs/2506.01192) was accepted to InterSpeech 2025!
-* 2024/12 — [MIT License](./LICENSE), GigaAM-v2 (**-15%** and **-12%** WER Reduction for CTC and RNN-T models, respectively), [ONNX export support](#onnx-export-and-inference)
-* 2024/05 — GigaAM-RNNT (**-19%** WER Reduction), [long-form inference using external Voice Activity Detection](#model-inference)
-* 2024/04 — GigaAM Release: GigaAM-CTC ([SoTA Speech Recognition model for the Russian language](#model-performance)), [GigaAM-Emo](#model-performance)
-
----
-
-## Setup
-
-### Requirements
-- Python ≥ 3.10
-- [ffmpeg](https://ffmpeg.org/) installed and added to your system's PATH
-
-### Install the GigaAM Package
-
-```bash
-# Clone the repository
-git clone https://github.com/salute-developers/GigaAM.git
-cd GigaAM
-
-# Install the package requirements
-pip install -e .
-
-# (optionally) Verify the installation:
-pip install -e .[tests]
-pytest -v tests/test_loading.py -m partial  # or `-m full` to test all models
+```powershell
+gigaam-cli.exe recording.mp3
+gigaam-cli.exe *.mp4 --formats txt,srt --out-dir C:\Transcripts
+gigaam-cli.exe lecture.m4a --model CTC --device cpu --threads 8
+gigaam-cli.exe --help
 ```
 
----
+### Settings file
 
-## GigaAM overview
+`gigaam-config.json` beside the app holds the defaults for both the window and
+the command line. [`gigaam-config.example.json`](gigaam-config.example.json)
+lists every key. Files saved by v0.1 still load (`"CUDA"` now means GPU).
+Speech search and chunking settings are only in this file and in command-line
+flags such as `--vad-threshold`:
 
-GigaAM is a [Conformer](https://arxiv.org/pdf/2005.08100.pdf)-based foundational model (220-240M parameters) pre-trained on diverse Russian speech data. It serves as the backbone for the entire GigaAM family, enabling state-of-the-art fine-tuned performance in speech recognition and emotion recognition. More information about GigaAM-v1 can be found in our [post on Habr](https://habr.com/ru/companies/sberdevices/articles/805569). We fine-tuned the GigaAM encoder for ASR using [CTC](https://www.cs.toronto.edu/~graves/icml_2006.pdf) and [RNNT](https://arxiv.org/abs/1211.3711) decoders. GigaAM family includes three lines of models
+| Key | Default | Meaning |
+| --- | ---: | --- |
+| `vad_threshold` | 0.5 | Silero speech probability at or above which audio counts as speech |
+| `vad_min_speech_ms` | 300 | shorter speech is ignored |
+| `vad_min_silence_ms` | 2000 | a pause must be this long to end a speech region |
+| `vad_speech_pad_ms` | 250 | padding added around each speech region |
+| `vad_max_speech_s` | 25 | longer regions are split at their longest pause |
+| `max_duration` | 25 | regions are joined into chunks of up to this many seconds |
+| `strict_limit_duration` | 25 | longer chunks are cut into equal parts (GigaAM takes about 25 s at most) |
+| `new_chunk_threshold` | 0.2 | chunks this short or shorter are dropped |
 
-| | Pretrain Method | Pretrain (hours) | ASR (hours) | Available Versions |
-| :--- | :--- | :--- | :--- | :---: |
-| **v1** | [Wav2vec 2.0](https://arxiv.org/abs/2006.11477) | 50,000 | 2,000 | `v1_ssl`, `emo`, `v1_ctc`, `v1_rnnt` |
-| **v2** | [HuBERT–CTC](https://arxiv.org/abs/2506.01192) | 50,000 | 2,000 | `v2_ssl`, `v2_ctc`, `v2_rnnt` |
-| **v3** | HuBERT–CTC | 700,000 | 4,000 | `v3_ssl`, `v3_ctc`, `v3_rnnt`, `v3_e2e_ctc`, `v3_e2e_rnnt` |
+## How it works
 
-Where `v3_e2e_ctc` and `v3_e2e_rnnt` support punctuation and text normalization.
-
-## Model Performance
-
-`GigaAM-v3` training incorporates new internal datasets: callcenter, music, speech with atypical characteristics, and voice messages. As a result, the models perform on average **30%** better on these new domains while maintaining the same quality as `GigaAM-v2` on public benchmarks. In end-to-end ASR comparisons of `e2e_ctc` and `e2e_rnnt` against Whisper (judged via independent LLM-as-a-Judge side-by-side) GigaAM models win by an average margin of **70:30**. Our emotion recognition model `GigaAM-Emo` outperforms existing models by **15%** Macro F1-Score.
-
-For detailed results, see [here](./evaluation.md).
-
----
-
-## Usage
-
-### Model inference
-
-**Note:** ASR with `.transcribe` function is applicable for audio **only up to 25 seconds**. To enable `.transcribe_longform` install the additional [pyannote.audio](https://github.com/pyannote/pyannote-audio) dependencies
-
-<details>
-<summary>Longform setup instruction</summary>
-
-* Generate [Hugging Face API token](https://huggingface.co/docs/hub/security-tokens)
-* Accept the conditions to access [pyannote/segmentation-3.0](https://huggingface.co/pyannote/segmentation-3.0) files and content
-
-```bash
-pip install -e .[longform]
-# optionally run longform testing
-pip install -e .[tests]
-HF_TOKEN=<your hf token> pytest -v tests/test_longform.py
 ```
-</details>
-
-<br>
-
-
-```python
-import gigaam
-
-# Load test audio
-audio_path = gigaam.utils.download_short_audio()
-long_audio_path = gigaam.utils.download_long_audio()
-
-# Audio embeddings
-model_name = "v3_ssl"       # Options: `v1_ssl`, `v2_ssl`, `v3_ssl`
-model = gigaam.load_model(model_name)
-embedding, _ = model.embed_audio(audio_path)
-print(embedding)
-
-# ASR
-model_name = "v3_e2e_rnnt"  # Options: any model version with suffix `_ctc` or `_rnnt`
-model = gigaam.load_model(model_name)
-transcription = model.transcribe(audio_path)
-print(transcription)
-
-# and long-form ASR
-import os
-os.environ["HF_TOKEN"] = <HF_TOKEN with read access to "pyannote/segmentation-3.0">
-utterances = model.transcribe_longform(long_audio_path)
-for utt in utterances:
-   transcription, (start, end) = utt["transcription"], utt["boundaries"]
-   print(f"[{gigaam.format_time(start)} - {gigaam.format_time(end)}]: {transcription}")
-
-# Emotion recognition
-model = gigaam.load_model("emo")
-emotion2prob = model.get_probs(audio_path)
-print(", ".join([f"{emotion}: {prob:.3f}" for emotion, prob in emotion2prob.items()]))
+ffmpeg decode -> Silero VAD (ONNX loop, CPU) -> GigaAM encoder (ONNX, GPU or CPU) -> greedy decoder (numpy)
 ```
 
-### Loading from Hugging Face
+The three stages run on their own threads, so recognition starts a few
+seconds into a long file. The audio is decoded once. Silero runs as one ONNX
+loop over blocks of 32 ms windows, which gives exactly the speech regions of
+silero-vad. The encoder graph contains the log-mel front-end, so it takes raw
+audio. The small RNNT prediction and joint networks run in numpy and only
+step after an emitted token; this turned a 13 s decoder into a 1 s one.
+Tokens keep their 40 ms frame positions, which gives word timestamps.
 
-> **Note:** Install requirements from the [example](./colab_example.ipynb).
+The text is identical to v0.1 (PyTorch): on a 7.5-minute test file all 932
+words and all 26 chunk boundaries match, on DirectML and on the CPU.
 
-```python
-from transformers import AutoModel
+## Building from source
 
-model = AutoModel.from_pretrained("ai-sage/GigaAM-v3", revision="e2e_rnnt", trust_remote_code=True)
+Python 3.12 on Windows. The app needs only numpy and ONNX Runtime:
+
+```powershell
+python -m venv .venv
+.venv\Scripts\pip install -r requirements-build.txt   # app + PyInstaller + pytest
+.venv\Scripts\python -m gigaam_app                   # window
+.venv\Scripts\python -m gigaam_app.cli file.mp3      # command line
 ```
 
-### ONNX Export and Inference
+FFmpeg must be on PATH (or `ffmpeg.exe` in the repository root) when running from source.
 
-> **Note:** GPU support can be enabled with `pip install onnxruntime-gpu==1.23.*` if applicable.
+**Models.** `models/` is not in git. The export tools turn the upstream PyTorch
+checkpoints into ONNX; they need a separate environment with PyTorch
+([requirements-export.txt](requirements-export.txt)) and use the upstream
+`gigaam` package kept in [`gigaam/`](gigaam):
 
-1. Export the model to ONNX using the `model.to_onnx` method:
-   ```python
-   onnx_dir = "onnx"
-   model_version = "v3_ctc"  # Options: any version
-
-   model = gigaam.load_model(model_version)
-   model.to_onnx(dir_path=onnx_dir)
-   ```
-
-2. Run ONNX inference:
-   ```python
-   from gigaam.onnx_utils import load_onnx, infer_onnx
-
-   sessions, model_cfg = load_onnx(onnx_dir, model_version)
-   result = infer_onnx(audio_path, model_cfg, sessions)
-   print(result)  # string for ctc / rnnt, np.ndarray for ssl / emo
-   ```
-
-These and more advanced (e.g. custom audio loading, batching) examples can be found in the [Colab notebook](https://colab.research.google.com/github/salute-developers/GigaAM/blob/main/colab_example.ipynb).
-
----
-
-## Citation
-
-If you use GigaAM in your research, please cite our paper:
-
-```bibtex
-@inproceedings{kutsakov25_interspeech,
-  title     = {{GigaAM: Efficient Self-Supervised Learner for Speech Recognition}},
-  author    = {Aleksandr Kutsakov and Alexandr Maximenko and Georgii Gospodinov and Pavel Bogomolov and Fyodor Minkin},
-  year      = {2025},
-  booktitle = {{Interspeech 2025}},
-  pages     = {1213--1217},
-  doi       = {10.21437/Interspeech.2025-1616},
-  issn      = {2958-1796},
-}
+```powershell
+python tools/export_models.py v3_e2e_rnnt v3_e2e_ctc --out models
+python tools/make_silero_scan.py --out models/silero_vad_scan.onnx
 ```
 
-## Links
+Each export checks ONNX Runtime against PyTorch and writes `model.json` with
+SHA-256 checksums. Weights are stored as float16, which is lossless for these
+checkpoints.
 
-* [[arxiv] GigaAM: Efficient Self-Supervised Learner for Speech Recognition](https://arxiv.org/abs/2506.01192)
-* [[habr] GigaAM-v3: открытая SOTA-модель распознавания речи на русском](https://habr.com/ru/companies/sberdevices/articles/973160/)
-* [[habr] GigaAM: класс открытых моделей для обработки звучащей речи](https://habr.com/ru/companies/sberdevices/articles/805569)
-* [[youtube] Как научить LLM слышать: GigaAM 🤝 GigaChat Audio](https://www.youtube.com/watch?v=O7NSH2SAwRc)
-* [[youtube] GigaAM: Семейство акустических моделей для русского языка](https://youtu.be/PvZuTUnZa2Q?t=26442)
-* [[youtube] Speech-only Pre-training: обучение универсального аудиоэнкодера](https://www.youtube.com/watch?v=ktO4Mx6UMNk)
+**Tests.** `python -m pytest tests` runs the unit tests (VAD against the
+silero-vad reference, decoders against a textbook RNNT decoder, outputs,
+settings, CLI, the threaded pipeline with fakes) and, when `models/` exists,
+tests on the real models. A full-file comparison with a v0.1 reference runs when
+`GIGAAM_PARITY_AUDIO` and `GIGAAM_PARITY_REFERENCE` are set; see
+[tests/test_models.py](tests/test_models.py).
+
+**Windows release.** In the build environment (no PyTorch in it):
+
+```powershell
+python tools/build_windows.py
+```
+
+It verifies the models, builds both EXEs into one folder with
+[packaging/GigaAmTranscriber.spec](packaging/GigaAmTranscriber.spec), copies the
+models, `ffmpeg.exe` (Gyan's 8.0.1 full build, matching the source archive in
+`third_party/ffmpeg/`) and the licences, runs the console EXE and starts the
+window on a hidden desktop ([tools/gui_smoke_test.py](tools/gui_smoke_test.py)),
+then writes the zip, `THIRD_PARTY_LICENSES.zip`, the FFmpeg source and
+`SHA256SUMS.txt` to `build/release/`.
+
+**Docker.** `docker build -t gigaam-transcriber:cpu .` exports the models in a
+build stage and produces an image without PyTorch; see [DOCKER.md](DOCKER.md).
+
+## Repository layout
+
+| Path | Contents |
+| --- | --- |
+| `gigaam_app/` | the app: audio, VAD, ASR, pipeline, outputs, settings, CLI, GUI |
+| `launchers/` | PyInstaller entry points |
+| `packaging/` | PyInstaller spec, README for the app folder, licences not shipped by packages |
+| `tools/` | model export, Silero loop builder, Windows build, hidden GUI test |
+| `tests/` | pytest suite |
+| `gigaam/` | upstream GigaAM PyTorch package (MIT), used only by the export tools |
+| `experiments/` | prototypes and profiling scripts behind the v0.2 design |
+| `docs/plans/` | work plans |
+
+## Licences
+
+MIT, like upstream GigaAM. Bundled components keep their licences; see
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The Windows app includes
+FFmpeg (GPLv3) as a separate program; its source is a release download.
+
+GigaAM itself, its papers and model documentation:
+[salute-developers/GigaAM](https://github.com/salute-developers/GigaAM).

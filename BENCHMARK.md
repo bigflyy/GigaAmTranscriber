@@ -1,151 +1,89 @@
-# Local build and speed measurements
+# Speed measurements
 
-The size/startup table below describes an earlier RNNT-only build. For the
-v0.1.0 release with both RNNT and CTC, see [release verification](RELEASE_TESTS.md).
+Machine: AMD Ryzen 7 7840HS (8 cores, 16 logical processors), 64 GB RAM,
+NVIDIA GeForce RTX 4070 Laptop GPU (8 GB), Windows 11. These numbers describe
+this machine and these samples, not a guarantee. Other programs were running;
+repeated runs vary by about 20 %.
 
-Measured on 2026-09-26, Windows, AMD Ryzen 7 7840HS (8 cores / 16 logical
-processors), NVIDIA GeForce RTX 4070 Laptop GPU (8 GiB), driver 581.29.
-These measurements describe this machine and sample, not a performance guarantee.
+Sample: a 455 s (7.5 min) lecture, one speaker, MP4; Silero finds 26 chunks.
+"First file" is the first transcription in a fresh process, including GPU warm-up.
 
-## Release sizes and startup
+## v0.2 against v0.1, 2026-11-04 (from source)
 
-| Release | Folder size | Single EXE size | Folder GUI startup | Single EXE GUI startup |
-| --- | ---: | ---: | ---: | ---: |
-| CPU (Russian GUI with ETA) | 1.02 GiB | 626.43 MiB | 2.45 s | 26.11 s |
-| CUDA with CPU fallback | 4.99 GiB | 3.13 GiB | 2.09 s | 129.39 s |
+| Pipeline | Model ready after start | First file | Second file | Text against the v0.1 CPU reference |
+| --- | ---: | ---: | ---: | --- |
+| v0.1, PyTorch CUDA | 14.5 s | 37.7 s | 21.6 s | (CUDA fp16) |
+| v0.1, PyTorch CPU, 8 threads | 10.8 s | 40.4 s | - | reference |
+| v0.2, ONNX Runtime DirectML | 2.0 s | 6.9 s | 5.0 s | identical, 932 of 932 words |
+| v0.2, ONNX Runtime CPU, 8 threads | 2.0 s | 25 s | 25 s | identical |
+| ONNX Runtime CUDA (not shipped on Windows) | 3.1 s | 4.0 s | 3.8 s | identical |
+| ONNX Runtime CPU int8 (not shipped) | 1.1 s | 14.4 s | 17.4 s | 9 small differences in 932 words |
 
-Sizes include the RNNT checkpoint, tokenizer, Silero data, FFmpeg, Python,
-and bundled dependencies. Startup checks were single local runs with a
-minimal Windows PATH. The harness waits one extra second after detecting
-the window to capture it, so the figures include that second. Model loading
-starts when **Transcribe** is clicked and is excluded from GUI startup.
-The single EXE extracts on every launch and needs temporary disk space.
-Use the folder version for regular use; copy the entire folder, including
-`_internal`. Python and Conda are not needed by the recipient.
+v0.1 as released was a single-file EXE that unpacked itself on every start:
+27 s (CPU) and 106-129 s (CUDA) before the window appeared.
 
-## CPU versus GPU
+## Where v0.1 lost time
 
-`x realtime = audio duration / transcription time`: higher is faster.
-All runs used the same 60-second, mono 16 kHz WAV, RNNT model, and unchanged
-Silero/chunk settings. Silero produced five transcription chunks.
+For the same file on CUDA:
 
-| Environment / device | Model load | First run | Second run |
+- `import torch` took 4-9 s, and the CUDA libraries (3.9 GB) made the 3.7 GB EXE.
+- The single-file EXE unpacked everything to `%TEMP%` on every launch.
+- Each load computed the MD5 of the 449 MB checkpoint (about 1 s) and unpickled it.
+- The window loaded the model again for every file.
+- ffmpeg decoded the audio twice.
+- Silero VAD made about 14,000 single-thread PyTorch calls: 8-10 s. In v0.2 it is
+  one ONNX loop over blocks of 1024 windows (about 3.4 times faster) and runs while
+  recognition proceeds.
+- Greedy RNNT decoding took 13.5 s on the GPU, more than the encoder: it ran the
+  prediction LSTM on every frame, although its output only changes after a token,
+  and waited for the GPU after every step. The numpy decoder in v0.2 takes 0.9 s.
+
+## Choices measured along the way
+
+- Silero has to run in order over the whole file. Cutting the file into rows that
+  run in parallel was 6 times faster but moved up to 60 % of the speech regions
+  on noisy audio.
+- Chunk times are rounded to 0.1 s as silero-vad reports them; without the
+  rounding about 1 % of the words change.
+- Weights are stored as float16 in the ONNX files (lossless for these
+  checkpoints, half the download); ONNX Runtime then needs about 1 s more to
+  open the model.
+- Batching chunks helps on the GPU (up to 8 chunks, 200 s of audio per call)
+  and not on the CPU, where chunks run one by one.
+
+## Windows build v0.2.0
+
+Measured 2026-11-04 with the release folder (`gigaam-cli.exe`, PATH without
+Python or FFmpeg), same 455 s sample given twice in one run, 8 CPU threads:
+
+| Model and device | Model load | First file | Second file |
 | --- | ---: | ---: | ---: |
-| cuda-torch2 / CPU, PyTorch 2.12.1+cu126 | 1.611 s | 8.823 s / 6.80x | 8.690 s / 6.90x |
-| cuda-torch2 / GPU, PyTorch 2.12.1+cu126 | 1.879 s | 3.247 s / 18.48x | 1.704 s / 35.20x |
-| gigaam-cpu / CPU, PyTorch 2.5.1+cpu | 1.597 s | 9.531 s / 6.30x | 9.452 s / 6.35x |
+| RNNT, DirectML | 3.3 s | 6.0 s (76x realtime) | 4.8 s (95x) |
+| RNNT, CPU | 2.8 s | 23.4 s (19x) | 23.9 s (19x) |
+| CTC, DirectML | 4.7 s | 5.2 s (87x) | 4.4 s (103x) |
+| CTC, CPU | 2.5 s | 24.1 s (19x) | 23.5 s (19x) |
 
-In the same environment, the GPU was about **5.1 times faster** on the
-second run and **2.7 times faster** on the first. CPU inference uses FP32;
-the GPU encoder uses FP16, matching the existing loader defaults.
+The whole GPU run, from starting the process to exit after both files, took 15.5 s.
+`GigaAmTranscriber.exe` shows its window after about 1 s (three runs: 0.85-1.07 s,
+measured on a hidden desktop by `tools/gui_smoke_test.py`) and loads the model
+after that.
 
-Transcription timing includes audio decoding, Silero VAD, and GigaAM
-inference. It excludes Python imports, model loading, EXE extraction,
-GUI work, and transcript file writing. The same model instance is reused
-for both runs; the second run benefits from initialization and caches.
-The GUI currently loads GigaAM for each file, so allow model loading time
-in addition to these inference figures. CUDA was synchronized around timing.
+| Size | |
+| --- | ---: |
+| Release zip | 917 MiB |
+| Unpacked folder | 1184 MiB |
+| of which models (RNNT, CTC, Silero) | 857 MiB |
+| of which `ffmpeg.exe` | 201 MiB |
+| of which program (`_internal` and both EXEs) | 125 MiB |
 
-Silero 6.2.1 calls `torch.set_num_threads(1)` on import in both environments.
-That existing behavior was preserved for the original measurements above.
-The app now exposes a separate GigaAM CPU thread count, defaulting to 4.
-The original results therefore do not
-represent tuned multicore CPU performance. Builds and smoke tests had
-finished before the benchmark; each device benchmark ran sequentially.
+v0.1 for comparison: CPU EXE 0.99 GiB, CUDA EXE 3.51 GiB (two download parts).
 
-Reproduce with your own PCM WAV:
+## Reproduce
 
 ```powershell
-conda run -n cuda-torch2 python benchmark.py recording.wav --device cpu --cpu-threads 1 --runs 2
-conda run -n cuda-torch2 python benchmark.py recording.wav --device cuda --runs 2
-conda run -n gigaam-cpu python benchmark.py recording.wav --device cpu --cpu-threads 1 --runs 2
+gigaam-cli.exe lecture.mp4 lecture.mp4 --device gpu    # first and second file, one process
+gigaam-cli.exe lecture.mp4 --device cpu --threads 8
 ```
 
-The private audio is excluded from Git. Sample SHA-256:
-`13c3a08f25177f9999a5af90df31a2a73fa0641b79f34a3a2b97723d4f99d80f`.
-
-## GigaAM CPU thread comparison
-
-A later sequential sweep used the same 60-second sample and CPU environment
-(PyTorch 2.5.1+cpu). Silero used one thread throughout; only GigaAM inference
-changed. No packaging builds were running during the sweep. Each row has two
-consecutive runs with the same loaded model; initialization and model loading
-are excluded. The total includes FFmpeg decoding and VAD (roughly 1–1.4 s).
-
-| GigaAM threads | First run | Second run | Second-run x realtime |
-| ---: | ---: | ---: | ---: |
-| 1 | 12.575 s | 13.123 s | 4.57x |
-| 2 | 8.702 s | 8.239 s | 7.28x |
-| 4 (new default) | 6.379 s | 6.698 s | 8.96x |
-| 8 | 4.631 s | 4.636 s | 12.94x |
-| 16 | 5.299 s | 4.944 s | 12.13x |
-
-Eight threads gave about **44% higher throughput than four** on the second
-run, or about **31% less elapsed time**. Text and segment boundaries were
-identical across all ten runs. This is a small local comparison, not a
-universal optimal thread count. Conditions differed from the earlier CPU/GPU
-baseline, so compare rows within this sweep rather than mixing the tables.
-A follow-up using the implemented setting, in reverse order, measured
-4.156 s at 8 threads and 10.563 s at 1 thread with matching output.
-
-The default is **4**, as requested; choose **8** manually to try the faster
-setting on this CPU. Silero remains at 1 because its maintainers note that
-additional threads can hurt VAD performance:
-[Silero thread-count explanation](https://github.com/snakers4/silero-vad/discussions/484).
-The implementation was checked to use one thread during VAD, the selected
-number during recognition, and restore the previous count after success
-and deliberately triggered failure.
-An additional fresh-process check confirmed that the first Silero import
-also restores the caller's original thread count and that omitted options
-select four GigaAM CPU threads.
-
-To compare another machine, repeat the benchmark with
-`--device cpu --cpu-threads 4` and `--device cpu --cpu-threads 8`.
-
-## Verification scope
-
-- Source GUI: file input, initially hidden settings, original defaults,
-  actual CPU transcription, completion status, saved transcript, and 100% progress.
-- All four packaged variants: window opens and closes with a minimal Windows PATH.
-- CPU single EXE: actual transcription using bundled assets.
-- CUDA folder: actual GPU transcription and forced CPU fallback.
-- These transcription checks matched the source test transcript byte for byte.
-- Default and expanded settings layouts were visually inspected.
-- Russian GUI update: actual 60-second CPU transcription showed partial results
-  before completion; toggling timestamps changed the view and exported text,
-  and toggling back restored the original boundaries without loss.
-- Updated CPU folder EXE: default `-transcript.txt` naming and plain-text
-  export matched the reference. Both updated CPU packages passed GUI startup.
-- Remaining-time update: real CPU transcription displayed an ETA after the
-  first chunk and cleared it on completion. The layout was visually checked;
-  both CPU package formats were rebuilt and passed GUI startup again.
-- Thread-count update: the Russian settings defaulted to four threads and
-  completed a real GUI transcription at eight. The CPU folder EXE accepted
-  `--cpu-threads 8` and produced the reference transcript with a minimal PATH.
-  CPU and GPU Docker images were refreshed and passed transcription checks.
-- Advanced settings help: English labels and unchanged default values were
-  checked; hover hints, clickable parameter descriptions and the scrollable
-  full guide were exercised and visually inspected.
-
-CUDA artifacts refer to the earlier English GUI build. Further CUDA rebuilds
-were deferred at the user's request; the Russian interface and incremental
-text display are released for CPU first. The latest CPU single EXE, including
-the remaining-time estimate, is in `dist/cpu/onefile/`. The `onefile-ru`
-directory contains the earlier build without ETA.
-
-The Linux CPU Docker image was also built and tested with a mounted model
-cache and networking disabled. Its plain-text output matched the source
-sample. This Docker check was functional, not a speed benchmark.
-
-The CUDA Docker image (`gigaam-transcriber:cuda`, PyTorch 2.5.1+cu124) was
-built and tested with `--gpus all --device cuda` on the RTX 4070 Laptop GPU.
-It transcribed the sample offline using the mounted RNNT model cache;
-its plain-text output matched the CPU reference. The same image also
-passed with `--device cpu` and no GPU exposed. Docker reported image sizes
-of 9.46 GB for CUDA and 2.05 GB for CPU; the separately mounted model weights
-are excluded. These are functional checks, not Docker throughput benchmarks.
-
-Testing was performed on the build computer, not a separate clean Windows
-installation. CTC selection is implemented but its model was not downloaded
-or benchmarked; RNNT is bundled and works offline. CUDA single-EXE testing
-covered extraction and GUI startup; inference was checked in its folder build.
+The first output line gives the model load time, each file line the
+transcription time and speed.

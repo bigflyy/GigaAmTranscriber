@@ -1,77 +1,86 @@
-# v0.1.0 release verification
+# v0.2.0 release verification
 
-Tested on 2026-09-26 on Windows with an AMD Ryzen 7 7840HS, an NVIDIA
-GeForce RTX 4070 Laptop GPU (8 GiB), and NVIDIA driver 581.29. This verifies
-the listed cases on this machine; other hardware/driver combinations were
-not tested.
+Tested on 2026-11-04 on Windows 11 with an AMD Ryzen 7 7840HS and an NVIDIA
+GeForce RTX 4070 Laptop GPU (8 GB). Other hardware was not tested; DirectML on
+AMD and Intel GPUs is expected to work but was not tried.
 
-## Windows artifacts
+## Automated tests
 
-Both editions bundle the RNNT and CTC models, tokenizers, Silero VAD,
-Python, and FFmpeg.
+`python -m pytest tests`: 261 passed, 1 skipped (the parity test, which needs
+two environment variables), in about 20 s.
 
-| Edition | Portable folder | Single EXE |
-| --- | ---: | ---: |
-| CPU | 1,542,334,592 bytes (1.44 GiB) | 1,066,341,669 bytes (0.99 GiB) |
-| CUDA with CPU fallback | 5,796,165,660 bytes (5.40 GiB) | 3,771,192,580 bytes (3.51 GiB) |
+- **VAD:** the streaming `ChunkFinder` gives exactly the regions and chunks of
+  the batch port of silero-vad 6.2.1 plus the v0.1 grouping, for 160 random
+  probability sequences under four option sets, and nothing for silence.
+- **Decoders:** the fast numpy RNNT decoder equals a textbook greedy RNNT
+  (full joint with log-softmax, prediction network re-run every step) on 36
+  random small models; the per-frame symbol limit and all-blank cases; CTC
+  repeat merging and blanks; words and word times from SentencePiece and
+  character vocabularies.
+- **Pipeline:** with a fake model and fake VAD, segments come out in time order
+  and equal the chunks of the VAD; GPU batches keep to 8 chunks and 200 s;
+  cancelling keeps finished segments; errors in the encoder or in a callback are
+  raised and stop the worker threads; silence gives an empty transcript.
+- **Outputs:** clock format, TXT, timestamped TXT, SRT cue splitting (pauses,
+  sentence ends, 6 s and 84 characters), JSON, file names, atomic writes.
+- **Settings:** defaults, a v0.1 file (byte order mark, `"CUDA"`, retired keys),
+  round trip, the shipped example file, 18 kinds of invalid values.
+- **CLI:** typed VAD flags, wildcard expansion, exit code 2 for bad formats,
+  missing files and bad settings, `--version`, file names that the console code
+  page cannot show.
+- **Real models** (when `models/` exists): encoder output lengths, silence gives
+  no text, CLI end to end.
+- **Parity:** `GIGAAM_PARITY_AUDIO` + `GIGAAM_PARITY_REFERENCE` with the 455 s
+  lecture and a v0.1 PyTorch CPU reference: the same 26 chunk boundaries
+  (within 0.05 s) and the same 932 words, on DirectML (8 s) and on the CPU (28 s).
 
-GitHub downloads supply the CPU EXE directly and CUDA in two parts of
-1,900 MiB and approximately 1,696.5 MiB. The join script validates each part
-and the completed EXE. The full-size join was tested and its SHA-256 matched
-the built EXE. Small fixtures additionally verified corrupted-part rejection
-and handling of an already assembled matching file.
+## Windows build
 
-The folder builds are available locally under `dist/<edition>/onedir/`.
-The published release distributes the single-file builds. Single-file apps
-extract their contents to a temporary directory on each launch; this is
-especially noticeable with CUDA. Allow space for that extraction as well as
-the EXE (and the parts while assembling CUDA).
+`python tools/build_windows.py` from a venv with only `requirements-build.txt`
+(Python 3.12, numpy 2.5.4, onnxruntime-directml 1.23.0, PyInstaller 6.22.3).
+The script itself checks:
 
-Observed GUI startup (one run each, including the test harness's one-second
-screenshot delay): CPU folder 2.05 s, CPU single EXE 27.22 s, CUDA folder
-2.06 s, CUDA single EXE 106.12 s. Builds/transfers were active during some
-checks, so these are approximate startup observations, not controlled speed
-comparisons.
+- model files against the SHA-256 in each `model.json`, and the FFmpeg build
+  (`8.0.1-full_build-www.gyan.dev`) against the source archive;
+- no torch files in the build, and every bundled DLL is the build Python's own
+  copy (a Tcl DLL from another conda on PATH once broke the window; PyInstaller
+  now runs with a clean PATH);
+- `gigaam-cli.exe --version` and transcription of a silent file on CPU and on
+  Auto (DirectML), with PATH reduced to `System32`, so neither Python nor FFmpeg
+  can come from the system;
+- `GigaAmTranscriber.exe` starts on a hidden desktop, loads the model, shows no
+  error and closes on `WM_CLOSE` with exit code 0;
+- every release asset is below 2 GiB.
 
-## Tests
+Manual checks of the built folder:
 
-- 14 automated regression tests: settings defaults and validation, atomic
-  config writes, legacy config compatibility, chunk grouping and duration
-  limits, exclusion of leading silence, audio statistics, GUI defaults/help,
-  scroll/selection preservation, cancellation with both partial exports,
-  restart clearing, completion time, and both final TXT exports.
-- Actual RNNT and CTC inference from source on CPU and CUDA, including
-  streamed chunks, progress/statistics callbacks, thread settings/restoration,
-  and cancellation of a longer recording after the first result.
-- Packaged apps: real transcription with both models, no Conda or FFmpeg on
-  PATH, an empty user model cache, and model downloads blocked. Text compared
-  with the corresponding source run; both output files checked. CUDA also
-  exercised explicit CPU mode. Both folder and single-file formats checked.
-- Packaged GUI startup and clean shutdown, with screenshots inspected.
-- CPU and CUDA Docker images: both models with `--network none`, mounted
-  model cache, actual GPU use for CUDA, and both TXT outputs.
-- Public registry access: anonymous manifest requests and full image pulls
-  without registry credentials for both editions. Both RNNT and CTC ran
-  offline from each downloaded image, with GPU inference for CUDA and text
-  matching the local Docker builds. The CUDA pull needed retries after a
-  slow transfer, then completed successfully.
-- GitHub release uploads: server-reported SHA-256 checked against each
-  local asset. `SHA256SUMS.txt` and `cuda-parts.json` accompany the release.
+- **Window, full file:** `tools/gui_smoke_test.py --audio` on the 455 s lecture,
+  on a hidden desktop: window after 3.2 s (before the startup fix below), transcript
+  written after 8.0 s, RNNT on DirectML, 26 fragments; the saved text equals the
+  v0.1 reference word for word (932 words). A PrintWindow capture showed the
+  finished state: progress bar full, "Готово за 00:00:05 (94x быстрее реального
+  времени), фрагментов: 26", audio and speech statistics, the text, the saved files.
+- **Startup:** the first model load used to run before the window was drawn and
+  delayed it to 2.7-5.3 s; it now starts 150 ms after the window, which appears
+  after 0.85-1.07 s.
+- **CLI:** both models on DirectML and CPU, two files in one run (see
+  [BENCHMARK.md](BENCHMARK.md)); a Cyrillic file name with a character outside
+  the console code page and output redirected to a file (failed before the fix,
+  now passes and is covered by a test); TXT, SRT and JSON written.
 
-The transcription samples exercise packaging and functionality; they are
-not an accuracy benchmark. Existing CPU/GPU and CPU thread measurements
-are in [BENCHMARK.md](BENCHMARK.md); its older build-size table predates CTC
-bundling.
+## Docker
 
-## Build environments
+CPU image, built locally with `docker build -t gigaam-transcriber:cpu .`
+(Docker Desktop 28.3.2, WSL2), 2.81 GB uncompressed:
 
-- Windows CPU: Python 3.12, PyTorch 2.5.1+cpu, torchaudio 2.5.1+cpu.
-- Windows CUDA: existing `cuda-torch2` environment, PyTorch 2.12.1+cu126
-  and torchaudio 2.11.0+cpu. This existing environment carries optional
-  dependencies and produces a larger executable.
-- Both Windows builds: PyInstaller 6.22.3, Silero VAD 6.2.1.
-- Docker: Python 3.11, PyTorch/torchaudio 2.5.1 (CPU or cu124), Linux amd64.
+- The export stage downloaded the checkpoints and exported both models with
+  CPU torch 2.8.0: max |onnx - torch| 5.8e-06 (RNNT) and 2.0e-05 (CTC); the
+  Silero loop equals per-window Silero exactly. The ONNX files differ in bytes
+  from the Windows export (torch 2.12), the vocabularies are identical.
+- With `--network none`: `--version`; the 455 s lecture with RNNT in 22.7 s and
+  with CTC in 22.1 s on the CPU (8 threads). The RNNT text equals the v0.1
+  reference word for word (932 words).
 
-Container publication workflow:
-[v0.1.0 run](https://github.com/bigflyy/GigaAmTranscriber/actions/runs/36231676622).
-Runtime source is shared by both Docker and Windows builds.
+The CUDA image (`ORT_VARIANT=cuda`) was not built locally; the publishing
+workflow builds it and checks offline CPU transcription with both models, which
+the CPU image passed too. GPU use in that image is not yet verified.

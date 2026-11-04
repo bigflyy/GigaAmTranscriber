@@ -1,15 +1,16 @@
 {
-  "version": 1,
+  "version": 2,
   "model": "RNNT",
   "device": "Auto",
-  "cpu_threads": 4,
+  "cpu_threads": 0,
   "include_timestamps": false,
+  "outputs": ["txt", "timestamps"],
   "vad_threshold": 0.5,
   "vad_min_speech_ms": 300,
   "vad_max_speech_s": 25.0,
   "vad_min_silence_ms": 2000,
   "vad_speech_pad_ms": 250,
-  "new_chunk_threshold": 0.2,
   "max_duration": 25.0,
-  "strict_limit_duration": 25.0
+  "strict_limit_duration": 25.0,
+  "new_chunk_threshold": 0.2
 }
