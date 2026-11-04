@@ -13,9 +13,9 @@ Last updated 2026-11-05 (session 4). The plan is in [docs/plans/01-onnx-runtime-
 - Commit and publish the release only after the owner has seen the new build work
   (owner confirmed in session 3).
 
-## Session 4 (2026-11-05): B2 done (not adopted), B6 built, upload pending
+## Session 4 (2026-11-05): B2 done (not adopted), B6 built, multilingual dropped
 
-Commits 0d7dd4a..2990463 on main, not pushed. Tests: 281 passed, 1 skipped
+Commits from 0d7dd4a on main, pushed. Tests: 280 passed, 1 skipped
 (parity), with the session 3 venv
 `C:\Users\User\AppData\Local\Temp\claude\b3b5ded84d394c69\740fa774-5b91-4234-b11a-c5b322975530\scratchpad\venv-app`.
 
@@ -35,7 +35,7 @@ on the lecture). Only the iGPU would gain, and the text changes, so the app stay
 fp32. Side finding: DML device 0 is the RTX on this laptop; the app does not pick
 an adapter (DirectML's default).
 
-**B6, downloads of extra models (code done, hosting not done).**
+**B6, downloads of extra models (code done; no model uses it yet).**
 - Models: `multilingual_ctc` (220M, 845 MB) and `multilingual_large_ctc` (600M,
   2.2 GB), the two v0.1 offered. Char-level CTC (Latin, Cyrillic, Kazakh letters),
   lowercase, no punctuation. Checkpoints are float32 and NOT fp16-exact; lossy fp16
@@ -45,7 +45,7 @@ an adapter (DirectML's default).
   1.5 GiB each). v3_e2e_ctc re-exports byte for byte. Max |onnx - torch|: 2.5e-4 and 8.8e-4.
 - Speed on DML (RTX): 220M like v3 (lecture 4.6 s); 600M 1.7x slower, load 9 s cold.
   On English audio both write Cyrillic transliteration (that file is out of domain).
-- App: `gigaam_app/catalog.py` (keys RNNT, CTC, Multilingual, Multilingual-Large;
+- App: `gigaam_app/catalog.py` (keys RNNT, CTC; Multilingual entries were removed, see below;
   sizes and SHA-256 of each file in code; v0.1 names as aliases),
   `gigaam_app/download.py` (staging `<folder>.partial`, SHA-256 per file, HTTP Range
   resume, 3 attempts, cancel, disk space check, rename when all pass),
@@ -57,17 +57,18 @@ an adapter (DirectML's default).
   process with the Tk root withdrawn (never shown): large model cancelled at 312 MB,
   resumed with `Range: bytes=327155712-`, loaded; small model downloaded from
   "Распознать", transcribed a file. Docker `--download` is documented but not run.
-- Hosting: catalog URLs point to release tag `models-1`
-  (`https://github.com/bigflyy/GigaAmTranscriber/releases/download/models-1/<folder>.<file>`),
-  which does not exist yet. The exported folders are in this session's scratchpad
-  `export/` (3.1 GB):
-  `C:\Users\User\AppData\Local\Temp\claude\b3b5ded84d394c69\28d81582-1145-4ab9-a6b4-42d9490289a5\scratchpad\export`.
-  Upload: `tools/stage_model_assets.py OUT export/multilingual_ctc export/multilingual_large_ctc`
-  then `gh release upload models-1 OUT/*`; its printed hashes match catalog.py.
-  If the scratchpad is gone, re-export with the cuda-torch2 env (2 min); check the
-  hashes still match catalog.py (export looked deterministic for v3, not checked for these).
-- Open: B6.5 (owner approves hosting, upload, test real downloads), then a release
-  (version bump, release notes, Windows build, Docker images).
+- **Owner decision: multilingual GigaAM dropped.** Ignoring case and punctuation,
+  its Russian text differs from RNNT by 5% (lecture), 10% (phone call) and 26%
+  (multi-speaker class), and English comes out transliterated. Removed from the
+  catalog, GUI and docs; v0.1 settings that chose it load with RNNT. The downloader,
+  the external-data export and `tools/stage_model_assets.py` stay for future models
+  (Stage F, B9, diarization models). Release tag `models-1` is not created.
+- Owner: for English and other languages only Whisper-class models make sense.
+  Plan Stage F (before E) compares Parakeet TDT 0.6B v3, Whisper large-v3-turbo and
+  Qwen3-ASR on labelled Russian and English audio. B9: int8 encoder for CPU-only
+  machines as an optional download (owner suggested q8/q4).
+- No release date. v0.2.1/v0.3.0 has little visible change so far (v0.1 settings fix);
+  a release makes sense with B9 or Stage F.
 
 ## Release v0.2.0 (session 3, 2026-11-04): published
 

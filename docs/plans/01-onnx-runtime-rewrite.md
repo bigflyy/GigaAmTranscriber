@@ -18,15 +18,16 @@ Findings and measurements behind this plan are in [HANDOFF.md](../../HANDOFF.md)
 - [x] **B3** Audio decode once (ffmpeg), streaming Silero VAD (`ChunkFinder`, exact vs batch port), chunk grouping
 - [x] **B4** Encoder runner: provider choice (DirectML, CPU), batching on GPU, batch 1 on CPU
 - [x] **B5** RNNT and CTC greedy decoders that also return token frame times (word timestamps)
-- [ ] **B6** Model store: bundled models size-checked on load (done); downloads of extra models with SHA-256 (not done)
-  - [x] **B6.1** Export multilingual CTC 220M and 600M (fp32; the 600M weights split into data parts under 2 GiB); check text
+- [x] **B6** Model store: bundled models size-checked on load; downloads of extra models with SHA-256 (ready, no model uses it yet)
+  - [x] **B6.1** Export multilingual CTC 220M and 600M (fp32; the 600M weights split into data parts under 2 GiB); check text (5-26% of words differ from RNNT on Russian)
   - [x] **B6.2** Catalog in the app code (files, sizes, SHA-256) and a verified, resumable, cancellable downloader into a per-user folder
   - [x] **B6.3** Engine, settings (v0.1 model labels accepted), CLI `--list-models` / `--download`, GUI download prompt with progress
   - [x] **B6.4** Tests with a local HTTP server: good, damaged, truncated, resumed, cancelled downloads
-  - [ ] **B6.5** Owner approves hosting; upload the model files to a GitHub release and test real downloads
+  - [x] **B6.5** Hosting decision: the owner dropped the GigaAM multilingual models (worse than RNNT, English comes out transliterated); nothing hosted, v0.1 settings that chose them load with RNNT
   - [x] **B6.6** Docs: README, DOCKER.md (release notes are written with the next release)
 - [x] **B7** Automated tests: VAD, decoders, outputs, config, CLI, pipeline with fakes, real-model tests and an optional parity test
 - [x] **B8** Overlap speech search with recognition (3-thread pipeline) and Silero in an ONNX Scan loop (`tools/make_silero_scan.py`)
+- [ ] **B9** int8 encoder for CPU-only machines as an optional download (session 1: 25 s -> 14 s on the lecture, 9 small diffs in 932 words); measure the text on more files first, offer it only on CPU
 
 ### Stage C: Application
 
@@ -49,6 +50,13 @@ Findings and measurements behind this plan are in [HANDOFF.md](../../HANDOFF.md)
 - [x] **R3** Push to main
 - [x] **R4** Publish the v0.2.0 GitHub release with the four assets; check the uploaded checksums
 - [x] **R5** Run "Publish CPU and CUDA containers" with v0.2.0; check both images pass
+
+### Stage F: English and other languages (before Stage E)
+
+- [ ] **F1** Get labelled test audio: Russian and English, with reference text (public sets such as FLEURS or LibriSpeech, plus own files)
+- [ ] **F2** Compare candidates on WER and speed: NVIDIA Parakeet TDT 0.6B v3 (25 European languages incl. Russian, a transducer like RNNT), Whisper large-v3-turbo (99 languages, slower), Qwen3-ASR (top of the Open ASR leaderboard, 1.7B, LLM decoder)
+- [ ] **F3** Export the chosen model to ONNX with a numpy decoder; check DirectML and CPU
+- [ ] **F4** Offer it as a download through the catalog; language or model choice in the window and the CLI
 
 ### Stage E: Speaker diarization
 

@@ -222,7 +222,7 @@ def test_catalog_entries_are_well_formed():
 
 
 def test_old_names_and_unknown_names():
-    assert catalog.find("Multilingual CTC (220M)").key == "Multilingual"
+    assert catalog.find("Multilingual CTC (220M)").key == "RNNT"
     with pytest.raises(ValueError):
         catalog.find("Whisper")
 
@@ -230,11 +230,11 @@ def test_old_names_and_unknown_names():
 def test_installed_folder_looks_in_both_places(tmp_path, monkeypatch):
     monkeypatch.setenv("GIGAAM_MODELS", str(tmp_path / "bundled"))
     monkeypatch.setenv("GIGAAM_DOWNLOADS", str(tmp_path / "downloads"))
-    info = catalog.find("Multilingual")
+    info = ModelInfo("Fake", "fake_model", "test", files=(RemoteFile("model.json", 2, "0" * 64),))
     assert catalog.installed_folder(info) is None
-    (tmp_path / "downloads" / "multilingual_ctc").mkdir(parents=True)
-    (tmp_path / "downloads" / "multilingual_ctc" / "model.json").write_text("{}")
-    assert catalog.installed_folder(info) == tmp_path / "downloads" / "multilingual_ctc"
+    (tmp_path / "downloads" / "fake_model").mkdir(parents=True)
+    (tmp_path / "downloads" / "fake_model" / "model.json").write_text("{}")
+    assert catalog.installed_folder(info) == tmp_path / "downloads" / "fake_model"
     # A bundled model is never taken from the downloads folder.
     (tmp_path / "downloads" / "v3_e2e_rnnt").mkdir()
     (tmp_path / "downloads" / "v3_e2e_rnnt" / "model.json").write_text("{}")
@@ -259,8 +259,11 @@ def test_cli_download_and_list(server, tmp_path, monkeypatch, capsys):
 
 
 def test_cli_reports_model_not_downloaded(tmp_path, monkeypatch, capsys):
+    fake = ModelInfo("Fake", "fake_model", "test", files=(RemoteFile("model.json", 2, "0" * 64),))
     monkeypatch.setenv("GIGAAM_DOWNLOADS", str(tmp_path / "empty"))
+    monkeypatch.setitem(catalog.BY_KEY, "Fake", fake)
+    monkeypatch.setitem(cli.MODELS, "Fake", "fake_model")
     audio = tmp_path / "a.wav"
     audio.write_bytes(b"")
-    assert cli.main([str(audio), "--model", "Multilingual", "--config", str(tmp_path / "none.json")]) == 2
-    assert "--download Multilingual" in capsys.readouterr().err
+    assert cli.main([str(audio), "--model", "Fake", "--config", str(tmp_path / "none.json")]) == 2
+    assert "--download Fake" in capsys.readouterr().err

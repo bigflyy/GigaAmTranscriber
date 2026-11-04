@@ -1,7 +1,7 @@
 """Settings stored as gigaam-config.json beside the app.
 
 Version 1 files from v0.1 still load: "CUDA" becomes "GPU", the old names of
-the multilingual models become their new keys, and retired keys are ignored. Segmentation settings keep their v0.1 names.
+the dropped multilingual models become RNNT, and retired keys are ignored. Segmentation settings keep their v0.1 names.
 """
 
 from dataclasses import asdict, dataclass, field, fields

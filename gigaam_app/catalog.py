@@ -1,5 +1,8 @@
 """Models the app knows: bundled with the app, or downloaded on request.
 
+No model is downloadable at the moment; download.py and the GUI and CLI
+download paths are ready for the first one (tests use a fake entry).
+
 The size and SHA-256 of every downloadable file are written here, in the app
 itself, so a download is accepted only if it is byte for byte the published
 file. The checksums never come from the server that serves the files.
@@ -46,31 +49,15 @@ class ModelInfo:
 CATALOG = (
     ModelInfo("RNNT", "v3_e2e_rnnt", "Russian, punctuation and capitals (default)"),
     ModelInfo("CTC", "v3_e2e_ctc", "Russian, punctuation and capitals, a little faster than RNNT"),
-    ModelInfo("Multilingual", "multilingual_ctc",
-              "Russian, English, Kazakh and other languages; lowercase, no punctuation (220M)", files=(
-                  RemoteFile("model.json", 483, "46bf56233501dca6fd4d1e3b708b15a5dbb2ae9341bf9502a0394b40d54bb192"),
-                  RemoteFile("vocab.json", 392, "b4bb373f5d37285d5993071d351aaa5d2f77b4988991484a589c88e30b756de2"),
-                  RemoteFile("encoder.onnx", 885861138,
-                             "bb433f2caf41d3687bc7dff9131532f78bb67487e6797948534e2162282d352a"),
-              )),
-    ModelInfo("Multilingual-Large", "multilingual_large_ctc",
-              "Like Multilingual, larger and slower (600M)", files=(
-                  RemoteFile("model.json", 836, "6e64ef7a1b7edcc568c7eea65d0b8b8b03ceb5c499b7af872009e8e8083b7752"),
-                  RemoteFile("vocab.json", 392, "b4bb373f5d37285d5993071d351aaa5d2f77b4988991484a589c88e30b756de2"),
-                  RemoteFile("encoder.onnx", 3486444,
-                             "edbebce8351785dd10a7370d7a680e472b5377886a38881c5048fea7b3d8db1a"),
-                  RemoteFile("encoder.data1", 1603538944,
-                             "7687afc48cd0b3ef4967aec681899136d253fe65cdf6ee2998cf7c41c7ed4947"),
-                  RemoteFile("encoder.data2", 738197504,
-                             "d01248c14065795490c154303c01039b826a8e5b524f4789be3c1d22b1209ba3"),
-              )),
 )
 BY_KEY = {info.key: info for info in CATALOG}
 
-# Model names used by v0.1 settings files.
+# Model names used by v0.1 settings files. The GigaAM multilingual CTC models
+# were dropped in v0.2 (worse than RNNT on Russian, Cyrillic transliteration of
+# English), so settings that chose them load with RNNT.
 ALIASES = {
-    "Multilingual CTC (220M)": "Multilingual",
-    "Multilingual CTC Large (600M)": "Multilingual-Large",
+    "Multilingual CTC (220M)": "RNNT",
+    "Multilingual CTC Large (600M)": "RNNT",
 }
 
 

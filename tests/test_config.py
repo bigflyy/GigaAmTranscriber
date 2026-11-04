@@ -46,13 +46,11 @@ def test_example_config_in_repository_is_valid():
     assert settings.model in ("RNNT", "CTC")
 
 
-@pytest.mark.parametrize("old, new", [("Multilingual CTC (220M)", "Multilingual"),
-                                      ("Multilingual CTC Large (600M)", "Multilingual-Large"),
-                                      ("Multilingual-Large", "Multilingual-Large")])
-def test_multilingual_model_names(old, new):
-    # v0.1 stored the long names; they map to the new keys and are saved as those.
+@pytest.mark.parametrize("old", ["Multilingual CTC (220M)", "Multilingual CTC Large (600M)"])
+def test_dropped_multilingual_models_load_as_rnnt(old):
+    # v0.1 offered these; a settings file that chose one still opens.
     settings = config.parse({"version": 1, "model": old})
-    assert settings.model == new and json.loads(settings.to_json())["model"] == new
+    assert settings.model == "RNNT" and json.loads(settings.to_json())["model"] == "RNNT"
 
 
 def test_vad_ints_stay_ints():

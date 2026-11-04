@@ -32,7 +32,7 @@ saved beside the source file:
 | `json` | `name-transcript.json` | segments and every word with its start and end time |
 
 TXT and timestamped TXT are on by default; **Настройки** chooses the formats,
-the model (RNNT by default, CTC, or a multilingual model, see below), the device
+the model (RNNT by default, or CTC), the device
 (Авто, GPU, CPU) and CPU threads. **Сохранить как настройки по умолчанию** writes
 them to `gigaam-config.json` beside the app.
 
@@ -45,37 +45,12 @@ gigaam-cli.exe lecture.m4a --model CTC --device cpu --threads 8
 gigaam-cli.exe --help
 ```
 
-### Models
-
-| Model | Size | Text |
-| --- | ---: | --- |
-| `RNNT` (default) | bundled | Russian, with punctuation and capitals |
-| `CTC` | bundled | the same, a little faster |
-| `Multilingual` | 845 MB download | Russian, English, Kazakh and other languages; lowercase, no punctuation |
-| `Multilingual-Large` | 2.2 GB download | the same, larger; about 1.7 times slower on a GPU |
-
-The multilingual models (not in v0.2.0; from the next release) are downloaded
-when first chosen: the window asks before downloading and shows the progress,
-the command line uses `--download`:
-
-```powershell
-gigaam-cli.exe --list-models                  # every model and whether it is installed
-gigaam-cli.exe --download Multilingual        # download, then use with --model Multilingual
-```
-
-They go to `%LOCALAPPDATA%\GigaAmTranscriber\models` (on Linux
-`~/.local/share/gigaam-transcriber/models`; `GIGAAM_DOWNLOADS` overrides it), so
-a new version of the app finds them again. Every file must match the size and
-SHA-256 written in [`gigaam_app/catalog.py`](gigaam_app/catalog.py); a damaged
-file is deleted, and an interrupted download resumes where it stopped.
-
 ### Settings file
 
 `gigaam-config.json` beside the app holds the defaults for both the window and
 the command line. [`gigaam-config.example.json`](gigaam-config.example.json)
-lists every key. Files saved by v0.1 still load (`"CUDA"` now means GPU, and
-`"Multilingual CTC (220M)"` / `"Multilingual CTC Large (600M)"` mean
-`Multilingual` / `Multilingual-Large`).
+lists every key. Files saved by v0.1 still load (`"CUDA"` now means GPU; the v0.1 multilingual
+models are gone, and settings that chose one get RNNT).
 Speech search and chunking settings are only in this file and in command-line
 flags such as `--vad-threshold`:
 
@@ -132,22 +107,18 @@ python tools/make_silero_scan.py --out models/silero_vad_scan.onnx
 
 Each export checks ONNX Runtime against PyTorch and writes `model.json` with
 SHA-256 checksums. The v3 weights are stored as float16, which is lossless for
-these checkpoints. The multilingual checkpoints are float32 and stay so (float16
-storage changed the text); the 600M model's weights go into `encoder.data1` and
-`encoder.data2`, because a protobuf file and a GitHub release asset are limited
-to 2 GB.
+these checkpoints. Weights above 1.8 GiB go into `encoder.data1`, `encoder.data2`,
+... beside `encoder.onnx`, because a protobuf file and a GitHub release asset are
+limited to 2 GB.
 
-**Publishing downloadable models.** Export them, then
-
-```powershell
-python tools/export_models.py multilingual_ctc multilingual_large_ctc --out export
-python tools/stage_model_assets.py assets export/multilingual_ctc export/multilingual_large_ctc
-gh release upload models-1 assets/*
-```
-
-`stage_model_assets.py` copies the files to the asset names the app expects
-(`<folder>.<file>`) and prints the size and SHA-256 lines for
-`gigaam_app/catalog.py`, which must match the uploaded files.
+**Downloadable models.** The app can download extra models into
+`%LOCALAPPDATA%\GigaAmTranscriber\models` (`GIGAAM_DOWNLOADS` overrides it), each
+file checked against the size and SHA-256 in
+[`gigaam_app/catalog.py`](gigaam_app/catalog.py), with resume after an
+interruption (`gigaam-cli --list-models`, `--download MODEL`; the window asks
+first). No model uses this yet. To publish one, export it, run
+`python tools/stage_model_assets.py assets export/<folder>`, upload `assets/*`
+to the `models-1` release and paste the printed lines into the catalog.
 
 **Tests.** `python -m pytest tests` runs the unit tests (VAD against the
 silero-vad reference, decoders against a textbook RNNT decoder, outputs,

@@ -24,12 +24,8 @@ from .outputs import clock, write_outputs
 DEVICE_LABELS = {"Auto": "Авто", "GPU": "GPU", "CPU": "CPU"}
 FORMAT_LABELS = (("txt", "TXT"), ("timestamps", "TXT с таймкодами"), ("srt", "SRT (субтитры)"),
                  ("json", "JSON (слова и время)"))
-MODEL_NOTES = {
-    "Multilingual": "Многоязычная модель: русский, английский, казахский и другие языки. "
-                    "Пишет строчными буквами, без знаков препинания.",
-    "Multilingual-Large": "Многоязычная модель, крупнее и медленнее: русский, английский, казахский "
-                          "и другие языки. Пишет строчными буквами, без знаков препинания.",
-}
+# Russian notes shown before a download, by model key (catalog descriptions are English).
+MODEL_NOTES = {}
 MEDIA_TYPES = [("Аудио и видео", "*.wav *.mp3 *.m4a *.ogg *.opus *.flac *.aac *.wma *.mp4 *.mkv "
                                   "*.mov *.avi *.webm"), ("Все файлы", "*.*")]
 
