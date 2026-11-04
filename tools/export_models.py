@@ -7,6 +7,8 @@ Each model folder contains:
     encoder.onnx  - raw 16 kHz waveform in; log-mel front-end + Conformer encoder
                     inside the graph. CTC models also include the CTC head, so the
                     output is log-probabilities.
+    encoder.data1...- only for weights above 1.8 GiB (multilingual_large_ctc):
+                    ONNX external data in parts of at most 1.5 GiB.
     head.npz      - RNNT only: prediction LSTM and joint network weights (run in numpy).
     vocab.json    - token pieces; index = token id, blank id = len(vocab).
     model.json    - model type, frame duration and file checksums.
@@ -24,8 +26,10 @@ import sys
 import warnings
 
 import numpy as np
+import tempfile
+
 import onnx
-from onnx import helper, numpy_helper, TensorProto
+from onnx import external_data_helper, helper, numpy_helper, TensorProto
 import onnxruntime as ort
 import torch
 from torch import nn
@@ -35,6 +39,8 @@ sys.path.insert(0, str(ROOT))
 import gigaam  # noqa: E402  (the upstream PyTorch package in this repository)
 
 SAMPLE_RATE = 16000
+SINGLE_FILE_LIMIT = 1800 * 1024 ** 2  # weights up to this size stay inside encoder.onnx
+DATA_PART_LIMIT = 1536 * 1024 ** 2    # largest external data part (GitHub assets: 2 GiB)
 
 
 class ConvLogMel(nn.Module):
@@ -90,14 +96,15 @@ class EncoderGraph(nn.Module):
         return encoded.transpose(1, 2), encoded_len  # (B, T, D)
 
 
-def store_weights_as_fp16(path):
+def store_weights_as_fp16(model):
     """Keep exactly-representable float32 weights as float16 plus a Cast node.
 
     GigaAM v3 checkpoints already hold float16 weights, so this halves the file
     without changing any value. ONNX Runtime folds the Cast when the session loads,
-    so inference still runs in float32. Tensors that would change are left alone.
+    so inference still runs in float32. Tensors that would change are left alone
+    (the multilingual checkpoints are float32 throughout, so nothing changes there).
+    Works on a loaded ModelProto in place.
     """
-    model = onnx.load(str(path))
     graph = model.graph
     casts, converted, kept = [], 0, 0
     for index, tensor in enumerate(list(graph.initializer)):
@@ -118,8 +125,51 @@ def store_weights_as_fp16(path):
         converted += 1
     for node in reversed(casts):
         graph.node.insert(0, node)
-    onnx.save(model, str(path))
     return converted, kept
+
+
+def weight_bytes(model):
+    return sum(len(tensor.raw_data) for tensor in model.graph.initializer)
+
+
+def save_encoder(model, folder):
+    """Write encoder.onnx, with the weights in separate data parts when they are large.
+
+    A protobuf file cannot exceed 2 GB, and a GitHub release asset cannot exceed
+    2 GiB, so weights above SINGLE_FILE_LIMIT go into encoder.data1, encoder.data2,
+    ... of at most DATA_PART_LIMIT bytes each (ONNX external data; every tensor
+    names its own file and offset). Returns the file names, encoder.onnx first.
+    """
+    for old in [folder / "encoder.onnx", *folder.glob("encoder.data*")]:
+        old.unlink(missing_ok=True)
+    path = folder / "encoder.onnx"
+    if weight_bytes(model) <= SINGLE_FILE_LIMIT:
+        onnx.save(model, str(path))
+        return ["encoder.onnx"]
+    parts, handle, offset = [], None, 0
+    try:
+        for tensor in model.graph.initializer:
+            data = tensor.raw_data
+            if len(data) < 1024:
+                continue  # tiny tensors stay inside the graph file
+            if handle is None or offset + len(data) > DATA_PART_LIMIT:
+                if handle is not None:
+                    handle.close()
+                parts.append(f"encoder.data{len(parts) + 1}")
+                handle, offset = open(folder / parts[-1], "wb"), 0
+            padding = -offset % 4096  # page-aligned offsets let ONNX Runtime map the file
+            handle.write(b"\0" * padding)
+            offset += padding
+            handle.write(data)
+            external_data_helper.set_external_data(tensor, location=parts[-1], offset=offset, length=len(data))
+            tensor.data_location = TensorProto.EXTERNAL
+            tensor.ClearField("raw_data")
+            offset += len(data)
+    finally:
+        if handle is not None:
+            handle.close()
+    onnx.save(model, str(path))
+    return ["encoder.onnx", *parts]
 
 
 def sha256(path):
@@ -147,19 +197,28 @@ def export(name, out_root, fp16_storage):
     graph = EncoderGraph(model, is_ctc).eval()
     example = (torch.randn(2, SAMPLE_RATE * 6), torch.tensor([SAMPLE_RATE * 6, SAMPLE_RATE * 4]))
     out_name = "log_probs" if is_ctc else "encoded"
-    with warnings.catch_warnings(), torch.no_grad():
-        warnings.simplefilter("ignore")
-        torch.onnx.export(
-            graph, example, str(encoder_path),
-            input_names=["wav", "wav_len"], output_names=[out_name, "encoded_len"],
-            dynamic_axes={"wav": {0: "batch", 1: "samples"}, "wav_len": {0: "batch"},
-                          out_name: {0: "batch", 1: "frames"}, "encoded_len": {0: "batch"}},
-            opset_version=17, dynamo=False)
+    # Trace into a scratch folder first: above 2 GB the exporter writes one
+    # external data file per tensor, which save_encoder then packs into parts.
+    with tempfile.TemporaryDirectory(dir=folder) as scratch:
+        traced = Path(scratch) / "encoder.onnx"
+        with warnings.catch_warnings(), torch.no_grad():
+            warnings.simplefilter("ignore")
+            torch.onnx.export(
+                graph, example, str(traced),
+                input_names=["wav", "wav_len"], output_names=[out_name, "encoded_len"],
+                dynamic_axes={"wav": {0: "batch", 1: "samples"}, "wav_len": {0: "batch"},
+                              out_name: {0: "batch", 1: "frames"}, "encoded_len": {0: "batch"}},
+                opset_version=17, dynamo=False)
+        encoder = onnx.load(str(traced))  # reads any external data into memory
     if fp16_storage:
-        converted, kept = store_weights_as_fp16(encoder_path)
+        converted, kept = store_weights_as_fp16(encoder)
         print(f"   fp16 storage: {converted} tensors converted, {kept} kept in fp32", flush=True)
+    encoder_files = save_encoder(encoder, folder)
+    del encoder
 
     files = {"encoder": "encoder.onnx", "vocab": "vocab.json"}
+    for number, part in enumerate(encoder_files[1:], 1):
+        files[f"encoder_data{number}"] = part
     vocab = vocabulary(model)
     (folder / "vocab.json").write_text(json.dumps(vocab, ensure_ascii=False), encoding="utf-8")
 
