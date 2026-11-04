@@ -1,6 +1,6 @@
 # Handoff: state and findings
 
-Last updated 2026-11-05. The plan is in [docs/plans/01-onnx-runtime-rewrite.md](docs/plans/01-onnx-runtime-rewrite.md).
+Last updated 2026-11-05 (session 4). The plan is in [docs/plans/01-onnx-runtime-rewrite.md](docs/plans/01-onnx-runtime-rewrite.md).
 
 ## Decisions (approved by the owner on 2026-11-04)
 
@@ -12,6 +12,62 @@ Last updated 2026-11-05. The plan is in [docs/plans/01-onnx-runtime-rewrite.md](
 - Old builds in `dist/` may be deleted once the new build is verified.
 - Commit and publish the release only after the owner has seen the new build work
   (owner confirmed in session 3).
+
+## Session 4 (2026-11-05): B2 done (not adopted), B6 built, upload pending
+
+Commits 0d7dd4a..2990463 on main, not pushed. Tests: 281 passed, 1 skipped
+(parity), with the session 3 venv
+`C:\Users\User\AppData\Local\Temp\claude\b3b5ded84d394c69\740fa774-5b91-4234-b11a-c5b322975530\scratchpad\venv-app`.
+
+**B2, fp16 compute on DirectML: not adopted.** `experiments/onnx_runtime/fp16_encoder.py`
+converts the encoder explicitly: fp16 everywhere except the mel front-end (log of
+1e-9 powers) and the frame-length arithmetic (fp16 is exact only to 2048). The
+onnxconverter-common converter failed (left the graph's Cast(to=float) nodes,
+type errors, then all-NaN output). RNNT, 7 files / 2 h of audio, encoder time:
+
+| GPU | fp32 | fp16 | Text vs fp32 |
+| --- | ---: | ---: | --- |
+| RTX 4070 Laptop (DML device 0) | 42.6 s | 40.8 s | lecture identical; `2023 06 10 12 08 59.mp3` loses 10 of 2863 words ("Так, вторая группа.", dialogue dashes) |
+| Radeon 780M iGPU (DML device 1) | 175 s | 107 s | same kind of differences |
+
+Keeping Softmax and LayerNorm in fp32 did not help (still differs, and adds a diff
+on the lecture). Only the iGPU would gain, and the text changes, so the app stays
+fp32. Side finding: DML device 0 is the RTX on this laptop; the app does not pick
+an adapter (DirectML's default).
+
+**B6, downloads of extra models (code done, hosting not done).**
+- Models: `multilingual_ctc` (220M, 845 MB) and `multilingual_large_ctc` (600M,
+  2.2 GB), the two v0.1 offered. Char-level CTC (Latin, Cyrillic, Kazakh letters),
+  lowercase, no punctuation. Checkpoints are float32 and NOT fp16-exact; lossy fp16
+  storage changed 8 tokens on a Russian file, so they ship fp32. The 600M weights
+  exceed the 2 GB protobuf and 2 GiB GitHub asset limits: `export_models.py` now puts
+  weights above 1.8 GiB into `encoder.data1` / `encoder.data2` (external data, at most
+  1.5 GiB each). v3_e2e_ctc re-exports byte for byte. Max |onnx - torch|: 2.5e-4 and 8.8e-4.
+- Speed on DML (RTX): 220M like v3 (lecture 4.6 s); 600M 1.7x slower, load 9 s cold.
+  On English audio both write Cyrillic transliteration (that file is out of domain).
+- App: `gigaam_app/catalog.py` (keys RNNT, CTC, Multilingual, Multilingual-Large;
+  sizes and SHA-256 of each file in code; v0.1 names as aliases),
+  `gigaam_app/download.py` (staging `<folder>.partial`, SHA-256 per file, HTTP Range
+  resume, 3 attempts, cancel, disk space check, rename when all pass),
+  `paths.downloads_dir()` (`%LOCALAPPDATA%\GigaAmTranscriber\models`, `GIGAAM_DOWNLOADS`).
+  CLI `--list-models`, `--download MODEL`; GUI asks before downloading, progress and
+  cancel. Bug fixed on the way: v0.2.0 rejected v0.1 settings naming a multilingual model.
+- Tested: `tests/test_download.py` (17 tests, local HTTP server: damaged, cut,
+  resumed, cancelled, Range ignored, 404, too long, no space). GUI end to end in
+  process with the Tk root withdrawn (never shown): large model cancelled at 312 MB,
+  resumed with `Range: bytes=327155712-`, loaded; small model downloaded from
+  "Распознать", transcribed a file. Docker `--download` is documented but not run.
+- Hosting: catalog URLs point to release tag `models-1`
+  (`https://github.com/bigflyy/GigaAmTranscriber/releases/download/models-1/<folder>.<file>`),
+  which does not exist yet. The exported folders are in this session's scratchpad
+  `export/` (3.1 GB):
+  `C:\Users\User\AppData\Local\Temp\claude\b3b5ded84d394c69\28d81582-1145-4ab9-a6b4-42d9490289a5\scratchpad\export`.
+  Upload: `tools/stage_model_assets.py OUT export/multilingual_ctc export/multilingual_large_ctc`
+  then `gh release upload models-1 OUT/*`; its printed hashes match catalog.py.
+  If the scratchpad is gone, re-export with the cuda-torch2 env (2 min); check the
+  hashes still match catalog.py (export looked deterministic for v3, not checked for these).
+- Open: B6.5 (owner approves hosting, upload, test real downloads), then a release
+  (version bump, release notes, Windows build, Docker images).
 
 ## Release v0.2.0 (session 3, 2026-11-04): published
 
