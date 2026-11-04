@@ -24,7 +24,7 @@ Findings and measurements behind this plan are in [HANDOFF.md](../../HANDOFF.md)
   - [x] **B6.3** Engine, settings (v0.1 model labels accepted), CLI `--list-models` / `--download`, GUI download prompt with progress
   - [x] **B6.4** Tests with a local HTTP server: good, damaged, truncated, resumed, cancelled downloads
   - [ ] **B6.5** Owner approves hosting; upload the model files to a GitHub release and test real downloads
-  - [ ] **B6.6** Docs: README, DOCKER.md, release notes
+  - [x] **B6.6** Docs: README, DOCKER.md (release notes are written with the next release)
 - [x] **B7** Automated tests: VAD, decoders, outputs, config, CLI, pipeline with fakes, real-model tests and an optional parity test
 - [x] **B8** Overlap speech search with recognition (3-thread pipeline) and Silero in an ONNX Scan loop (`tools/make_silero_scan.py`)
 

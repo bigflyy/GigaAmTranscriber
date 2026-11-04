@@ -53,13 +53,26 @@ Both commands save `recording-transcript.txt` and
 ... --help                                    # all options, including speech search settings
 ```
 
+### Multilingual models
+
+The multilingual models (from the release after v0.2.0) are not in the image;
+they are downloaded once into a volume. The first run needs the network:
+
+```powershell
+docker run --rm -v gigaam-models:/models-extra -e GIGAAM_DOWNLOADS=/models-extra ghcr.io/bigflyy/gigaamtranscriber:cpu --download Multilingual
+docker run --rm --network none -v gigaam-models:/models-extra -e GIGAAM_DOWNLOADS=/models-extra -v "C:\Audio:/data" ghcr.io/bigflyy/gigaamtranscriber:cpu recording.mp3 --model Multilingual
+```
+
+`--list-models` shows what is installed. Downloads are checked against the
+SHA-256 inside the app and resume if interrupted.
+
 Settings can also come from a file: put a `gigaam-config.json` (see
 [gigaam-config.example.json](gigaam-config.example.json)) in the audio folder
 and add `--config gigaam-config.json`.
 
 Changes from v0.1: the images no longer need the model volume, `--device cuda`
 is now `--device gpu`, `--cpu-threads` is now `--threads`, and `--model` takes
-`RNNT` or `CTC`.
+`RNNT` or `CTC` (later releases also `Multilingual` and `Multilingual-Large`).
 
 ## Publish a new version
 
