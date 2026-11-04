@@ -35,6 +35,7 @@ Findings and measurements behind this plan are in [HANDOFF.md](../../HANDOFF.md)
 - [x] **C2** GUI: start loading the model at launch in the background, keep it loaded between files
 - [x] **C3** GUI settings cut to model, device, threads, output formats; VAD knobs in the config file only
 - [x] **C4** Remove torch-era code paths, `giga.py`, debug files, the frozen `requirements.txt`
+- [ ] **C5** Nicer window design (owner asked): first try a modern ttk theme such as sv-ttk (Windows 11 look, light and dark), spacing and a clearer layout; a different toolkit only if that is not enough. Check the result with screenshots from a hidden desktop
 
 ### Stage D: Packaging
 

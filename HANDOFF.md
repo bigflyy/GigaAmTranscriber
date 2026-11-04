@@ -67,6 +67,7 @@ an adapter (DirectML's default).
   Plan Stage F (before E) compares Parakeet TDT 0.6B v3, Whisper large-v3-turbo and
   Qwen3-ASR on labelled Russian and English audio. B9: int8 encoder for CPU-only
   machines as an optional download (owner suggested q8/q4).
+- Owner tried the app from source: it works. Owner wants a nicer window design: plan C5.
 - No release date. v0.2.1/v0.3.0 has little visible change so far (v0.1 settings fix);
   a release makes sense with B9 or Stage F.
 
