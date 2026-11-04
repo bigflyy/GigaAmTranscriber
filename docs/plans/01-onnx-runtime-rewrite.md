@@ -19,6 +19,12 @@ Findings and measurements behind this plan are in [HANDOFF.md](../../HANDOFF.md)
 - [x] **B4** Encoder runner: provider choice (DirectML, CPU), batching on GPU, batch 1 on CPU
 - [x] **B5** RNNT and CTC greedy decoders that also return token frame times (word timestamps)
 - [ ] **B6** Model store: bundled models size-checked on load (done); downloads of extra models with SHA-256 (not done)
+  - [x] **B6.1** Export multilingual CTC 220M and 600M (fp32; the 600M weights split into data parts under 2 GiB); check text
+  - [x] **B6.2** Catalog in the app code (files, sizes, SHA-256) and a verified, resumable, cancellable downloader into a per-user folder
+  - [x] **B6.3** Engine, settings (v0.1 model labels accepted), CLI `--list-models` / `--download`, GUI download prompt with progress
+  - [x] **B6.4** Tests with a local HTTP server: good, damaged, truncated, resumed, cancelled downloads
+  - [ ] **B6.5** Owner approves hosting; upload the model files to a GitHub release and test real downloads
+  - [ ] **B6.6** Docs: README, DOCKER.md, release notes
 - [x] **B7** Automated tests: VAD, decoders, outputs, config, CLI, pipeline with fakes, real-model tests and an optional parity test
 - [x] **B8** Overlap speech search with recognition (3-thread pipeline) and Silero in an ONNX Scan loop (`tools/make_silero_scan.py`)
 

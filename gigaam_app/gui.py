@@ -2,7 +2,8 @@
 
 The model starts loading as soon as the window opens, while the user picks a
 file, and stays loaded between files. Changing model, device or threads loads
-it again before the next transcription.
+it again before the next transcription. A model that is not bundled is
+downloaded first, after the user agrees; the progress bar shows the download.
 """
 
 import os
@@ -15,13 +16,20 @@ import time
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-from . import __version__, config
+from . import __version__, catalog, config, download
 from .engine import MODELS, Transcriber
+from .paths import downloads_dir
 from .outputs import clock, write_outputs
 
 DEVICE_LABELS = {"Auto": "Авто", "GPU": "GPU", "CPU": "CPU"}
 FORMAT_LABELS = (("txt", "TXT"), ("timestamps", "TXT с таймкодами"), ("srt", "SRT (субтитры)"),
                  ("json", "JSON (слова и время)"))
+MODEL_NOTES = {
+    "Multilingual": "Многоязычная модель: русский, английский, казахский и другие языки. "
+                    "Пишет строчными буквами, без знаков препинания.",
+    "Multilingual-Large": "Многоязычная модель, крупнее и медленнее: русский, английский, казахский "
+                          "и другие языки. Пишет строчными буквами, без знаков препинания.",
+}
 MEDIA_TYPES = [("Аудио и видео", "*.wav *.mp3 *.m4a *.ogg *.opus *.flac *.aac *.wma *.mp4 *.mkv "
                                   "*.mov *.avi *.webm"), ("Все файлы", "*.*")]
 
@@ -50,6 +58,8 @@ class Worker(threading.Thread):
                     self._ensure(job[1])
                 elif job[0] == "transcribe":
                     self._transcribe(*job[1:])
+                elif job[0] == "download":
+                    self._download(job[1])
             except Exception as error:  # every failure is shown in the window
                 self.events.put(("error", str(error) or type(error).__name__))
 
@@ -63,6 +73,24 @@ class Worker(threading.Thread):
         self.engine, self.engine_key = engine, key
         self.events.put(("loaded", engine.device_label, engine.load_seconds, model))
         return engine
+
+    def _download(self, model):
+        self.cancel.clear()
+        info = catalog.find(model)
+        last = [0.0]
+
+        def progress(done, total):
+            now = time.perf_counter()
+            if now - last[0] > 0.1 or done == total:
+                last[0] = now
+                self.events.put(("download_progress", model, done, total))
+
+        try:
+            folder = download.install(info, on_progress=progress, should_cancel=self.cancel.is_set)
+        except download.DownloadCancelled:
+            self.events.put(("download_done", model, None))
+            return
+        self.events.put(("download_done", model, folder))
 
     def _transcribe(self, path, key, options, formats):
         self.cancel.clear()
@@ -92,6 +120,7 @@ class App:
         self.worker = Worker(self.events)
         self.worker.start()
         self.running = False
+        self.downloading = False
         self.segments = []
         self.output_files = []
         self.asr_started = None
@@ -157,7 +186,7 @@ class App:
         row.pack(fill="x")
         ttk.Label(row, text="Модель").pack(side="left")
         self.model_box = ttk.Combobox(row, textvariable=self.model, values=tuple(MODELS),
-                                      state="readonly", width=8)
+                                      state="readonly", width=18)
         self.model_box.pack(side="left", padx=(6, 16))
         ttk.Label(row, text="Устройство").pack(side="left")
         self.device_box = ttk.Combobox(row, textvariable=self.device, values=tuple(DEVICE_LABELS.values()),
@@ -166,8 +195,8 @@ class App:
         ttk.Label(row, text="Потоки CPU (0 = авто)").pack(side="left")
         self.threads_box = ttk.Spinbox(row, textvariable=self.threads, from_=0, to=os.cpu_count() or 8, width=4)
         self.threads_box.pack(side="left", padx=6)
-        for widget in (self.model_box, self.device_box):
-            widget.bind("<<ComboboxSelected>>", lambda event: self.request_load())
+        self.model_box.bind("<<ComboboxSelected>>", lambda event: self.request_load(ask=True))
+        self.device_box.bind("<<ComboboxSelected>>", lambda event: self.request_load())
         self.threads_box.bind("<FocusOut>", lambda event: self.request_load())
 
         outputs = ttk.Frame(self.settings_frame)
@@ -220,9 +249,40 @@ class App:
             threads = 0
         return self.model.get(), device.lower(), threads
 
-    def request_load(self):
-        if not self.running:
+    def request_load(self, ask=False):
+        if not self.running and self.model_ready(ask):
             self.worker.jobs.put(("load", self.engine_key()))
+
+    def model_ready(self, ask):
+        """True when the chosen model is on disk. Otherwise, if ask is set, offer
+        to download it; the model loads when the download has finished."""
+        info = catalog.find(self.model.get())
+        if catalog.installed_folder(info) is not None:
+            return True
+        size = info.download_size / 1024 ** 2
+        size_text = f"{size / 1024:.1f} ГБ" if size >= 1024 else f"{size:.0f} МБ"
+        self.engine_state.set(f"Модель {info.key} не скачана")
+        if not ask:
+            self.status.set(f"Модель {info.key} скачивается отдельно ({size_text}). "
+                            "Нажмите «Распознать», чтобы скачать её.")
+            return False
+        question = (f"Модель {info.key} не входит в программу и скачивается отдельно: {size_text}.\n\n"
+                    f"{MODEL_NOTES.get(info.key, info.description)}\n\n"
+                    f"Папка: {downloads_dir()}\n\n"
+                    "Если скачивание прервётся, в следующий раз оно продолжится с того же места. "
+                    "Скачать сейчас?")
+        if messagebox.askyesno("Скачать модель", question, parent=self.root):
+            self.begin_download(info)
+        return False
+
+    def begin_download(self, info):
+        self.running = self.downloading = True
+        self.bar["value"] = 0
+        self.eta.set("")
+        self.run_started = time.perf_counter()
+        self.set_controls(running=True)
+        self.status.set(f"Скачивание модели {info.key}...")
+        self.worker.jobs.put(("download", info.key))
 
     def current_settings(self):
         model, device, threads = self.engine_key()
@@ -260,6 +320,8 @@ class App:
         if not path.is_file():
             messagebox.showerror("Файл", "Выберите существующий аудио- или видеофайл.", parent=self.root)
             return
+        if not self.model_ready(ask=True):
+            return
         formats = [fmt for fmt, _ in FORMAT_LABELS if self.formats[fmt].get()] or ["txt"]
         self.running = True
         self.segments = []
@@ -278,7 +340,8 @@ class App:
     def cancel(self):
         if self.running:
             self.worker.cancel.set()
-            self.status.set("Отмена... готовые фрагменты будут сохранены.")
+            self.status.set("Остановка скачивания..." if self.downloading else
+                            "Отмена... готовые фрагменты будут сохранены.")
 
     def close(self):
         self.worker.cancel.set()
@@ -323,13 +386,17 @@ class App:
                            f"пропущено без речи {hms(skipped)}")
         elif kind == "progress":
             self.on_progress(event[1], event[2])
+        elif kind == "download_progress":
+            self.on_download_progress(*event[1:])
+        elif kind == "download_done":
+            self.on_download_done(event[1], event[2])
         elif kind == "segment":
             self.segments.append(event[1])
             self.append_preview(event[1])
         elif kind == "finished":
             self.on_finished(event[1], event[2])
         elif kind == "error":
-            self.running = False
+            self.running = self.downloading = False
             self.set_controls(running=False)
             self.status.set("Ошибка: " + event[1])
             self.eta.set("")
@@ -343,6 +410,27 @@ class App:
         if 0.03 < recognised < 1:
             left = (now - self.run_started) / recognised * (1 - recognised)
             self.eta.set(f"Осталось примерно {hms(left)}")
+
+    def on_download_progress(self, model, done, total):
+        fraction = done / total if total else 0.0
+        self.bar["value"] = 1000 * fraction
+        self.status.set(f"Скачивание модели {model}: {done / 1024 ** 2:.0f} из {total / 1024 ** 2:.0f} МБ")
+        elapsed = time.perf_counter() - self.run_started
+        if 0.02 < fraction < 1 and elapsed > 3:
+            # Resumed bytes count as done from the start, so the first seconds
+            # are skipped before an estimate is shown.
+            self.eta.set(f"Осталось примерно {hms(elapsed / fraction * (1 - fraction))}")
+
+    def on_download_done(self, model, folder):
+        self.running = self.downloading = False
+        self.set_controls(running=False)
+        self.eta.set("")
+        if folder is None:
+            self.status.set("Скачивание остановлено. В следующий раз оно продолжится с того же места.")
+            return
+        self.bar["value"] = 1000
+        self.status.set(f"Модель {model} скачана.")
+        self.request_load()
 
     def on_finished(self, result, written):
         self.running = False

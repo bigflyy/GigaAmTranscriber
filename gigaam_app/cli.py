@@ -1,4 +1,8 @@
-"""Command line: gigaam-cli FILE [FILE ...]. The model loads once for all files."""
+"""Command line: gigaam-cli FILE [FILE ...]. The model loads once for all files.
+
+gigaam-cli --list-models shows every model and whether it is installed;
+gigaam-cli --download MODEL fetches an extra model (resumes if interrupted).
+"""
 
 import argparse
 from dataclasses import fields
@@ -7,8 +11,8 @@ from pathlib import Path
 import sys
 import time
 
-from . import __version__, config
-from .engine import MODELS, Transcriber
+from . import __version__, catalog, config, download
+from .engine import MODELS, ModelNotInstalled, Transcriber
 from .outputs import FORMATS, write_outputs
 from .vad import VadOptions
 
@@ -17,7 +21,7 @@ def build_parser():
     parser = argparse.ArgumentParser(
         prog="gigaam-cli",
         description="Transcribe Russian speech in audio or video files with GigaAM.")
-    parser.add_argument("files", nargs="+", type=Path, help="audio or video files")
+    parser.add_argument("files", nargs="*", type=Path, help="audio or video files")
     parser.add_argument("-o", "--out-dir", type=Path, help="output folder (default: beside each file)")
     parser.add_argument("--model", choices=tuple(MODELS), help="recognition model (default: RNNT)")
     parser.add_argument("--device", choices=("auto", "gpu", "cpu"), help="default: auto")
@@ -26,6 +30,9 @@ def build_parser():
                                           "(default: txt,timestamps)")
     parser.add_argument("--config", type=Path, help="settings file (default: gigaam-config.json beside the app)")
     parser.add_argument("--quiet", action="store_true", help="print only errors")
+    parser.add_argument("--list-models", action="store_true", help="show the models and where they are installed")
+    parser.add_argument("--download", metavar="MODEL", choices=tuple(MODELS),
+                        help="download an extra model, then transcribe FILES if any are given")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     tuning = parser.add_argument_group("segmentation (override the settings file)")
     for item in fields(VadOptions):
@@ -51,9 +58,69 @@ def safe_console():
             stream.reconfigure(errors="backslashreplace")
 
 
+def size_text(size):
+    return f"{size / 1024 ** 3:.1f} GB" if size >= 1024 ** 3 else f"{size / 1024 ** 2:.0f} MB"
+
+
+def list_models():
+    from .paths import downloads_dir, models_dir
+    for info in catalog.CATALOG:
+        folder = catalog.installed_folder(info)
+        if info.bundled:
+            state = "bundled" if folder else "missing"
+        else:
+            state = "installed" if folder else f"download {size_text(info.download_size)}"
+        print(f"{info.key:<20} {state:<16} {info.description}")
+    print(f"\nBundled models: {models_dir()}\nDownloaded models: {downloads_dir()}")
+
+
+def download_model(key, quiet):
+    """Download one catalog model with a progress line; returns an exit code."""
+    info = catalog.find(key)
+    folder = catalog.installed_folder(info)
+    if folder is not None:
+        if not quiet:
+            print(f"{info.key} is already installed: {folder}")
+        return 0
+    last = [0.0]
+
+    def progress(done, total):
+        now = time.perf_counter()
+        if not quiet and sys.stderr.isatty() and (now - last[0] > 0.2 or done == total):
+            last[0] = now
+            print(f"\r  {info.key}: {done / 1024 ** 2:,.0f} of {total / 1024 ** 2:,.0f} MB",
+                  end="", file=sys.stderr, flush=True)
+
+    if not quiet:
+        print(f"Downloading {info.key} ({size_text(info.download_size)})...", flush=True)
+    try:
+        folder = download.install(info, on_progress=progress)
+    except KeyboardInterrupt:
+        print("\nDownload stopped; run the same command again to resume.", file=sys.stderr)
+        return 1
+    except (download.DownloadError, OSError) as error:
+        print(f"\nDownload failed: {error}", file=sys.stderr)
+        return 1
+    if not quiet:
+        if sys.stderr.isatty():
+            print(file=sys.stderr)
+        print(f"{info.key} installed: {folder}")
+    return 0
+
+
 def main(argv=None):
     safe_console()
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if args.list_models:
+        list_models()
+        return 0
+    if args.download:
+        code = download_model(args.download, args.quiet)
+        if code or not args.files:
+            return code
+    if not args.files:
+        parser.error("no input files")
     args.files = expand_wildcards(args.files)
     try:
         settings = config.load(args.config)
@@ -82,7 +149,11 @@ def main(argv=None):
     if missing:
         print("File not found: " + ", ".join(missing), file=sys.stderr)
         return 2
-    transcriber = Transcriber(model, device=device, cpu_threads=threads)
+    try:
+        transcriber = Transcriber(model, device=device, cpu_threads=threads)
+    except ModelNotInstalled as error:
+        print(error, file=sys.stderr)
+        return 2
     say(f"{model} on {transcriber.device_label}, loaded in {transcriber.load_seconds:.1f} s")
     failures = 0
     for path in args.files:

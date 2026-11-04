@@ -175,7 +175,8 @@ class AsrModel:
         self.frame_seconds = float(self.meta["frame_seconds"])
         self.blank_id = int(self.meta["blank_id"])
         for entry in self.meta["files"].values():
-            # A cheap size check catches truncated copies; checksums are verified on install.
+            # A cheap size check catches truncated copies. SHA-256 is checked when the
+            # release is built (bundled models) or downloaded (download.py).
             path = folder / entry["name"]
             if not path.is_file() or path.stat().st_size != entry["size"]:
                 raise RuntimeError(f"Model file is missing or damaged: {path}")

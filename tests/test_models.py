@@ -18,17 +18,17 @@ import sys
 import numpy as np
 import pytest
 
-from gigaam_app.engine import MODELS, Transcriber
+from gigaam_app.engine import BUNDLED_MODELS, Transcriber
 from gigaam_app.paths import models_dir
 
 ROOT = Path(__file__).resolve().parents[1]
-HAVE_MODELS = all((models_dir() / folder / "model.json").is_file() for folder in MODELS.values()) and \
+HAVE_MODELS = all((models_dir() / folder / "model.json").is_file() for folder in BUNDLED_MODELS.values()) and \
     (models_dir() / "silero_vad_scan.onnx").is_file()
 needs_models = pytest.mark.skipif(not HAVE_MODELS, reason="exported models not found in models/")
 needs_ffmpeg = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not on PATH")
 
 
-@pytest.fixture(scope="module", params=list(MODELS))
+@pytest.fixture(scope="module", params=list(BUNDLED_MODELS))
 def cpu_transcriber(request):
     return Transcriber(request.param, device="cpu", cpu_threads=2)
 

@@ -18,16 +18,16 @@ import queue
 import threading
 import time
 
+from . import catalog
 from .asr import AsrModel, Word, create_session
 from .audio import SAMPLE_RATE, decode_audio
+from .catalog import ModelNotInstalled
 from .paths import models_dir
 from .vad import WINDOW, ChunkFinder, SileroVad, VadOptions
 
-# Display name -> exported model folder.
-MODELS = {
-    "RNNT": "v3_e2e_rnnt",
-    "CTC": "v3_e2e_ctc",
-}
+# Model key -> exported model folder, for every model in the catalog.
+MODELS = {info.key: info.folder for info in catalog.CATALOG}
+BUNDLED_MODELS = {info.key: info.folder for info in catalog.CATALOG if info.bundled}
 DEFAULT_MODEL = "RNNT"
 
 # GPU batches: at most this many chunks and this much padded audio per encoder call.
@@ -65,10 +65,24 @@ class Transcriber:
     """A loaded model plus VAD. One transcription at a time per instance."""
 
     def __init__(self, model=DEFAULT_MODEL, device="auto", cpu_threads=None, model_root=None):
-        root = Path(model_root) if model_root else models_dir()
+        """model: a catalog key (or a v0.1 name). model_root: one folder holding the
+        model folder and the VAD model, instead of the normal lookup (tests, experiments).
+        Raises ModelNotInstalled for a downloadable model that is not downloaded yet."""
         started = time.perf_counter()
+        if model_root:
+            root = Path(model_root)
+            folder = root / MODELS.get(model, model)
+        else:
+            root = models_dir()
+            info = catalog.find(model)
+            model = info.key
+            folder = catalog.installed_folder(info)
+            if folder is None:
+                if info.bundled:
+                    raise FileNotFoundError(f"Model not found: {root / info.folder}")
+                raise ModelNotInstalled(info)
         self.model_label = model
-        self.asr = AsrModel(root / MODELS.get(model, model), device=device, cpu_threads=cpu_threads)
+        self.asr = AsrModel(folder, device=device, cpu_threads=cpu_threads)
         # Silero does tiny sequential steps; one CPU thread is fastest.
         vad_session, _ = create_session(root / "silero_vad_scan.onnx", device="cpu", cpu_threads=1)
         self.vad = SileroVad(vad_session)
@@ -235,4 +249,4 @@ class Transcriber:
                        text=" ".join(word.text for word in words), words=words)
 
 
-__all__ = ["MODELS", "DEFAULT_MODEL", "Segment", "Transcript", "Transcriber", "VadOptions", "Word"]
+__all__ = ["MODELS", "BUNDLED_MODELS", "DEFAULT_MODEL", "ModelNotInstalled", "Segment", "Transcript", "Transcriber", "VadOptions", "Word"]

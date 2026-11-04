@@ -1,7 +1,7 @@
 """Settings stored as gigaam-config.json beside the app.
 
-Version 1 files from v0.1 still load: "CUDA" becomes "GPU", and retired keys
-are ignored. Segmentation settings keep their v0.1 names.
+Version 1 files from v0.1 still load: "CUDA" becomes "GPU", the old names of
+the multilingual models become their new keys, and retired keys are ignored. Segmentation settings keep their v0.1 names.
 """
 
 from dataclasses import asdict, dataclass, field, fields
@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import tempfile
 
+from .catalog import ALIASES
 from .engine import DEFAULT_MODEL, MODELS
 from .outputs import DEFAULT_FORMATS, FORMATS
 from .paths import app_dir
@@ -57,6 +58,7 @@ def parse(data):
         if key == "version" or key in RETIRED_KEYS:
             continue
         if key == "model":
+            value = ALIASES.get(value, value) if isinstance(value, str) else value
             if value not in MODELS:
                 raise ValueError(f"model: expected one of {', '.join(MODELS)}")
             settings.model = value
