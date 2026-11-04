@@ -3,7 +3,9 @@ __pycache__/
 build/
 dist/
 *.spec
+!packaging/*.spec
 models/
+third_party/
 *.ckpt
 *.transcript.txt
 *-transcript.txt
