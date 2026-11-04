@@ -1,10 +1,14 @@
 *
 !Dockerfile
-!requirements-cpu.txt
+!requirements-export.txt
 !gigaam/
 !gigaam/**
-!transcribe.py
-!model_catalog.py
+!gigaam_app/
+!gigaam_app/**
+!tools/export_models.py
+!tools/make_silero_scan.py
 !LICENSE
+!THIRD_PARTY_NOTICES.md
+!gigaam-config.example.json
 **/__pycache__/
 **/*.pyc
