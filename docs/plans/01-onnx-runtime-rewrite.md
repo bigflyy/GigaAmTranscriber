@@ -14,7 +14,7 @@ Findings and measurements behind this plan are in [HANDOFF.md](../../HANDOFF.md)
 ### Stage B: Engine (new package, no torch import)
 
 - [x] **B1** Export tool `tools/export_models.py`: RNNT and CTC, weights stored fp16 losslessly, vocab, head, model.json with SHA-256
-- [ ] **B2** Try fp16 compute for DirectML (speed); keep only if text stays identical
+- [x] **B2** Try fp16 compute for DirectML (speed); keep only if text stays identical (tried: text changed, app stays fp32)
 - [x] **B3** Audio decode once (ffmpeg), streaming Silero VAD (`ChunkFinder`, exact vs batch port), chunk grouping
 - [x] **B4** Encoder runner: provider choice (DirectML, CPU), batching on GPU, batch 1 on CPU
 - [x] **B5** RNNT and CTC greedy decoders that also return token frame times (word timestamps)

@@ -11,6 +11,7 @@ conda environments and sample audio are hard-coded for the owner's machine.
 | `ortasr.py` | Torch-free pipeline: `python ortasr.py AUDIO cpu|cuda|dml MODEL_DIR [ENCODER_FILE]` |
 | `compare.py` | Word-level diff of two transcript JSON files |
 | `diar.py` | sherpa-onnx speaker diarization timing: `python diar.py AUDIO MODEL_DIR EMBEDDING.onnx THRESHOLD` |
+| `fp16_encoder.py` | fp16-compute copy of an exported encoder (plan B2): `python fp16_encoder.py IN.onnx OUT.onnx [OP ...]`. Not used by the app: the text changed (HANDOFF.md) |
 
 Export (needs the torch environment, run from the repository root):
 
