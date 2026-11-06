@@ -122,10 +122,13 @@ def missing_runtime():
         return ("Для окна программы нужен Microsoft Edge WebView2 Runtime, а он не установлен.\n\n"
                 "Установите его с сайта Microsoft (бесплатно, загрузчик около 2 МБ) и запустите программу снова.\n\n"
                 "Открыть страницу загрузки?", WEBVIEW2_URL)
+    # The frozen build carries PyGObject itself; from source it comes from the system too.
+    python_gi = "" if getattr(sys, "frozen", False) else " python3-gi"
+    python_gobject = "" if getattr(sys, "frozen", False) else " python3-gobject"
     return ("Для окна программы нужна библиотека WebKitGTK, а она не найдена.\n\n"
             "Установите её и запустите программу снова:\n"
-            "  Ubuntu, Debian: sudo apt install gir1.2-webkit2-4.1 python3-gi\n"
-            "  Fedora: sudo dnf install webkit2gtk4.1 python3-gobject\n\n"
+            f"  Ubuntu, Debian: sudo apt install gir1.2-webkit2-4.1{python_gi}\n"
+            f"  Fedora: sudo dnf install webkit2gtk4.1 gobject-introspection{python_gobject}\n\n"
             "Командная строка (gigaam-cli) работает и без неё.", None)
 
 
