@@ -10,7 +10,7 @@ Steps:
 2. PyInstaller onedir build from packaging/GigaAmTranscriber.spec;
 3. copy models/, ffmpeg.exe, the example settings, README.txt and licences beside the EXEs;
 4. smoke test the console EXE on a silent file with ffmpeg removed from PATH, and
-   start the windowed EXE on a hidden desktop (tools/gui_smoke_test.py);
+   start the windowed EXE off screen (tools/gui_smoke_test.py);
 5. pack the release assets into build/release/:
        GigaAmTranscriber-v<version>-windows-x64.zip   the app folder
        THIRD_PARTY_LICENSES.zip                      the licences folder alone
