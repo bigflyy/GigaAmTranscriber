@@ -37,9 +37,9 @@ The sv-ttk attempt is kept as a patch outside the repo, not committed.
 ### Stage E: Release v0.3.0 (owner's go, 2026-11-06)
 
 - [x] **E1** Owner tried the build ("they kinda work"): refuse files without sound (txt and others) with a note instead of adding them and failing; ffmpeg decides, not the extension (owner chose this) (controller.has_sound; window_check.py 29 checks on Windows and WSL; three waits there now wait for the page, not only the controller)
-- [ ] **E2** Bump the version to 0.3.0; move docs/RELEASE_NOTES_NEXT.md into RELEASE_NOTES.md
-- [ ] **E3** Rebuild Windows (release zip, smoke tests) and Linux (tar.gz, smoke tests in WSL)
-- [ ] **E4** THIRD_PARTY_LICENSES.zip with the Linux licences (pygobject, debian) merged in; SHA256SUMS
+- [x] **E2** Bump the version to 0.3.0; move docs/RELEASE_NOTES_NEXT.md into RELEASE_NOTES.md
+- [x] **E3** Rebuild Windows (release zip, smoke tests) and Linux (tar.gz, smoke tests in WSL) (zip 916 MiB, tar.gz 825 MiB; both unpacked fresh: lecture text identical, Windows window transcribed the 60 s file)
+- [x] **E4** THIRD_PARTY_LICENSES.zip with the Linux licences (pygobject, debian) merged in; SHA256SUMS (folders windows/ and linux/; sha256sum -c passes)
 - [ ] **E5** Ask the owner, then tag, push and publish the GitHub release
 
 ### Stage D: Later

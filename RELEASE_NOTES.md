@@ -1,76 +1,62 @@
-# GigaAM Transcriber v0.2.0
+# GigaAM Transcriber v0.3.0
 
-The app is rewritten on ONNX Runtime. PyTorch is gone from the app: one
-Windows download for every GPU and the CPU, a few seconds to start, and
-transcription several times faster. The recognised text is the same as in v0.1.
+A new window, and the app now runs on Linux too. Recognition and the text are the
+same as in v0.2.0.
 
-## Windows download
+## New window
 
-Download **`GigaAmTranscriber-v0.2.0-windows-x64.zip`** (about 920 MB), unzip
-it anywhere and run **`GigaAmTranscriber.exe`**. `gigaam-cli.exe` in the same
-folder is the command line. No Python, CUDA, FFmpeg or model download is needed.
+- Files in a list on the left (done, running, waiting); the selected file's
+  progress and its text as it is recognised on the right. Several files can be
+  added at once, by **+ Добавить** or by dragging files or a folder onto the window;
+  they start at once and run one at a time. Files without sound (a text file, a
+  document, a photo, a silent video) are not added; a short note names them.
+  Whether a file has sound is asked of FFmpeg, so unusual video types work too.
+- **The list is kept between sessions.** Finished files come back with their text
+  when the window opens again; SRT or JSON can still be made from them later.
+  **Убрать из списка** forgets a file but keeps its saved transcripts.
+- Saved files are shown as buttons that open them; **Показать в папке** opens the
+  folder. A format that was not chosen can be written from the text already recognised.
+- Closing the window while a file is recognised or a model downloads asks first.
+  The text recognised so far is saved.
+- Settings (model, device, CPU threads, formats) apply to the next file at once
+  and are saved by themselves; **Сбросить настройки** goes back to the defaults.
+- Light and dark theme, following the system.
+- The window is drawn by Microsoft Edge WebView2 on Windows (part of Windows 10
+  and 11; if it is missing, the app links to Microsoft's installer) and by the
+  system's WebKitGTK on Linux. It opens in about 2 s.
 
-- One build for all computers: **Авто** uses any DirectX 12 GPU (NVIDIA, AMD,
-  Intel) through DirectML and falls back to the CPU. No CUDA install, no split
-  download, no join script.
-- A folder instead of a single EXE: nothing is unpacked to a temporary folder at
-  every launch. The window opens in about 1 s and the model is ready 2-3 s
-  later (v0.1: 27 s for the CPU EXE and over 100 s for the CUDA EXE before the
-  window appeared).
-- These EXEs are not code-signed; Windows SmartScreen may ask for confirmation.
+## Windows
 
-## Faster
+`GigaAmTranscriber-v0.3.0-windows-x64.zip` (about 920 MB): unzip it anywhere and run
+`GigaAmTranscriber.exe`; `gigaam-cli.exe` beside it is the command line. Both models
+and FFmpeg are inside; any DirectX 12 GPU is used through DirectML, with the CPU as
+fallback. The EXEs are not code-signed, so Windows SmartScreen may ask once.
 
-On a 7.5-minute lecture (Ryzen 7 7840HS, RTX 4070 Laptop):
+## Linux
 
-| | v0.1 (PyTorch) | v0.2 (ONNX Runtime) |
-| --- | ---: | ---: |
-| GPU, first file after start | 38 s (CUDA) | 5-7 s (DirectML) |
-| CPU, 8 threads | 40 s | 25 s |
-| Model ready after start | 11-15 s | 2-3 s |
+`GigaAmTranscriber-v0.3.0-linux-x64.tar.gz` (about 830 MB): the window and
+`gigaam-cli`, both models inside, recognition on the CPU (a 7.5-minute lecture
+in about 35 s). Unpack it and run `./GigaAmTranscriber/GigaAmTranscriber`.
 
-The model now starts loading when the window opens and stays loaded between
-files. The speech search overlaps with recognition, the audio is decoded once,
-and the RNNT decoder no longer runs its network on every frame.
-Details: [BENCHMARK.md](https://github.com/bigflyy/GigaAmTranscriber/blob/main/BENCHMARK.md).
+The system must have glibc 2.39 or newer (Ubuntu 24.04, Debian 13, Fedora 40 and
+later), FFmpeg and, for the window, WebKitGTK 4.1:
 
-## New
+    sudo apt install ffmpeg gir1.2-webkit2-4.1
+    sudo dnf install ffmpeg-free webkit2gtk4.1 gobject-introspection   # Fedora
 
-- **SRT subtitles** and **JSON with word times** in addition to TXT and timestamped TXT.
-- **Word timestamps** from the decoders (40 ms steps), used by SRT and JSON.
-- The command line takes several files and wildcards (`gigaam-cli.exe *.mp3`),
-  `--formats`, `--out-dir`, and the speech search settings as flags.
-- Simpler settings window: model, device, CPU threads and output formats.
-  The speech search settings are in `gigaam-config.json` (see
-  `gigaam-config.example.json`); v0.1 settings files still load.
+NVIDIA GPUs on Linux: use the CUDA Docker image for now.
 
-## Same results
+## Fixes
 
-The speech search and chunking are ported exactly from v0.1 (Silero VAD 6.2.1
-and the same grouping). On the 7.5-minute test file all 932 words and all 26
-chunk boundaries are identical to v0.1, on the GPU and on the CPU.
-
-## Docker
-
-CPU: `ghcr.io/bigflyy/gigaamtranscriber:cpu` · CUDA: `ghcr.io/bigflyy/gigaamtranscriber:cuda`
-(versioned: `v0.2.0-cpu`, `v0.2.0-cuda`).
-
-The models are now inside the images: no model volume or download step.
-Some flags changed (`--device gpu`, `--threads`, `--model RNNT|CTC`).
-[Docker commands](https://github.com/bigflyy/GigaAmTranscriber/blob/main/DOCKER.md).
-
-## Not in this release
-
-- Only the Russian v3 RNNT and CTC models are included. The multilingual
-  models need a model download step in the app, which is planned.
-- Speaker diarization (who speaks when) is planned for a later release.
+- Settings files from v0.1 that chose a multilingual model load again (with RNNT).
 
 ## Downloads
 
-- `GigaAmTranscriber-v0.2.0-windows-x64.zip` - the app.
-- `THIRD_PARTY_LICENSES.zip` - licences of the bundled components (also inside the app folder).
-- `FFmpeg-8.0.1-source.zip` - source of the bundled FFmpeg build (GPLv3).
+- `GigaAmTranscriber-v0.3.0-windows-x64.zip` - Windows app.
+- `GigaAmTranscriber-v0.3.0-linux-x64.tar.gz` - Linux app.
+- `THIRD_PARTY_LICENSES.zip` - licences of the bundled components, one folder per app
+  (`windows/`, `linux/`; also inside the app folders).
+- `FFmpeg-8.0.1-source.zip` - source of the FFmpeg build in the Windows app (GPLv3).
 - `SHA256SUMS.txt` - checksums of the files above.
 
-[Verification](https://github.com/bigflyy/GigaAmTranscriber/blob/main/RELEASE_TESTS.md)
-· [Third-party notices](https://github.com/bigflyy/GigaAmTranscriber/blob/main/THIRD_PARTY_NOTICES.md)
+Notes of earlier versions: https://github.com/bigflyy/GigaAmTranscriber/releases

@@ -1,8 +1,36 @@
 # Handoff: state and findings
 
-Last updated 2026-11-06 (session 7). Current plan: [docs/plans/02-webview-window.md](docs/plans/02-webview-window.md)
+Last updated 2026-11-06 (session 8). Current plan: [docs/plans/02-webview-window.md](docs/plans/02-webview-window.md)
 (new window; Stages A-C done, D is later); the rewrite plan [docs/plans/01-onnx-runtime-rewrite.md](docs/plans/01-onnx-runtime-rewrite.md)
 still holds B9, F and E. Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
+
+## Session 8 (2026-11-06): release v0.3.0 prepared (plan 02 Stage E), plan 03 drafted
+
+- Owner tried the build in build/next ("they kinda work"), OK'd pushing session 7's commits
+  (pushed, fd26e6d) and deleting build/app (deleted). Owner's order: release v0.3.0, then the
+  "fix a part of the text" idea (draft plan docs/plans/03-fix-a-part.md, questions not asked yet).
+- E1, owner's choice: files without sound are not added; one toast names them
+  ("Не добавлено, в файле нет звука: ..."). `controller.has_sound()` asks ffmpeg for an Audio
+  stream (photos and silent videos have only Video), so the extension does not matter; folders
+  still filter by extension and get a note when nothing matched. Toasts stay 60 ms per character.
+- window_check.py (29 checks, Windows and WSL): three steps waited for the controller and then
+  read the page too early; failed twice while the GPU was shared. They now wait for the page.
+- Licences: THIRD_PARTY_LICENSES.zip has `windows/` (build_windows.py) and `linux/`
+  (build_linux.py adds it to the zip in its --release folder and updates SHA256SUMS). Build
+  Windows first: it rewrites SHA256SUMS and the zip. This session's WSL scripts (build.sh,
+  merge.sh = re-add the Linux line and licences without rebuilding, unpack.sh, wcheck.sh) are in
+  `C:\Users\User\AppData\Local\Temp\claude\b3b5ded84d394c69\59f921e3-888c-4266-ac6e-17cc5cc8fa41\scratchpad\wsl`.
+- The first Windows release build failed its GUI smoke test ("did not close after WM_CLOSE"):
+  another session's GigaAM job held the GPU, the model load ran past the test's 12 s, and closing
+  waits for the load. Rerun alone: passes; closing during a normal load takes about 4 s.
+  gui_smoke_test.py now gives the app a temporary GIGAAM_CONFIG and GIGAAM_HISTORY (it used the
+  owner's).
+- Release assets ready in `C:\MyProjects\GigaAmTranscriberuildelease` (Windows zip 916 MiB,
+  Linux tar.gz 825 MiB, licences zip, FFmpeg source, SHA256SUMS; `sha256sum -c` passes). Both
+  unpacked fresh: 455 s lecture text identical (Windows CLI 20 s on DirectML; Linux 50 s on a busy
+  CPU); the unpacked Windows window transcribed the 60 s file. RELEASE_NOTES.md holds the v0.3.0
+  notes (draft file removed). Not done: tag, push, GitHub release (E5, ask the owner first);
+  Docker images were not rebuilt (recognition unchanged; DOCKER.md still names v0.2.0 tags).
 
 ## Session 7 (2026-11-06): Linux build (C2), docs (C3), owner's requests (B9)
 
