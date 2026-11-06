@@ -1,0 +1,694 @@
+"""What the window shows: the file queue, the settings and the model status.
+
+No GUI toolkit is used here, so the logic runs in tests with a fake worker.
+The page (gigaam_app/web) calls the methods below through window.Api; every
+change goes back to it as a message {seq, kind, data} through `send`.
+
+Files run one at a time, in the order they were added. The model loads once
+the page is ready and stays loaded between files; changing the model, device
+or threads loads it again before the next file. A model that is not bundled
+is downloaded first, after the user agrees.
+"""
+
+from dataclasses import dataclass, field
+import itertools
+import os
+from pathlib import Path
+import queue
+import re
+import subprocess
+import sys
+import threading
+import time
+
+from . import catalog, config
+from .engine import MODELS, Transcript
+from .outputs import FORMATS, plain_text, timestamped_text, write_outputs
+from .paths import downloads_dir, ffmpeg_executable
+
+MEDIA_SUFFIXES = {".wav", ".mp3", ".m4a", ".ogg", ".opus", ".flac", ".aac", ".wma", ".mp4", ".mkv",
+                  ".mov", ".avi", ".webm"}
+FILE_DIALOG_TYPES = ("Аудио и видео (" + ";".join("*" + suffix for suffix in sorted(MEDIA_SUFFIXES)) + ")",
+                     "Все файлы (*.*)")
+
+DEVICES = (("Auto", "Авто"), ("GPU", "Видеокарта"), ("CPU", "Процессор"))
+DEVICE_NAMES = {"GPU (DirectML)": "видеокарта (DirectML)", "GPU (CUDA)": "видеокарта (CUDA)", "CPU": "процессор"}
+FORMAT_LABELS = {"txt": "TXT", "timestamps": "TXT с таймкодами", "srt": "SRT (субтитры)",
+                 "json": "JSON (слова и время)"}
+# Chips under a finished file: (format, short tag, label).
+OUTPUT_CHIPS = (("txt", "TXT", "Текст"), ("timestamps", "TXT", "С таймкодами"),
+                ("srt", "SRT", "Субтитры"), ("json", "JSON", "Слова и время"))
+# Russian notes for the model choice; catalog descriptions are English.
+MODEL_NOTES = {
+    "RNNT": "Русский язык, пунктуация и заглавные буквы. Выбрана по умолчанию.",
+    "CTC": "Русский язык, пунктуация и заглавные буквы. Немного быстрее RNNT.",
+}
+
+WAITING, RUNNING, DONE, CANCELLED, FAILED = "waiting", "running", "done", "cancelled", "failed"
+
+
+# ---------------------------------------------------------------------- texts
+
+def duration_text(seconds):
+    """7:35, 48:12, 1:02:03."""
+    total = int(round(seconds))
+    hours, minutes, secs = total // 3600, total // 60 % 60, total % 60
+    return f"{hours}:{minutes:02d}:{secs:02d}" if hours else f"{minutes}:{secs:02d}"
+
+
+def about_text(seconds):
+    """A rough time left: 'около 3 с', 'около 2 мин', 'около 1 ч 5 мин'."""
+    seconds = max(1, int(round(seconds)))
+    if seconds < 60:
+        return f"около {seconds} с"
+    minutes = int(round(seconds / 60))
+    if minutes < 60:
+        return f"около {minutes} мин"
+    return f"около {minutes // 60} ч {minutes % 60} мин"
+
+
+def times_text(number):
+    """'в 87 раз', 'в 2 раза', 'в 21 раз': Russian plural after a number."""
+    word = "раза" if number % 10 in (2, 3, 4) and number % 100 not in (12, 13, 14) else "раз"
+    return f"в {number} {word}"
+
+
+def size_text(size):
+    megabytes = size / 1024 ** 2
+    return f"{megabytes / 1024:.1f} ГБ" if megabytes >= 1024 else f"{megabytes:.0f} МБ"
+
+
+def device_name(label):
+    return DEVICE_NAMES.get(label, label)
+
+
+# ---------------------------------------------------------------------- desktop helpers
+
+def probe_duration(path):
+    """Length of a media file in seconds from ffmpeg's header dump, or None."""
+    try:
+        flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+        result = subprocess.run([ffmpeg_executable(), "-hide_banner", "-nostdin", "-i", str(path)],
+                                capture_output=True, timeout=20, creationflags=flags)
+    except (OSError, RuntimeError, subprocess.TimeoutExpired):
+        return None
+    match = re.search(rb"Duration: (\d+):(\d\d):(\d\d(?:\.\d+)?)", result.stderr)
+    if not match:
+        return None
+    hours, minutes, seconds = match.groups()
+    return int(hours) * 3600 + int(minutes) * 60 + float(seconds)
+
+
+def open_path(path):
+    """Open a file or folder with its default app."""
+    if sys.platform == "win32":
+        os.startfile(str(path))
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", str(path)])
+    else:
+        subprocess.Popen(["xdg-open", str(path)])
+
+
+def show_in_folder(path):
+    """Open the folder of a file, with the file selected where the system allows it."""
+    if sys.platform == "win32":
+        subprocess.Popen(["explorer", "/select,", str(path)])
+    else:
+        open_path(Path(path).parent)
+
+
+# ---------------------------------------------------------------------- state
+
+@dataclass
+class QueuedFile:
+    id: str
+    path: Path
+    state: str = WAITING
+    duration: float = None       # seconds, from probe_duration; None while unknown
+    phase: str = ""              # what a running file is doing before progress starts
+    progress: float = 0.0        # recognised fraction
+    started: float = None        # clock() when it started running
+    recognising_since: float = None
+    cancelling: bool = False
+    segments: list = field(default_factory=list)
+    speech_seconds: float = None
+    result: Transcript = None
+    written: dict = field(default_factory=dict)   # format -> Path
+    error: str = ""
+    elapsed: float = 0.0
+    formats: list = field(default_factory=list)  # formats asked for when it started
+
+
+class Controller:
+    """The window's state. Page calls arrive on bridge threads, worker events on
+    the event thread; one lock keeps them in order."""
+
+    def __init__(self, worker, events, send, clock=time.perf_counter, probe=probe_duration,
+                 desktop=None, settings_path=None, initial_files=()):
+        self.worker = worker
+        self.events = events
+        self.send = send
+        self.clock = clock
+        self.probe = probe
+        self.open_path = desktop.open_path if desktop else open_path
+        self.show_in_folder = desktop.show_in_folder if desktop else show_in_folder
+        self.settings_path = settings_path
+        self.initial_files = list(initial_files)
+        self.lock = threading.RLock()
+        self.seq = 0
+        self.ready_called = False
+        self.files = []
+        self.ids = itertools.count(1)
+        self.running = None          # the QueuedFile on the worker, if any
+        self.downloading = None      # model key being downloaded
+        self.download_started = None
+        self.asking = None           # model key the download question is open for
+        self.declined = set()        # models the user said "not now" to
+        self.loaded_key = None
+        self.engine = {"state": "idle", "text": "Запуск...", "detail": ""}
+        self.probe_jobs = queue.Queue()
+        self.startup_error = ""
+        try:
+            self.settings = config.load(settings_path)
+        except (OSError, ValueError) as error:
+            self.settings = config.Settings()
+            self.startup_error = f"Файл настроек не прочитан, используются значения по умолчанию: {error}"
+
+    def start(self):
+        threading.Thread(target=self._event_loop, name="gigaam-events", daemon=True).start()
+        threading.Thread(target=self._probe_loop, name="gigaam-probe", daemon=True).start()
+
+    # ------------------------------------------------------------------ messages
+
+    def _emit(self, kind, data):
+        """Send one change to the page. Before the page asked for its snapshot
+        nothing is sent: the snapshot already holds the change."""
+        if not self.ready_called:
+            return
+        self.seq += 1
+        self.send({"seq": self.seq, "kind": kind, "data": data})
+
+    def _emit_files(self):
+        self._emit("files", [self._file_view(item) for item in self.files])
+
+    def _emit_file(self, item):
+        self._emit("file", self._file_view(item))
+
+    def _set_engine(self, state, text, detail=""):
+        self.engine = {"state": state, "text": text, "detail": detail}
+        self._emit("engine", dict(self.engine))
+
+    def _error(self, text):
+        self._emit("error", {"text": text})
+
+    def _notice(self, text):
+        self._emit("notice", {"text": text})
+
+    # ------------------------------------------------------------------ views
+
+    def _file_view(self, item):
+        """What the page needs to draw one file."""
+        outputs = []
+        if item.result is not None and item.result.segments:
+            outputs = [{"format": fmt, "short": short, "label": label,
+                        "path": str(item.written[fmt]) if fmt in item.written else None}
+                       for fmt, short, label in OUTPUT_CHIPS]
+        return {
+            "id": item.id, "name": item.path.name, "path": str(item.path), "state": item.state,
+            "detail": self._detail(item), "status": self._status(item),
+            "progress": item.progress, "segments": len(item.segments), "outputs": outputs,
+            "cancelling": item.cancelling, "can_cancel": item.state == RUNNING and not item.cancelling,
+            "can_retry": item.state in (DONE, CANCELLED, FAILED), "can_remove": item.state != RUNNING,
+        }
+
+    def _detail(self, item):
+        """The short line under the name in the list."""
+        length = duration_text(item.duration) + " - " if item.duration else ""
+        if item.state == WAITING:
+            return length + "в очереди"
+        if item.state == DONE:
+            return length + ("готово" if item.segments else "речь не найдена")
+        if item.state == CANCELLED:
+            return length + "отменено"
+        if item.state == FAILED:
+            return "ошибка"
+        return length + f"{item.progress * 100:.0f}%"
+
+    def _status(self, item):
+        """The line under the title on the right."""
+        if item.state == WAITING:
+            model = self.settings.model
+            if self._blocked_model() == model and self.running is None:
+                return f"Ждёт модель {model}: она ещё не скачана. Скачайте её в настройках или выберите другую."
+            return "В очереди. Распознавание начнётся после текущего файла." if self.running else "В очереди."
+        if item.state == RUNNING:
+            if item.cancelling:
+                return "Отмена... готовые фрагменты будут сохранены."
+            if item.progress <= 0 or item.duration is None:
+                return item.phase or "Подготовка..."
+            text = f"Распознаю: {duration_text(item.progress * item.duration)} из {duration_text(item.duration)}"
+            if 0.03 < item.progress < 1 and item.recognising_since is not None:
+                spent = self.clock() - item.recognising_since
+                text += ", осталось " + about_text(spent / item.progress * (1 - item.progress))
+            return text
+        if item.state == FAILED:
+            return "Ошибка: " + item.error
+        result = item.result
+        length = duration_text(result.audio_seconds) if result else ""
+        if item.state == CANCELLED:
+            if not item.segments:
+                return "Отменено до первого фрагмента, файлы не созданы."
+            done = item.segments[-1].end
+            return f"Отменено на {duration_text(done)} из {length}, готовые фрагменты сохранены."
+        if not item.segments:
+            return f"{length} - речь не найдена, файлы не созданы."
+        parts = [length]
+        if item.speech_seconds is not None:
+            parts.append(f"речь {duration_text(item.speech_seconds)}")
+        speed = int(result.audio_seconds / item.elapsed) if item.elapsed > 0 else 0
+        finished = f"готово за {duration_text(item.elapsed) if item.elapsed >= 60 else f'{item.elapsed:.0f} с'}"
+        if speed >= 2:
+            finished += f", {times_text(speed)} быстрее записи"
+        parts.append(finished)
+        return " - ".join(parts)
+
+    def _options(self):
+        models = []
+        for key in MODELS:
+            info = catalog.find(key)
+            note = MODEL_NOTES.get(key, info.description)
+            if not info.bundled:
+                installed = catalog.installed_folder(info) is not None
+                note += " Скачана." if installed else f" Скачивается отдельно, {size_text(info.download_size)}."
+            models.append({"key": key, "title": key, "note": note})
+        return {
+            "models": models,
+            "devices": [{"key": key, "label": label} for key, label in DEVICES],
+            "formats": [{"key": fmt, "label": FORMAT_LABELS[fmt]} for fmt in FORMATS],
+            "cpu_count": os.cpu_count() or 8,
+            "config_note": f"Параметры поиска речи (порог, длина фрагментов) задаются в файле "
+                           f"{self.settings_path or config.default_path()}.",
+        }
+
+    def _settings_view(self):
+        s = self.settings
+        return {"model": s.model, "device": s.device, "cpu_threads": s.cpu_threads,
+                "outputs": list(s.outputs), "include_timestamps": s.include_timestamps}
+
+    # ------------------------------------------------------------------ page calls
+
+    def ready(self):
+        """The page is drawn: return everything it shows, then start the model."""
+        with self.lock:
+            first = not self.ready_called
+            if first:
+                for path in self.initial_files:
+                    self._add(Path(path))
+            snapshot = {"seq": self.seq, "files": [self._file_view(item) for item in self.files],
+                        "engine": dict(self.engine), "settings": self._settings_view(), "options": self._options()}
+            self.ready_called = True
+            if first:
+                if self.startup_error:
+                    self._error(self.startup_error)
+                self._request_load()
+                self._pump()
+            return snapshot
+
+    def add_files(self, paths):
+        """Add files (or the media files directly inside dropped folders). Returns how many were added."""
+        added = 0
+        with self.lock:
+            for raw in paths or []:
+                if not raw:
+                    continue
+                path = Path(str(raw).strip().strip('"'))
+                if path.is_dir():
+                    for child in sorted(path.iterdir()):
+                        if child.is_file() and child.suffix.lower() in MEDIA_SUFFIXES:
+                            added += self._add(child)
+                elif path.is_file():
+                    added += self._add(path)
+                else:
+                    self._notice(f"Файл не найден: {path}")
+            if added:
+                self.declined.discard(self.settings.model)
+                self._emit_files()
+                self._pump()
+        return added
+
+    def _add(self, path):
+        path = path.resolve()
+        if any(item.path == path and item.state in (WAITING, RUNNING) for item in self.files):
+            return 0
+        item = QueuedFile(id=str(next(self.ids)), path=path)
+        self.files.append(item)
+        self.probe_jobs.put(item)
+        return 1
+
+    def remove(self, file_id):
+        with self.lock:
+            item = self._find(file_id)
+            if item is None or item.state == RUNNING:
+                return False
+            self.files.remove(item)
+            self._emit_files()
+            return True
+
+    def cancel(self, file_id):
+        with self.lock:
+            item = self._find(file_id)
+            if item is None or item.state != RUNNING or item.cancelling:
+                return False
+            item.cancelling = True
+            self.worker.cancel.set()
+            self._emit_file(item)
+            return True
+
+    def retry(self, file_id):
+        with self.lock:
+            item = self._find(file_id)
+            if item is None or item.state not in (DONE, CANCELLED, FAILED):
+                return False
+            fresh = QueuedFile(id=item.id, path=item.path, duration=item.duration)
+            self.files[self.files.index(item)] = fresh
+            self.declined.discard(self.settings.model)
+            self._emit("lines_reset", {"id": item.id})
+            self._emit_file(fresh)
+            self._pump()
+            return True
+
+    def segments(self, file_id):
+        with self.lock:
+            item = self._find(file_id)
+            if item is None:
+                return []
+            return [{"index": index, "start": segment.start, "end": segment.end, "text": segment.text}
+                    for index, segment in enumerate(item.segments)]
+
+    def copy_text(self, file_id, with_times):
+        """The text as in the saved files: plain, or with [start - end] timecodes."""
+        with self.lock:
+            item = self._find(file_id)
+            if item is None:
+                return ""
+            transcript = Transcript(source=str(item.path), model="", device="", segments=list(item.segments))
+        return timestamped_text(transcript) if with_times else plain_text(transcript)
+
+    def open_output(self, file_id, fmt):
+        with self.lock:
+            item = self._find(file_id)
+            path = item.written.get(fmt) if item else None
+        if path is None:
+            return False
+        if not path.is_file():
+            self._notice_locked(f"Файл не найден: {path}")
+            return False
+        self.open_path(path)
+        return True
+
+    def create_output(self, file_id, fmt):
+        """Write one more format for a finished file from the text already recognised."""
+        with self.lock:
+            item = self._find(file_id)
+            if item is None or item.result is None or not item.result.segments or fmt not in FORMATS:
+                return False
+            result = item.result
+        try:
+            written = write_outputs(result, [fmt])
+        except (OSError, ValueError) as error:
+            with self.lock:
+                self._error(f"Не удалось сохранить {FORMAT_LABELS[fmt]}: {error}")
+            return False
+        with self.lock:
+            item.written[fmt] = written[0]
+            self._emit_file(item)
+        return True
+
+    def show_folder(self, file_id):
+        with self.lock:
+            item = self._find(file_id)
+            if item is None:
+                return False
+            target = next(iter(item.written.values()), item.path)
+        self.show_in_folder(target)
+        return True
+
+    def set_settings(self, change):
+        """Apply settings from the page at once; they count from the next file."""
+        with self.lock:
+            s = self.settings
+            before = self._engine_key()
+            if "model" in change:
+                s.model = catalog.find(change["model"]).key
+            if "device" in change:
+                if change["device"] not in dict(DEVICES):
+                    raise ValueError(f"Unknown device {change['device']!r}")
+                s.device = change["device"]
+            if "cpu_threads" in change:
+                s.cpu_threads = max(0, int(change["cpu_threads"]))
+            if "outputs" in change:
+                chosen = [fmt for fmt in FORMATS if fmt in change["outputs"]]
+                s.outputs = chosen or ["txt"]
+            if "include_timestamps" in change:
+                s.include_timestamps = bool(change["include_timestamps"])
+            self._emit("settings", self._settings_view())
+            if self._engine_key() != before:
+                if "model" in change:
+                    self.declined.discard(s.model)
+                self._request_load(ask="model" in change)
+                self._pump()
+                self._emit_files()  # the waiting text may name the model
+            return True
+
+    def save_default(self):
+        with self.lock:
+            settings = self.settings
+        path = self.settings_path or config.default_path()
+        try:
+            config.save(settings, path)
+        except OSError as error:
+            raise RuntimeError(f"Не удалось сохранить настройки: {error}") from error
+        return f"Сохранено в {path}"
+
+    def download(self):
+        """The user agreed to download the model the question was about."""
+        with self.lock:
+            model = self.asking
+            if model is None or self.downloading:
+                return False
+            self.asking = None
+            self.downloading = model
+            self.download_started = self.clock()
+            self.worker.cancel.clear()
+            self.worker.jobs.put(("download", model))
+            self._set_engine("busy", f"Скачивание модели {model}...")
+            self._emit("download", {"phase": "progress", "model": model, "fraction": 0.0,
+                                    "status": "Подключение..."})
+            return True
+
+    def decline_download(self):
+        with self.lock:
+            if self.asking:
+                self.declined.add(self.asking)
+                self.asking = None
+                self._emit_files()
+            return True
+
+    def cancel_download(self):
+        with self.lock:
+            if self.downloading:
+                self.worker.cancel.set()
+            return True
+
+    def close(self):
+        """The window is closing: stop whatever runs; partial text of a running file is saved."""
+        self.worker.cancel.set()
+
+    # ------------------------------------------------------------------ queue
+
+    def _find(self, file_id):
+        return next((item for item in self.files if item.id == str(file_id)), None)
+
+    def _notice_locked(self, text):
+        with self.lock:
+            self._notice(text)
+
+    def _engine_key(self):
+        s = self.settings
+        return s.model, s.engine_device, s.cpu_threads
+
+    def _model_installed(self, key):
+        return catalog.installed_folder(catalog.find(key)) is not None
+
+    def _blocked_model(self):
+        """The chosen model when it is not on disk, else None."""
+        model = self.settings.model
+        return None if self._model_installed(model) else model
+
+    def _request_load(self, ask=False):
+        """Load the chosen model now, while nothing runs, so the next file starts at once."""
+        if not self.ready_called:
+            return
+        model = self.settings.model
+        if not self._model_installed(model):
+            self._set_engine("missing", f"{model} - не скачана")
+            if ask:
+                self._ask_download(model)
+            return
+        if self.running is None and self.downloading is None and self._engine_key() != self.loaded_key:
+            self.worker.jobs.put(("load", self._engine_key()))
+
+    def _ask_download(self, model):
+        if self.asking == model or self.downloading:
+            return
+        info = catalog.find(model)
+        self.asking = model
+        text = (f"Модель {model} не входит в программу и скачивается отдельно: {size_text(info.download_size)}.\n\n"
+                f"{MODEL_NOTES.get(model, info.description)}\n\n"
+                "Если скачивание прервётся, в следующий раз оно продолжится с того же места.")
+        self._emit("download", {"phase": "ask", "model": model, "text": text, "folder": f"Папка: {downloads_dir()}"})
+
+    def _pump(self):
+        """Start the next waiting file if nothing runs."""
+        if not self.ready_called or self.running is not None or self.downloading is not None:
+            return
+        item = next((item for item in self.files if item.state == WAITING), None)
+        if item is None:
+            return
+        model = self.settings.model
+        if not self._model_installed(model):
+            if model not in self.declined:
+                self._ask_download(model)
+            self._emit_file(item)
+            return
+        formats = list(self.settings.outputs) or ["txt"]
+        item.state = RUNNING
+        item.started = self.clock()
+        item.phase = "Подготовка..."
+        item.formats = formats
+        self.running = item
+        self.worker.jobs.put(("transcribe", item.path, self._engine_key(), self.settings.vad, formats))
+        self._emit_file(item)
+
+    # ------------------------------------------------------------------ worker events
+
+    def _event_loop(self):
+        while True:
+            event = self.events.get()
+            if event is None:
+                return
+            with self.lock:
+                try:
+                    self.handle(event)
+                except Exception as error:  # a bug here must not stop the event thread
+                    self._error(f"Внутренняя ошибка окна: {error!r}")
+
+    def handle(self, event):
+        kind, args = event[0], event[1:]
+        item = self.running
+        if kind == "loading":
+            self._set_engine("busy", f"Загрузка модели {args[0]}...")
+            if item:
+                item.phase = f"Загрузка модели {args[0]}..."
+                self._emit_file(item)
+        elif kind == "loaded":
+            device, seconds, model = args
+            self.loaded_key = self.worker.engine_key
+            self._set_engine("ready", f"{model} - {device_name(device)}", f"Загружена за {seconds:.1f} с")
+        elif kind == "load_failed":
+            self.loaded_key = None
+            self._set_engine("error", f"{args[0]} - не загрузилась", args[1])
+        elif kind == "status" and item:
+            item.phase = args[0]
+            item.recognising_since = self.clock()
+            self._emit_file(item)
+        elif kind == "progress" and item:
+            item.progress = args[1]
+            self._emit_file(item)
+        elif kind == "stats" and item:
+            item.speech_seconds = args[0].speech_seconds
+            if item.duration is None:
+                item.duration = args[0].audio_seconds
+        elif kind == "segment" and item:
+            segment = args[0]
+            item.segments.append(segment)
+            self._emit("segment", {"id": item.id, "index": len(item.segments) - 1,
+                                   "start": segment.start, "end": segment.end, "text": segment.text})
+        elif kind == "finished" and item:
+            self._finish(item, *args)
+        elif kind == "download_progress":
+            self._download_progress(*args)
+        elif kind == "download_done":
+            self._download_done(*args)
+        elif kind == "error":
+            self._worker_error(args[0])
+
+    def _finish(self, item, result, written):
+        item.elapsed = self.clock() - item.started
+        item.cancelling = False
+        item.result = result
+        if result is None or result.cancelled:
+            item.state = CANCELLED
+        else:
+            item.state = DONE
+            item.progress = 1.0
+        if result is not None:
+            item.duration = result.audio_seconds or item.duration
+        # write_outputs returns the paths in the order of the formats it was given.
+        item.written = dict(zip(item.formats, written))
+        self.running = None
+        self._emit_file(item)
+        self._pump()
+
+    def _worker_error(self, text):
+        if self.downloading:
+            model, self.downloading = self.downloading, None
+            self.declined.add(model)
+            self._set_engine("error", f"{model} - не скачана", text)
+            self._emit("download", {"phase": "failed", "model": model, "text": ""})
+            self._error(f"Не удалось скачать модель {model}: {text}")
+        elif self.running:
+            item, self.running = self.running, None
+            item.state = FAILED
+            item.error = text
+            item.cancelling = False
+            self._emit_file(item)
+            self._pump()
+        else:
+            self._error("Ошибка: " + text)
+
+    def _download_progress(self, model, done, total):
+        fraction = done / total if total else 0.0
+        status = f"{done / 1024 ** 2:.0f} из {total / 1024 ** 2:.0f} МБ"
+        elapsed = self.clock() - (self.download_started or self.clock())
+        if 0.02 < fraction < 1 and elapsed > 3:
+            # Resumed bytes count as done from the start, so the first seconds are skipped.
+            status += ", осталось " + about_text(elapsed / fraction * (1 - fraction))
+        self._emit("download", {"phase": "progress", "model": model, "fraction": fraction, "status": status})
+
+    def _download_done(self, model, folder):
+        self.downloading = None
+        if folder is None:
+            self.declined.add(model)
+            self._set_engine("missing", f"{model} - не скачана")
+            self._emit("download", {"phase": "cancelled", "model": model,
+                                    "text": "Скачивание остановлено. В следующий раз оно продолжится с того же места."})
+            self._emit_files()
+            return
+        self._emit("download", {"phase": "done", "model": model, "text": f"Модель {model} скачана"})
+        self._emit("options", self._options())
+        self._request_load()
+        self._pump()
+
+    # ------------------------------------------------------------------ durations
+
+    def _probe_loop(self):
+        while True:
+            item = self.probe_jobs.get()
+            if item is None:
+                return
+            seconds = self.probe(item.path)
+            with self.lock:
+                if seconds and item.duration is None and item in self.files:
+                    item.duration = seconds
+                    self._emit_file(item)

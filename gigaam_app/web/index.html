@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GigaAM - Расшифровка речи</title>
+<!-- window.py inlines these two files, so the page needs no server and no network. -->
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <header class="side-head">
+      <h1>Файлы</h1>
+      <button id="add" class="primary" type="button">+ Добавить</button>
+    </header>
+    <ul id="files" class="files" aria-label="Файлы"></ul>
+    <div class="side-foot">
+      <div class="engine" id="engine" role="status">
+        <span class="dot" aria-hidden="true"></span>
+        <span id="engine-text">Запуск...</span>
+      </div>
+      <button id="open-settings" class="link" type="button">Настройки</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div id="banner" class="banner" role="alert" hidden>
+      <span id="banner-text"></span>
+      <button id="banner-close" class="icon" type="button" aria-label="Закрыть">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+
+    <!-- No files yet: a big drop target. -->
+    <section id="view-empty" class="view empty">
+      <div class="drop-target">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V4m0 0L8 8m4-4 4 4"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
+        <p class="drop-title">Перетащите сюда аудио или видео</p>
+        <p class="muted">или нажмите «Добавить». Можно сразу несколько файлов: они распознаются по очереди,
+          а текст сохраняется рядом с каждым файлом.</p>
+        <button id="add-empty" class="primary big" type="button">Выбрать файлы</button>
+      </div>
+    </section>
+
+    <!-- The selected file: progress, live text, saved files. -->
+    <section id="view-file" class="view file-view" hidden>
+      <div class="file-head">
+        <div class="title-row">
+          <div class="title-box">
+            <h2 id="file-name"></h2>
+            <p id="file-status" class="muted"></p>
+          </div>
+          <div class="actions">
+            <button id="file-cancel" class="danger" type="button" hidden>Отмена</button>
+            <button id="file-retry" type="button" hidden>Распознать снова</button>
+            <button id="file-remove" type="button" hidden>Убрать из списка</button>
+          </div>
+        </div>
+        <div id="file-bar" class="bar" hidden><div></div></div>
+        <div id="saved" class="saved" hidden>
+          <span class="saved-label">Сохранено:</span>
+          <span id="saved-list" class="saved-list"></span>
+          <button id="show-folder" class="link" type="button">Показать в папке</button>
+        </div>
+      </div>
+      <div class="text-tools">
+        <span id="text-label" class="caps">Текст</span>
+        <label class="switch">
+          <input id="times" type="checkbox">
+          <span class="track" aria-hidden="true"><span class="knob"></span></span>
+          Таймкоды
+        </label>
+        <button id="copy" type="button">Копировать</button>
+      </div>
+      <div id="text" class="text" tabindex="0" aria-live="off"></div>
+    </section>
+
+    <!-- Settings replace the file view until "Готово". -->
+    <section id="view-settings" class="view settings" hidden>
+      <div class="settings-head">
+        <h2>Настройки</h2>
+        <button id="close-settings" class="primary" type="button">Готово</button>
+      </div>
+      <div class="settings-body">
+        <fieldset>
+          <legend>Модель</legend>
+          <div id="models" class="choices"></div>
+        </fieldset>
+        <fieldset>
+          <legend>Устройство</legend>
+          <div id="devices" class="segmented"></div>
+          <p class="hint">«Авто» берёт видеокарту, если она есть, иначе процессор.</p>
+        </fieldset>
+        <fieldset>
+          <legend>Потоки процессора</legend>
+          <label class="inline"><input id="threads" type="number" min="0" step="1"> 0 = выбрать автоматически</label>
+        </fieldset>
+        <fieldset>
+          <legend>Сохранять рядом с файлом</legend>
+          <div id="formats" class="checks"></div>
+        </fieldset>
+        <p class="hint">Изменения действуют сразу, для следующего файла. Чтобы они остались после перезапуска,
+          сохраните их как настройки по умолчанию.</p>
+        <div class="settings-actions">
+          <button id="save-default" type="button">Сохранить как настройки по умолчанию</button>
+          <span id="save-note" class="muted"></span>
+        </div>
+        <p id="config-note" class="hint"></p>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="drop-overlay" class="drop-overlay" hidden>
+  <div>Отпустите, чтобы добавить файлы</div>
+</div>
+
+<!-- Download of a model that is not bundled: question, then progress. -->
+<dialog id="download" class="dialog" aria-labelledby="download-title">
+  <h2 id="download-title">Скачать модель</h2>
+  <p id="download-text"></p>
+  <p id="download-folder" class="hint"></p>
+  <div id="download-progress" hidden>
+    <div class="bar"><div></div></div>
+    <p id="download-status" class="muted"></p>
+  </div>
+  <div class="dialog-actions">
+    <button id="download-no" type="button">Не сейчас</button>
+    <button id="download-yes" class="primary" type="button">Скачать</button>
+    <button id="download-stop" class="danger" type="button" hidden>Остановить</button>
+  </div>
+</dialog>
+
+<div id="toast" class="toast" role="status" hidden></div>
+<script src="app.js"></script>
+</body>
+</html>

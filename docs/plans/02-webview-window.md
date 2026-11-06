@@ -17,8 +17,8 @@ The sv-ttk attempt is kept as a patch outside the repo, not committed.
 
 ### Stage B: The window
 
-- [ ] **B1** Page in `gigaam_app/web/` (HTML, CSS, JS, no CDN): design B, light and dark following the system; create the window with `background_color` set to the theme's background, so the frame is never white before the page paints
-- [ ] **B2** Python side: an API object over the existing `Worker`; replaces the Tk `App`
+- [x] **B1** Page in `gigaam_app/web/` (HTML, CSS, JS, no CDN): design B, light and dark following the system; create the window with `background_color` set to the theme's background, so the frame is never white before the page paints
+- [x] **B2** Python side: an API object over the existing `Worker`; replaces the Tk `App`
 - [ ] **B3** File list: add by dialog or drop, several files, queue runs one at a time, cancel, remove
 - [ ] **B4** Live text for the selected file, timecodes switch, copy, open the saved files and the folder
 - [ ] **B5** Settings view: model, device, CPU threads, formats, save as default; model download prompt with progress

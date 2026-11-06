@@ -1,0 +1,309 @@
+/* GigaAM window, design B: file list on the left, the selected file on the right.
+   Light and dark follow the system; html[data-theme] forces one (tests, GIGAAM_THEME).
+   The window background colour in window.py must match --bg of each theme. */
+
+:root {
+  --bg: #f6f7f9;
+  --side: #eceef2;
+  --line: #dcdfe5;
+  --card: #ffffff;
+  --card-line: #d3d7df;
+  --text: #17181c;
+  --text-2: #3b3e46;
+  --muted: #5d616b;
+  --faint: #8a8e98;
+  --accent: #2f6fe0;
+  --accent-text: #ffffff;
+  --accent-soft: #dce7fb;
+  --accent-track: #c4d4f1;
+  --link: #1f5fd1;
+  --ok: #17784a;
+  --ok-soft: #d4f0e0;
+  --warn: #a15c00;
+  --danger: #b42318;
+  --danger-line: #efc2be;
+  --danger-soft: #fdecea;
+  --overlay: rgba(23, 24, 28, 0.35);
+  --shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #16171b;
+    --side: #121317;
+    --line: #24262c;
+    --card: #1f2026;
+    --card-line: #2c2e35;
+    --text: #e8e9ec;
+    --text-2: #c9cbd1;
+    --muted: #9a9da6;
+    --faint: #6f737c;
+    --accent: #5b9dff;
+    --accent-text: #0b1220;
+    --accent-soft: #1f2a3d;
+    --accent-track: #2c3a52;
+    --link: #7fb2ff;
+    --ok: #4fd18b;
+    --ok-soft: #173a2a;
+    --warn: #f0b04a;
+    --danger: #ff9b9b;
+    --danger-line: #4a3438;
+    --danger-soft: #2a1d20;
+    --overlay: rgba(0, 0, 0, 0.5);
+    --shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #16171b;
+  --side: #121317;
+  --line: #24262c;
+  --card: #1f2026;
+  --card-line: #2c2e35;
+  --text: #e8e9ec;
+  --text-2: #c9cbd1;
+  --muted: #9a9da6;
+  --faint: #6f737c;
+  --accent: #5b9dff;
+  --accent-text: #0b1220;
+  --accent-soft: #1f2a3d;
+  --accent-track: #2c3a52;
+  --link: #7fb2ff;
+  --ok: #4fd18b;
+  --ok-soft: #173a2a;
+  --warn: #f0b04a;
+  --danger: #ff9b9b;
+  --danger-line: #4a3438;
+  --danger-soft: #2a1d20;
+  --overlay: rgba(0, 0, 0, 0.5);
+  --shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.4 "Segoe UI Variable Text", "Segoe UI", system-ui, "Cantarell", "Ubuntu", "Noto Sans", sans-serif;
+  overflow: hidden;
+}
+
+h1, h2, p { margin: 0; }
+.muted { color: var(--muted); }
+.hint { color: var(--muted); font-size: 13px; }
+.caps { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+
+/* ------------------------------------------------------------------ buttons */
+
+button {
+  font: inherit;
+  font-size: 13px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 9px;
+  border: 1px solid var(--card-line);
+  background: var(--card);
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+button:hover { border-color: var(--faint); }
+button:disabled { opacity: 0.5; cursor: default; }
+button:focus-visible, input:focus-visible, .text:focus-visible, .file:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+button.primary { background: var(--accent); color: var(--accent-text); border: none; font-weight: 600; }
+button.primary:hover { filter: brightness(1.08); }
+button.big { height: 40px; padding: 0 18px; font-size: 14px; }
+button.danger { background: transparent; border-color: var(--danger-line); color: var(--danger); }
+button.danger:hover { background: var(--danger-soft); }
+button.link { background: none; border: none; height: auto; padding: 0; color: var(--link); }
+button.link:hover { text-decoration: underline; }
+button.icon { width: 28px; height: 28px; padding: 0; display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; border: none; color: var(--muted); }
+button.icon:hover { color: var(--text); background: var(--card); }
+
+/* ------------------------------------------------------------------ layout */
+
+.app { display: flex; height: 100%; }
+
+.side {
+  flex: 0 0 280px;
+  background: var(--side);
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  padding: 16px 12px 14px;
+  min-height: 0;
+}
+.side-head { display: flex; align-items: center; justify-content: space-between; padding: 0 6px 10px; }
+.side-head h1 { font-size: 15px; font-weight: 700; }
+
+.files { list-style: none; margin: 0; padding: 0; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; min-height: 0; }
+.file {
+  display: flex; gap: 10px; align-items: center;
+  padding: 9px 8px 9px 10px; border-radius: 10px; cursor: pointer; position: relative;
+}
+.file:hover { background: color-mix(in srgb, var(--accent-soft) 55%, transparent); }
+.file.selected { background: var(--accent-soft); }
+.file .name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.file.selected .name { font-weight: 600; }
+.file.waiting .name { color: var(--text-2); }
+.file .info { min-width: 0; flex: 1; }
+.file .detail { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.file .mini-bar { height: 4px; border-radius: 2px; background: var(--accent-track); margin-top: 6px; overflow: hidden; }
+.file .mini-bar div { height: 4px; background: var(--accent); width: 0; transition: width 0.2s; }
+.file .remove { visibility: hidden; flex-shrink: 0; }
+.file:hover .remove, .file:focus-within .remove { visibility: visible; }
+
+/* State icons: done tick, running spinner, waiting ring, cancelled and failed marks. */
+.state { width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.state.done { background: var(--ok-soft); color: var(--ok); }
+.state.running { border: 2px solid var(--accent); border-right-color: transparent; animation: spin 0.9s linear infinite; }
+.state.waiting { border: 2px solid var(--card-line); }
+.state.cancelled { border: 2px solid var(--faint); color: var(--faint); }
+.state.failed { background: var(--danger-soft); color: var(--danger); }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .state.running { animation: none; border-right-color: var(--accent); } }
+
+.side-foot { border-top: 1px solid var(--line); margin-top: 10px; padding: 12px 6px 0; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.engine { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2); }
+.engine .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); flex-shrink: 0; }
+.engine.ready .dot { background: var(--ok); }
+.engine.busy .dot { background: var(--warn); }
+.engine.error .dot { background: var(--danger); }
+
+.main { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; position: relative; }
+.view { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+
+.banner {
+  display: flex; align-items: flex-start; gap: 10px; margin: 12px 20px 0; padding: 10px 12px;
+  border-radius: 10px; background: var(--danger-soft); color: var(--danger); border: 1px solid var(--danger-line);
+}
+.banner span { flex: 1; white-space: pre-wrap; }
+
+/* ------------------------------------------------------------------ empty view */
+
+.empty { align-items: center; justify-content: center; padding: 24px; }
+.drop-target {
+  max-width: 460px; width: 100%; padding: 40px 32px; border: 2px dashed var(--card-line); border-radius: 16px;
+  display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; color: var(--muted);
+}
+.drop-target svg { color: var(--accent); }
+.drop-title { font-size: 18px; font-weight: 600; color: var(--text); }
+.drop-target button { margin-top: 8px; }
+
+/* ------------------------------------------------------------------ file view */
+
+.file-head { padding: 18px 28px 14px; display: flex; flex-direction: column; gap: 10px; border-bottom: 1px solid var(--line); }
+.title-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.title-box { flex: 1; min-width: 200px; }
+.title-box h2 { font-size: 18px; font-weight: 700; overflow-wrap: anywhere; }
+.title-box p { font-size: 13px; margin-top: 3px; }
+.actions { display: flex; gap: 8px; }
+.actions button { height: 36px; padding: 0 14px; border-radius: 10px; }
+
+.bar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.bar div { height: 6px; border-radius: 3px; background: var(--accent); width: 0; transition: width 0.2s; }
+
+.saved { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; }
+.saved-label { color: var(--muted); }
+.saved-list { display: contents; }
+.chip {
+  height: 28px; padding: 0 10px; border-radius: 8px; font-size: 12px; display: inline-flex; align-items: center; gap: 6px;
+}
+.chip b { font-size: 11px; font-weight: 700; color: var(--link); }
+.chip.missing { border-style: dashed; background: transparent; color: var(--muted); }
+.chip.missing b { color: var(--muted); }
+
+.text-tools { display: flex; align-items: center; gap: 14px; padding: 10px 28px; }
+.text-tools .caps { flex: 1; }
+
+.switch { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2); cursor: pointer; user-select: none; }
+.switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.switch .track { width: 34px; height: 20px; border-radius: 10px; background: var(--card-line); position: relative; transition: background 0.15s; }
+.switch .knob { position: absolute; left: 3px; top: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--card); transition: left 0.15s; }
+.switch input:checked + .track { background: var(--accent); }
+.switch input:checked + .track .knob { left: 17px; background: var(--accent-text); }
+.switch input:focus-visible + .track { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.text { flex: 1; overflow-y: auto; padding: 4px 28px 24px; line-height: 1.6; min-height: 0; user-select: text; }
+.text p { margin: 0 0 12px; overflow-wrap: anywhere; }
+.text time { color: var(--faint); font-size: 13px; font-variant-numeric: tabular-nums; margin-right: 10px; user-select: none; }
+.text:not(.with-times) time { display: none; }
+.text .placeholder { color: var(--muted); }
+
+/* ------------------------------------------------------------------ settings */
+
+.settings { overflow-y: auto; }
+.settings-head { display: flex; align-items: center; justify-content: space-between; padding: 18px 28px 14px; border-bottom: 1px solid var(--line); }
+.settings-head h2 { font-size: 18px; font-weight: 700; }
+.settings-body { padding: 8px 28px 28px; display: flex; flex-direction: column; gap: 6px; max-width: 640px; }
+fieldset { border: none; margin: 0; padding: 12px 0 8px; display: flex; flex-direction: column; gap: 8px; }
+legend { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; padding: 0; margin-bottom: 8px; }
+
+.choices { display: flex; flex-direction: column; gap: 6px; }
+.choice {
+  display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 10px;
+  border: 1px solid var(--card-line); background: var(--card); cursor: pointer;
+}
+.choice:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.choice input { margin: 3px 0 0; accent-color: var(--accent); }
+.choice .choice-title { font-weight: 600; }
+.choice .choice-note { font-size: 13px; color: var(--muted); }
+
+.segmented { display: inline-flex; border: 1px solid var(--card-line); border-radius: 10px; overflow: hidden; align-self: flex-start; }
+.segmented label { padding: 7px 14px; cursor: pointer; font-size: 13px; background: var(--card); border-right: 1px solid var(--card-line); }
+.segmented label:last-child { border-right: none; }
+.segmented input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.segmented label:has(input:checked) { background: var(--accent); color: var(--accent-text); font-weight: 600; }
+.segmented label:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.checks { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+.checks label, .inline { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; }
+.checks input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
+input[type="number"] {
+  width: 72px; height: 32px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--card-line);
+  background: var(--card); color: var(--text); font: inherit;
+}
+.settings-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
+
+/* ------------------------------------------------------------------ overlays */
+
+.drop-overlay {
+  position: fixed; inset: 0; background: var(--overlay); display: flex; align-items: center; justify-content: center;
+  pointer-events: none; z-index: 10;
+}
+.drop-overlay div {
+  padding: 28px 40px; border-radius: 16px; border: 2px dashed var(--accent); background: var(--card);
+  font-size: 18px; font-weight: 600; box-shadow: var(--shadow);
+}
+
+.dialog {
+  border: 1px solid var(--card-line); border-radius: 14px; background: var(--bg); color: var(--text);
+  padding: 22px 24px 18px; width: min(480px, calc(100vw - 32px)); box-shadow: var(--shadow);
+}
+.dialog::backdrop { background: var(--overlay); }
+.dialog h2 { font-size: 17px; margin-bottom: 10px; }
+.dialog p { margin-bottom: 10px; white-space: pre-wrap; }
+.dialog .bar { margin: 6px 0 8px; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+
+.toast {
+  position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 20;
+  background: var(--text); color: var(--bg); padding: 8px 14px; border-radius: 9px; font-size: 13px; box-shadow: var(--shadow);
+}
+
+/* Narrow windows: the list goes on top. */
+@media (max-width: 640px) {
+  .app { flex-direction: column; }
+  .side { flex: 0 0 auto; max-height: 40%; border-right: none; border-bottom: 1px solid var(--line); }
+  .file-head, .text-tools, .text, .settings-head, .settings-body { padding-left: 16px; padding-right: 16px; }
+}
