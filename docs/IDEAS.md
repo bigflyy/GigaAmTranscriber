@@ -4,6 +4,10 @@ Owner's ideas for later. Ideas only: work that has started lives in docs/plans.
 Older future items already sit in plans: plan 01 (B9 int8 encoder for CPU, Stage F other
 models, Stage E speaker diarization) and plan 02 (D1-D3).
 
+## Look
+
+- 2026-11-06: the app icon: "we need to do mockups and fix it".
+
 ## Languages and speakers
 
 - 2026-11-06: detect the language (there, in the selected part or the file).
