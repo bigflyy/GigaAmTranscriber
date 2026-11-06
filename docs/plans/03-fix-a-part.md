@@ -12,7 +12,10 @@ chunks of up to about 25 s by Silero VAD. Greedy decoding has no "temperature": 
 of other readings are a different cut of the audio, the other model, beam search (N best), or a
 different model family.
 
-Draft: stages and order are a proposal until the owner has answered the questions in HANDOFF.md.
+Owner's decisions (2026-11-06):
+- "Распознать заново" shows the readings that differ side by side; the user picks one
+  ("Взять"), edits by hand or cancels. Nothing is replaced automatically.
+- Listening to the selection is part of Stage A.
 
 ### Stage A: Select, listen, re-recognise
 

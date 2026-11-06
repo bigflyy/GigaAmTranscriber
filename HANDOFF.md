@@ -29,8 +29,11 @@ still holds B9, F and E. Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
   Linux tar.gz 825 MiB, licences zip, FFmpeg source, SHA256SUMS; `sha256sum -c` passes). Both
   unpacked fresh: 455 s lecture text identical (Windows CLI 20 s on DirectML; Linux 50 s on a busy
   CPU); the unpacked Windows window transcribed the 60 s file. RELEASE_NOTES.md holds the v0.3.0
-  notes (draft file removed). Not done: tag, push, GitHub release (E5, ask the owner first);
-  Docker images were not rebuilt (recognition unchanged; DOCKER.md still names v0.2.0 tags).
+  notes (draft file removed). Owner OK'd publishing: main pushed, tag v0.3.0 pushed, GitHub
+  release created from RELEASE_NOTES.md. Owner chose no Docker images for v0.3.0
+  (recognition unchanged; DOCKER.md keeps the v0.2.0 tags).
+- Plan 03 decisions (owner): readings shown side by side to pick, no automatic replacement;
+  playback of the selection in Stage A. New idea: the app icon (mockups, then fix it), in IDEAS.md.
 
 ## Session 7 (2026-11-06): Linux build (C2), docs (C3), owner's requests (B9)
 

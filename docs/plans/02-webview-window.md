@@ -40,7 +40,7 @@ The sv-ttk attempt is kept as a patch outside the repo, not committed.
 - [x] **E2** Bump the version to 0.3.0; move docs/RELEASE_NOTES_NEXT.md into RELEASE_NOTES.md
 - [x] **E3** Rebuild Windows (release zip, smoke tests) and Linux (tar.gz, smoke tests in WSL) (zip 916 MiB, tar.gz 825 MiB; both unpacked fresh: lecture text identical, Windows window transcribed the 60 s file)
 - [x] **E4** THIRD_PARTY_LICENSES.zip with the Linux licences (pygobject, debian) merged in; SHA256SUMS (folders windows/ and linux/; sha256sum -c passes)
-- [ ] **E5** Ask the owner, then tag, push and publish the GitHub release
+- [x] **E5** Ask the owner, then tag, push and publish the GitHub release (owner OK'd; https://github.com/bigflyy/GigaAmTranscriber/releases/tag/v0.3.0, Latest; GitHub's SHA-256 digests match SHA256SUMS; no Docker images, owner's choice)
 
 ### Stage D: Later
 
