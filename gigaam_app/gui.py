@@ -144,7 +144,7 @@ class App:
             self.status.set(settings_note)
         # Load the model only once the window is on screen: opening the model
         # holds the interpreter for about two seconds, which would delay the window.
-        root.after(150, self.request_load)
+        root.after(150, self.first_load)
         root.after(100, self.poll)
         if initial_file:
             root.after(200, self.start)
@@ -244,6 +244,12 @@ class App:
         except ValueError:
             threads = 0
         return self.model.get(), device.lower(), threads
+
+    def first_load(self):
+        """Finish drawing the window, then load the model. While the model opens
+        the window cannot redraw, so it must not be left half-painted."""
+        self.root.update()
+        self.request_load()
 
     def request_load(self, ask=False):
         if not self.running and self.model_ready(ask):
