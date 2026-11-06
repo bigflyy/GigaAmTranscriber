@@ -23,6 +23,7 @@ from pathlib import Path
 import struct
 import subprocess
 import sys
+import tempfile
 import time
 import zlib
 
@@ -134,7 +135,13 @@ def run(app, audio=None, png=None, ready_seconds=12.0, timeout=300.0, log=print)
     command = [str(app / "GigaAmTranscriber.exe")] + ([str(audio)] if audio else [])
     started = time.perf_counter()
     # A onedir build runs in one process, so the window belongs to this pid.
-    process = subprocess.Popen(command, cwd=app, env=dict(os.environ, GIGAAM_WINDOW_OFFSCREEN="1"))
+    # The app gets its own settings file and list folder, so a test never reads or changes
+    # the user's (unless the caller set them on purpose).
+    scratch = Path(tempfile.mkdtemp(prefix="gigaam-smoke-"))
+    env = dict(os.environ, GIGAAM_WINDOW_OFFSCREEN="1")
+    env.setdefault("GIGAAM_CONFIG", str(scratch / "gigaam-config.json"))
+    env.setdefault("GIGAAM_HISTORY", str(scratch / "history"))
+    process = subprocess.Popen(command, cwd=app, env=env)
     pid = process.pid
     timings = {}
 
