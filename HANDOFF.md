@@ -1,6 +1,33 @@
 # Handoff: state and findings
 
-Last updated 2026-11-05 (session 4). The plan is in [docs/plans/01-onnx-runtime-rewrite.md](docs/plans/01-onnx-runtime-rewrite.md).
+Last updated 2026-11-06 (session 5). Current plan: [docs/plans/02-webview-window.md](docs/plans/02-webview-window.md)
+(new window); the rewrite plan [docs/plans/01-onnx-runtime-rewrite.md](docs/plans/01-onnx-runtime-rewrite.md) still holds B9, F and E.
+
+## Session 5 (2026-11-06): new window on pywebview, Stage A done
+
+- C5 (sv-ttk restyle) was built but the owner found it too close to the old window.
+  Not committed; the whole diff is kept outside the repo at
+  `C:\Users\User\AppData\Local\Temp\claude\b3b5ded84d394c69\3f818aad-2f5d-47ea-8f62-788af417f8b8\scratchpad\c5-backup\c5-sv-ttk.patch`.
+  Two side fixes from it were committed: the smoke test reads the title with
+  GetWindowTextW (11edf89), and the first model load waits for the window to draw (101b70c).
+- Mockups: https://claude.ai/artifact/32pVRs6kmWRDDUiss5sYby. **Owner chose design B**
+  (file list on the left: done, running, waiting; selected file's progress and live text on the right).
+- **Owner decisions:** build it in HTML/CSS with pywebview; Linux too, using the system
+  WebKitGTK (the app names the package if it is missing); Linux recognition on the CPU
+  first, NVIDIA later; ONNX Runtime WebGPU (Vulkan) as a later experiment for a light
+  Linux GPU option.
+- Spike results (`experiments/webview_spike/`, pywebview 6.2.1): bridge both ways, pushed
+  lines and theme detection work on Windows (WebView2 156) and WSL Ubuntu 24.04 (WebKitGTK 2.52).
+  Frozen on Windows: +2 MB; window frame at 1.3-1.6 s, page at 2.5-2.7 s (Tk: 0.85 s).
+  Without WebView2 pywebview falls back to the IE engine silently, so the app must check (B6).
+  Drop and the file dialog were not tested (need a real mouse).
+- Testing: WebView2 does not paint on a hidden desktop; use an off-screen window
+  (x, y = -6000, `focus=False`) and PrintWindow. In WSL, unset `WAYLAND_DISPLAY` and set
+  `GDK_BACKEND=x11` under Xvfb; once this session forgot it and a spike window showed on
+  the owner's screen through WSLg for a few seconds.
+- Dev venv for this session: `C:\Users\User\AppData\Local\Temp\claude\b3b5ded84d394c69\3f818aad-2f5d-47ea-8f62-788af417f8b8\scratchpad\venv-app`
+  (requirements-build.txt + pywebview); the session 3 venv lost its python.exe.
+  Tests: 280 passed, 1 skipped. WSL venv: `~/.venvs/gigaam-spike` (system site packages for gi).
 
 ## Decisions (approved by the owner on 2026-11-04)
 

@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<style>
+:root { --bg:#f6f7f9; --side:#eceef2; --card:#fff; --line:#dfe2e8; --text:#17181c; --muted:#5d616b; --accent:#2f6fe0; --accent-text:#fff; color-scheme: light dark; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg:#16171b; --side:#121317; --card:#1f2026; --line:#2c2e35; --text:#e8e9ec; --muted:#9a9da6; --accent:#5b9dff; --accent-text:#0b1220; }
+}
+html, body { margin:0; height:100%; background:var(--bg); color:var(--text); font: 14px "Segoe UI Variable Text", "Segoe UI", "Inter", "Cantarell", "Ubuntu", sans-serif; }
+.app { display:flex; height:100%; }
+.side { width:270px; background:var(--side); border-right:1px solid var(--line); padding:16px 12px; box-sizing:border-box; display:flex; flex-direction:column; gap:6px; }
+.side h2 { font-size:15px; margin:0 6px 8px; display:flex; justify-content:space-between; align-items:center; }
+button { font:inherit; border-radius:9px; border:1px solid var(--line); background:var(--card); color:var(--text); height:32px; padding:0 12px; cursor:pointer; }
+button.primary { background:var(--accent); color:var(--accent-text); border:none; font-weight:600; }
+.file { padding:10px; border-radius:10px; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.file.sel { background:color-mix(in srgb, var(--accent) 18%, transparent); font-weight:600; }
+.main { flex:1; padding:18px 28px; display:flex; flex-direction:column; gap:12px; min-width:0; }
+.muted { color:var(--muted); }
+.line { line-height:1.6; }
+.line time { color:var(--muted); font-size:13px; margin-right:10px; font-variant-numeric:tabular-nums; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="side">
+    <h2>Файлы <button class="primary" onclick="pick()">+ Добавить</button></h2>
+    <div id="files"><div class="file sel">research-2026.mp4</div></div>
+  </div>
+  <div class="main">
+    <div style="font-size:18px;font-weight:700">research-2026.mp4</div>
+    <div class="muted" id="status">Ожидание моста...</div>
+    <div id="text"></div>
+  </div>
+</div>
+<script>
+function addLine(time, text) {
+  const div = document.createElement('div');
+  div.className = 'line';
+  div.innerHTML = '<time></time><span></span>';
+  div.querySelector('time').textContent = time;
+  div.querySelector('span').textContent = text;
+  document.getElementById('text').appendChild(div);
+}
+function addFiles(paths) {
+  for (const p of paths) {
+    const div = document.createElement('div');
+    div.className = 'file';
+    div.textContent = p || '(no path)';
+    document.getElementById('files').appendChild(div);
+  }
+}
+async function pick() { addFiles(await pywebview.api.pick_files()); }
+window.addEventListener('pywebviewready', async () => {
+  const info = await pywebview.api.info();
+  const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+  const msg = `Мост работает: ${info.platform}, ${info.renderer}, тема ${dark ? 'тёмная' : 'светлая'}, ${navigator.userAgent}`;
+  document.getElementById('status').textContent = msg;
+  pywebview.api.report(msg);
+});
+</script>
+</body>
+</html>

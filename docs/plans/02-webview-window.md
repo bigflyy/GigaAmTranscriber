@@ -12,8 +12,8 @@ The sv-ttk attempt is kept as a patch outside the repo, not committed.
 
 ### Stage A: Prove pywebview
 
-- [ ] **A1** Spike: a pywebview window with a JS-to-Python bridge, a file dialog, drag and drop with real file paths, and Python pushing events to the page; run it on Windows and in WSL Ubuntu (off screen)
-- [ ] **A2** Freeze the spike with PyInstaller on Windows; measure start-up time and added size; check the WebView2-missing path shows a clear message
+- [x] **A1** Spike: a pywebview window with a JS-to-Python bridge, a file dialog, drag and drop with real file paths, and Python pushing events to the page; run it on Windows and in WSL Ubuntu (off screen) (works on both; WebView2 does not paint on a hidden desktop, so Windows tests use an off-screen, non-focusable window; under WSL unset WAYLAND_DISPLAY and use GDK_BACKEND=x11 with Xvfb; drop and the file dialog need a check by hand)
+- [x] **A2** Freeze the spike with PyInstaller on Windows; measure start-up time and added size; check the WebView2-missing path shows a clear message (pywebview and pythonnet add about 2 MB; frozen: window frame at 1.3-1.6 s, page at 2.5-2.7 s, against 0.85 s for the Tk window; without WebView2 pywebview silently falls back to the IE engine, so the app must check and explain, see B6)
 
 ### Stage B: The window
 
@@ -22,7 +22,7 @@ The sv-ttk attempt is kept as a patch outside the repo, not committed.
 - [ ] **B3** File list: add by dialog or drop, several files, queue runs one at a time, cancel, remove
 - [ ] **B4** Live text for the selected file, timecodes switch, copy, open the saved files and the folder
 - [ ] **B5** Settings view: model, device, CPU threads, formats, save as default; model download prompt with progress
-- [ ] **B6** Status: model and device, errors, first-run model load
+- [ ] **B6** Status: model and device, errors, first-run model load; before opening the window, check for WebView2 (Windows) or WebKitGTK (Linux) and otherwise show a native message with the install link or package name; window background set to the theme colour so the frame is not white while the page loads
 - [ ] **B7** Tests: the API logic with a fake worker; the page driven in a headless browser where it helps
 - [ ] **B8** Remove the Tk window and its smoke test, or keep the smoke test working on the new window
 
