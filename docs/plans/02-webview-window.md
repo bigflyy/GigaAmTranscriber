@@ -26,7 +26,7 @@ The sv-ttk attempt is kept as a patch outside the repo, not committed.
 - [x] **B7** Tests: the API logic with a fake worker; the page driven in a headless browser where it helps (tests/test_controller.py, tests/test_window.py; instead of a headless browser, tools/window_check.py drives the real window: 19 checks pass on Windows, dark and light, and in WSL Ubuntu under Xvfb)
 - [x] **B8** Remove the Tk window and its smoke test, or keep the smoke test working on the new window (Tk window removed; tools/gui_smoke_test.py runs the EXE off screen, since WebView2 does not run on a hidden desktop)
 
-- [x] **B9** Owner's requests after trying C1 (2026-11-06): ask before closing while a file or a download runs; keep the transcribed files in the list between sessions (gigaam_app/history.py: one JSON per file in the per-user folder, with word times; "Убрать из списка" forgets it, the saved files stay; window_check.py checks a second session, 26 checks)
+- [x] **B9** Owner's requests after trying C1 (2026-11-06): ask before closing while a file or a download runs; keep the transcribed files in the list between sessions (gigaam_app/history.py: one JSON per file in the per-user folder, with word times; "Убрать из списка" forgets it, the saved files stay; window_check.py checks a second session); settings save by themselves, with a reset button instead of "save as default" (owner's choice; 28 checks)
 
 ### Stage C: Packaging and docs
 

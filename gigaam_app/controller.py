@@ -468,6 +468,7 @@ class Controller:
                 s.outputs = chosen or ["txt"]
             if "include_timestamps" in change:
                 s.include_timestamps = bool(change["include_timestamps"])
+            self._save_settings()
             self._emit("settings", self._settings_view())
             if self._engine_key() != before:
                 if "model" in change:
@@ -477,15 +478,21 @@ class Controller:
                 self._emit_files()  # the waiting text may name the model
             return True
 
-    def save_default(self):
-        with self.lock:
-            settings = self.settings
+    def reset_settings(self):
+        """Back to the default model, device, threads and formats. The speech search
+        settings, which only the settings file holds, stay as they are."""
+        defaults = config.Settings()
+        return self.set_settings({"model": defaults.model, "device": defaults.device,
+                                  "cpu_threads": defaults.cpu_threads, "outputs": list(defaults.outputs),
+                                  "include_timestamps": defaults.include_timestamps})
+
+    def _save_settings(self):
+        """Every change is kept for the next start (gigaam-config.json, also read by the CLI)."""
         path = self.settings_path or config.default_path()
         try:
-            config.save(settings, path)
+            config.save(self.settings, path)
         except OSError as error:
-            raise RuntimeError(f"Не удалось сохранить настройки: {error}") from error
-        return f"Сохранено в {path}"
+            self._error(f"Не удалось сохранить настройки в {path}: {error}")
 
     def download(self):
         """The user agreed to download the model the question was about."""

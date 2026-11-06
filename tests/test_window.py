@@ -72,7 +72,7 @@ def test_api_exposes_only_page_methods():
     """pywebview exposes every public attribute of js_api to the page."""
     public = {name for name in dir(window.Api) if not name.startswith("_")}
     assert public == {"ready", "pick_files", "add_files", "remove", "cancel", "retry", "segments", "copy_text",
-                      "open_output", "create_output", "show_folder", "set_settings", "save_default",
+                      "open_output", "create_output", "show_folder", "set_settings", "reset_settings",
                       "download", "decline_download", "cancel_download", "close_anyway"}
     api = window.Api(controller=object())
     assert all(name.startswith("_") for name in vars(api))

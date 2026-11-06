@@ -326,12 +326,24 @@ def test_unknown_device_is_refused(app):
         app.set_settings({"device": "TPU"})
 
 
-def test_save_default(app, tmp_path):
-    app.set_settings({"model": "CTC", "include_timestamps": True})
-    note = app.save_default()
-    assert str(tmp_path / "settings.json") in note
-    saved = config.load(tmp_path / "settings.json")
-    assert saved.model == "CTC" and saved.include_timestamps
+def test_settings_are_saved_at_once_and_reset_keeps_the_speech_search(app, tmp_path):
+    path = tmp_path / "settings.json"
+    app.set_settings({"model": "CTC", "include_timestamps": True, "outputs": ["srt"]})
+    saved = config.load(path)
+    assert saved.model == "CTC" and saved.include_timestamps and saved.outputs == ["srt"]
+    app.settings.vad.vad_threshold = 0.7  # only the file sets these
+    assert app.reset_settings()
+    saved = config.load(path)
+    assert (saved.model, saved.include_timestamps, saved.outputs) == ("RNNT", False, ["txt", "timestamps"])
+    assert saved.vad.vad_threshold == 0.7
+    assert last(app.sent, "settings")["model"] == "RNNT"
+
+
+def test_a_settings_file_that_cannot_be_written_shows_an_error(app, tmp_path):
+    app.settings_path = tmp_path / "missing-folder" / "settings.json"
+    app.set_settings({"cpu_threads": 4})
+    assert app.settings.cpu_threads == 4  # still applied
+    assert last(app.sent, "error")["text"].startswith("Не удалось сохранить настройки")
 
 
 # ---------------------------------------------------------------------- downloads (B5)

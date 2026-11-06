@@ -52,8 +52,8 @@ TXT and timestamped TXT are on by default; a finished file also offers the
 other formats, made from the text already recognised. **Настройки** (bottom left)
 chooses the formats, the model (RNNT by default, or CTC), the device (Авто,
 Видеокарта, Процессор) and CPU threads; changes count from the next file.
-**Сохранить как настройки по умолчанию** writes them to `gigaam-config.json`
-beside the app. The window follows the system's light or dark theme.
+Changes are saved at once to `gigaam-config.json` beside the app (the command
+line reads the same file); **Сбросить настройки** goes back to the defaults. The window follows the system's light or dark theme.
 
 The window is a web page shown by Microsoft Edge WebView2, which Windows 10 and
 11 normally have; if it is missing, the app says so and links to Microsoft's

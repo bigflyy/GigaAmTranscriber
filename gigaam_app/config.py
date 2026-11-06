@@ -42,7 +42,9 @@ class Settings:
 
 
 def default_path():
-    return app_dir() / CONFIG_NAME
+    """gigaam-config.json beside the app; GIGAAM_CONFIG names another file (tests)."""
+    override = os.environ.get("GIGAAM_CONFIG")
+    return Path(override) if override else app_dir() / CONFIG_NAME
 
 
 def parse(data):

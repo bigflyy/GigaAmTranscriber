@@ -21,7 +21,15 @@ still holds B9, F and E. Owner's ideas: [docs/BACKLOG.md](docs/BACKLOG.md).
   `~/.local/share/gigaam-transcriber/history`; `GIGAAM_HISTORY` overrides. Kept: done files and
   cancelled files with text. Controller without `history=` remembers nothing (tests). Restored files
   come first; the page selects the newest at start. Retry keeps the entry's place; a failed retry
-  keeps the old result on disk. Settings are still saved only by the button (asked the owner).
+  keeps the old result on disk.
+- Owner chose: settings save automatically (every change goes to gigaam-config.json), and a
+  "Сбросить настройки" button replaced "Сохранить как настройки по умолчанию"; the reset keeps the
+  speech search values, which only the file sets. `GIGAAM_CONFIG` names another settings file
+  (window_check.py uses a temporary one; 28 checks).
+- Windows build with all of this: `C:\MyProjects\GigaAmTranscriberuild
+extpp\GigaAmTranscriber\`
+  (the old `buildpp` was locked by the owner's running window and is partly deleted). The Linux
+  tarball in build/release-linux predates the settings change; rebuild it for a release.
 - C2, how the frozen Linux app gets PyGObject and WebKitGTK (fits the plan's "system WebKitGTK",
   so not asked): GTK, WebKitGTK, libgirepository, typelibs and FFmpeg come from the system;
   PyGObject is copied in as plain files from Ubuntu's `python3-gi` 3.48.2 (`GIGAAM_GI_DIR`, gi is

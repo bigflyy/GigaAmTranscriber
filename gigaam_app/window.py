@@ -204,8 +204,8 @@ class Api:
     def set_settings(self, change):
         return self._controller.set_settings(change)
 
-    def save_default(self):
-        return self._controller.save_default()
+    def reset_settings(self):
+        return self._controller.reset_settings()
 
     def download(self):
         return self._controller.download()

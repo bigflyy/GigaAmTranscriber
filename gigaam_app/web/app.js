@@ -385,7 +385,7 @@ function renderSettings() {
 }
 
 async function changeSetting(change) {
-  $('save-note').textContent = '';
+  $('reset-note').textContent = '';
   await call('set_settings', change);
 }
 
@@ -502,9 +502,8 @@ $('threads').addEventListener('change', () => {
   $('threads').value = value;
   changeSetting({ cpu_threads: value });
 });
-$('save-default').addEventListener('click', async () => {
-  const note = await call('save_default');
-  if (note) $('save-note').textContent = note;
+$('reset-settings').addEventListener('click', async () => {
+  if (await call('reset_settings')) $('reset-note').textContent = 'Настройки сброшены.';
 });
 $('download-yes').addEventListener('click', () => call('download'));
 $('download-no').addEventListener('click', () => { $('download').close(); call('decline_download'); });

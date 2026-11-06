@@ -191,7 +191,12 @@ def scenario(window, control, long_audio, short_audio, shoot):
         js("document.querySelector('#devices input[value=CPU]').click()")
         wait(lambda: "процессор" in control.engine["text"], 60, "CPU model")
         check("device CPU", "процессор" in js("$('engine-text').textContent"), js("$('engine-text').textContent"))
-        js("document.querySelector('#devices input[value=Auto]').click()")
+        # Settings are saved at once; "Sbrosit" goes back to the defaults (device Auto).
+        check("settings saved at once", '"device": "CPU"' in Path(os.environ["GIGAAM_CONFIG"]).read_text("utf-8"))
+        js("$('reset-settings').click()")
+        wait(lambda: js("$('reset-note').textContent") != "", 10, "reset note")
+        check("reset to defaults", js("document.querySelector('#devices input[value=Auto]').checked")
+              and '"device": "Auto"' in Path(os.environ["GIGAAM_CONFIG"]).read_text("utf-8"))
         time.sleep(0.5)
         wait(lambda: control.engine["state"] == "ready", 60, "model with Auto")
 
@@ -282,6 +287,7 @@ def main():
     global shoot_again
     with tempfile.TemporaryDirectory(prefix="gigaam-check-") as downloads,             tempfile.TemporaryDirectory(prefix="gigaam-history-") as history:
         os.environ["GIGAAM_HISTORY"] = history  # never the user's own list
+        os.environ["GIGAAM_CONFIG"] = str(Path(history) / "settings.json")  # nor the user's settings
         add_test_model(downloads)
         shoot_again = screenshot_function(args.out)
         run = functools.partial(scenario, long_audio=args.long_audio.resolve(),

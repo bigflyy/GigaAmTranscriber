@@ -20,7 +20,8 @@ same as in v0.2.0.
   folder. A format that was not chosen can be written from the text already recognised.
 - Closing the window while a file is recognised or a model downloads asks first.
   The text recognised so far is saved.
-- Settings (model, device, CPU threads, formats) apply to the next file at once.
+- Settings (model, device, CPU threads, formats) apply to the next file at once
+  and are saved by themselves; **Сбросить настройки** goes back to the defaults.
 - Light and dark theme, following the system.
 - The window is drawn by Microsoft Edge WebView2 on Windows (part of Windows 10
   and 11; if it is missing, the app links to Microsoft's installer) and by the
