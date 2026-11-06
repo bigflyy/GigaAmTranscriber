@@ -4,3 +4,6 @@ numpy==2.5.4
 onnxruntime-directml==1.23.0; sys_platform == "win32"
 # Linux and macOS (Docker image): CPU build.
 onnxruntime==1.23.0; sys_platform != "win32"
+# The window: Edge WebView2 on Windows (through pythonnet), the system WebKitGTK on Linux
+# (PyGObject and gir1.2-webkit2-4.1 come from the system packages there).
+pywebview==6.2.1

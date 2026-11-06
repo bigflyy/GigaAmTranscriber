@@ -120,7 +120,7 @@ def missing_runtime():
         return None
     if sys.platform == "win32":
         return ("Для окна программы нужен Microsoft Edge WebView2 Runtime, а он не установлен.\n\n"
-                "Установите его с сайта Microsoft (бесплатно, около 2 МБ загрузчик) и запустите программу снова.\n\n"
+                "Установите его с сайта Microsoft (бесплатно, загрузчик около 2 МБ) и запустите программу снова.\n\n"
                 "Открыть страницу загрузки?", WEBVIEW2_URL)
     return ("Для окна программы нужна библиотека WebKitGTK, а она не найдена.\n\n"
             "Установите её и запустите программу снова:\n"
@@ -224,7 +224,9 @@ class Sender(threading.Thread):
             message = self.outbox.get()
             if message is None:
                 return
-            payload = json.dumps(message, ensure_ascii=False)
+            # ASCII only: pywebview's GTK backend passes the script's length in characters
+            # where WebKit expects bytes, so Cyrillic text would cut the script short.
+            payload = json.dumps(message, ensure_ascii=True)
             try:
                 self.window.evaluate_js(f"window.gigaam && window.gigaam.receive({payload})")
             except Exception:  # the window is closing; nothing left to draw on

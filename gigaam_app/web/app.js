@@ -232,6 +232,7 @@ function renderSaved(file) {
   for (const item of outputs) {
     const chip = el('button', item.path ? 'chip' : 'chip missing');
     chip.type = 'button';
+    chip.dataset.format = item.format;
     chip.appendChild(el('b', '', item.short));
     chip.appendChild(document.createTextNode(item.path ? item.label : `+ ${item.label}`));
     chip.title = item.path ? `Открыть ${item.path}` : `Создать файл: ${item.label}`;
