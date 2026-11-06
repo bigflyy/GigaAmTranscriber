@@ -502,6 +502,33 @@ class Controller:
                 self.worker.cancel.set()
             return True
 
+    def close_question(self):
+        """What closing the window now would stop, as the question to ask; None when
+        nothing runs, so the window may close without asking."""
+        with self.lock:
+            waiting = sum(1 for item in self.files if item.state == WAITING)
+            parts = []
+            if self.running is not None:
+                parts.append(f"Идёт распознавание файла {self.running.path.name}. "
+                             "Оно остановится; текст, распознанный до этого, сохранится.")
+            if self.downloading:
+                parts.append(f"Идёт скачивание модели {self.downloading}. "
+                             "Скачанная часть останется, в следующий раз скачивание продолжится.")
+            if not parts:
+                return None
+            if waiting:
+                parts.append(f"Файлов в очереди: {waiting}; они не будут распознаны.")
+            return "\n\n".join(parts)
+
+    def ask_close(self):
+        """The user is closing the window. If that would stop something, send the
+        question to the page and return True (the window stays open for now)."""
+        with self.lock:
+            question = self.close_question()
+            if question:
+                self._emit("confirm_close", {"text": question})
+            return bool(question)
+
     def close(self):
         """The window is closing: stop whatever runs; partial text of a running file is saved."""
         self.worker.cancel.set()

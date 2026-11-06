@@ -438,9 +438,17 @@ function apply(message) {
     case 'download': onDownload(data); break;
     case 'error': showError(data.text, data.source); break;
     case 'notice': toast(data.text); break;
+    case 'confirm_close': askClose(data.text); break;
     case 'lines_reset': state.lines.set(data.id, []); if (state.selected === data.id) drawLines(data.id); break;
     default: break;
   }
+}
+
+// The user closed the window while a file or a download runs; Python kept it open.
+function askClose(text) {
+  $('confirm-close-text').textContent = text;
+  if (!$('confirm-close').open) $('confirm-close').showModal();
+  $('confirm-close-no').focus();
 }
 
 window.gigaam = {
@@ -505,6 +513,9 @@ $('download').addEventListener('cancel', (event) => {
   event.preventDefault();
   if (!$('download-yes').hidden) { $('download').close(); call('decline_download'); }
 });
+
+$('confirm-close-no').addEventListener('click', () => $('confirm-close').close());
+$('confirm-close-yes').addEventListener('click', () => call('close_anyway'));
 
 // Drag and drop. Python receives the drop itself (it needs the real paths, which the
 // page cannot see); the page only shows where to drop.

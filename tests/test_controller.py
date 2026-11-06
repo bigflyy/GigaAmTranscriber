@@ -401,3 +401,21 @@ def test_a_failed_download_shows_the_error(app, extra):
     app.handle(("error", "HTTP 404"))
     assert last(app.sent, "download")["phase"] == "failed"
     assert last(app.sent, "error")["text"] == "Не удалось скачать модель Extra: HTTP 404"
+
+
+# ---------------------------------------------------------------------- closing
+
+def test_closing_asks_only_while_something_runs(app, media):
+    assert app.close_question() is None and app.ask_close() is False
+    app.add_files([str(path) for path in media])
+    question = app.close_question()
+    assert "a.mp3" in question and "Файлов в очереди: 2" in question
+    assert app.ask_close() is True
+    assert last(app.sent, "confirm_close")["text"] == question
+    assert not app.fake_worker.cancel.is_set()  # asking stops nothing
+
+
+def test_closing_during_a_download_asks(app, extra):
+    app.set_settings({"model": "Extra"})
+    app.download()
+    assert "Идёт скачивание модели" in app.close_question()

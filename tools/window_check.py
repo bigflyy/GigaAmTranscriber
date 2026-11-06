@@ -32,6 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from gigaam_app import catalog, controller as controller_module, window as window_module  # noqa: E402
 
 results = []
+confirmed_close = []   # the controller, once the scenario has confirmed closing
 
 
 def check(name, ok, detail=""):
@@ -138,6 +139,17 @@ def scenario(window, control, long_audio, short_audio, shoot):
               js("$('file-status').textContent"))
         shoot("02-running")
 
+        # Closing while a file runs asks first; "Ne zakryvat" keeps the window and the file.
+        window.destroy()
+        wait(lambda: js("$('confirm-close').open"), 10, "close question")
+        check("close asks while a file runs", "Идёт распознавание" in js("$('confirm-close-text').textContent"),
+              js("$('confirm-close-text').textContent"))
+        shoot("02b-close-question")
+        js("$('confirm-close-no').click()")
+        time.sleep(0.3)
+        check("not closing keeps the file running",
+              control.files[0].state == "running" and not js("$('confirm-close').open"))
+
         # Cancel the long file: its text so far is kept and saved; the short one starts.
         js("$('file-cancel').click()")
         wait(lambda: control.files[0].state == "cancelled", 60, "cancelled")
@@ -211,9 +223,19 @@ def scenario(window, control, long_audio, short_audio, shoot):
         time.sleep(0.3)
         check("banner closes once a model loads", js("$('banner').hidden"))
         shoot("08-end")
+
+        # Closing while a file runs, then "Zakryt": the window closes and the file stops.
+        control.add_files([str(long_audio)])
+        wait(lambda: control.running is not None and control.running.segments, 120, "long file again")
+        window.destroy()
+        wait(lambda: js("$('confirm-close').open"), 10, "close question again")
+        confirmed_close.append(control)  # main() checks the result once the window is gone
+        js("$('confirm-close-yes').click()")
+        return
     except Exception as error:
         check("scenario", False, repr(error))
     finally:
+        control.close_question = lambda: None  # close without asking, whatever still runs
         window.destroy()
 
 
@@ -234,6 +256,10 @@ def main():
         run = functools.partial(scenario, long_audio=args.long_audio.resolve(),
                                 short_audio=args.short_audio.resolve(), shoot=screenshot_function(args.out))
         window_module.main([], scenario=run)
+    if confirmed_close:
+        control = confirmed_close[0]
+        check("closing after the question stops the file",
+              control.worker.cancel.is_set() and control.running is not None)
     failed = [name for name, ok in results if not ok]
     print(f"{len(results) - len(failed)} passed, {len(failed)} failed")
     return 1 if failed or not results else 0

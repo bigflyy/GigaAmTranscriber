@@ -158,6 +158,7 @@ class Api:
     def __init__(self, controller):
         self._controller = controller
         self._window = None
+        self._close_confirmed = False
 
     def ready(self):
         return self._controller.ready()
@@ -209,6 +210,12 @@ class Api:
 
     def cancel_download(self):
         return self._controller.cancel_download()
+
+    def close_anyway(self):
+        """The user confirmed closing although a file or a download runs."""
+        self._close_confirmed = True
+        self._window.destroy()
+        return True
 
 
 class Sender(threading.Thread):
@@ -270,8 +277,13 @@ def main(argv=None, scenario=None):
         window.dom.document.events.drop += DOMEventHandler(on_drop, True, True)
 
     def on_closing():
+        # While a file or a download runs, ask first: the page shows the question and
+        # calls close_anyway() if the user agrees. Returning False keeps the window open.
+        if not api._close_confirmed and controller.ask_close():
+            return False
         controller.close()
         outbox.put(None)
+        return None
 
     window.events.loaded += on_loaded
     window.events.closing += on_closing
