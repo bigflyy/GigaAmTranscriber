@@ -53,9 +53,11 @@ user32.SendMessageW.restype = ctypes.c_ssize_t
 EnumProc = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
 user32.EnumDesktopWindows.argtypes = [wintypes.HANDLE, EnumProc, wintypes.LPARAM]
 user32.EnumChildWindows.argtypes = [wintypes.HWND, EnumProc, wintypes.LPARAM]
+user32.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
 
 
 def window_text(hwnd):
+    """Text of a window or control; WM_GETTEXT waits while the app's UI thread is busy."""
     length = user32.SendMessageW(hwnd, WM_GETTEXTLENGTH, 0, 0)
     buffer = ctypes.create_unicode_buffer(length + 1)
     user32.SendMessageW(hwnd, WM_GETTEXT, length + 1, ctypes.cast(buffer, ctypes.c_void_p).value)
@@ -70,7 +72,11 @@ def top_windows(desktop, pid):
         owner = wintypes.DWORD()
         user32.GetWindowThreadProcessId(hwnd, ctypes.byref(owner))
         if owner.value == pid:
-            found.append((hwnd, window_text(hwnd), bool(user32.IsWindowVisible(hwnd))))
+            # GetWindowTextW reads a top-level title without asking the app, so a
+            # window that is busy loading the model still counts as shown.
+            buffer = ctypes.create_unicode_buffer(512)
+            user32.GetWindowTextW(hwnd, buffer, len(buffer))
+            found.append((hwnd, buffer.value, bool(user32.IsWindowVisible(hwnd))))
         return True
 
     user32.EnumDesktopWindows(desktop, EnumProc(callback), 0)
