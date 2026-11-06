@@ -25,7 +25,7 @@ still holds B9, F and E. Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
   waits for the load. Rerun alone: passes; closing during a normal load takes about 4 s.
   gui_smoke_test.py now gives the app a temporary GIGAAM_CONFIG and GIGAAM_HISTORY (it used the
   owner's).
-- Release assets ready in `C:\MyProjects\GigaAmTranscriberuildelease` (Windows zip 916 MiB,
+- Release assets ready in `C:\MyProjects\GigaAmTranscriber\build\release` (Windows zip 916 MiB,
   Linux tar.gz 825 MiB, licences zip, FFmpeg source, SHA256SUMS; `sha256sum -c` passes). Both
   unpacked fresh: 455 s lecture text identical (Windows CLI 20 s on DirectML; Linux 50 s on a busy
   CPU); the unpacked Windows window transcribed the 60 s file. RELEASE_NOTES.md holds the v0.3.0
