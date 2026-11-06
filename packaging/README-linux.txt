@@ -21,7 +21,7 @@ FFmpeg и, для окна, WebKitGTK 4.1:
 GigaAmTranscriber - окно программы. Нажмите "+ Добавить" или перетащите файлы
 (или папку) в окно: они распознаются по очереди, текст появляется по ходу.
 Текст сохраняется рядом с исходным файлом: имя-transcript.txt и
-имя-transcript-timestamps.txt (в настройках можно добавить SRT и JSON).
+имя-transcript-timestamps.txt (в настройках можно добавить Markdown, SRT и JSON).
 
 gigaam-cli - командная строка, например:
     ./gigaam-cli запись.mp3

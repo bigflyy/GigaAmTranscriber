@@ -78,7 +78,7 @@ def test_finished_files_come_back_in_the_next_session(tmp_path, monkeypatch, med
     files = later.ready()["files"]
     assert [(file["name"], file["state"]) for file in files] == [("a.mp3", "done")]
     restored = files[0]
-    assert [chip["path"] is not None for chip in restored["outputs"]] == [True, True, False, False]
+    assert [chip["path"] is not None for chip in restored["outputs"]] == [True, True, False, False, False]
     assert later.copy_text(restored["id"], False) == "Первый.\nВторой.\n"
     assert [line["text"] for line in later.segments(restored["id"])] == ["Первый.", "Второй."]
     assert later.worker.jobs.empty()  # nothing is recognised again
@@ -86,7 +86,7 @@ def test_finished_files_come_back_in_the_next_session(tmp_path, monkeypatch, med
     # A format created after the restart is remembered too.
     assert later.create_output(restored["id"], "srt")
     third = make_controller(tmp_path, monkeypatch, History(tmp_path / "history"))
-    assert third.ready()["files"][0]["outputs"][2]["path"].endswith("a-transcript.srt")
+    assert third.ready()["files"][0]["outputs"][3]["path"].endswith("a-transcript.srt")
 
     # Removing it from the list forgets it but keeps the transcript files.
     assert third.remove(third.files[0].id)

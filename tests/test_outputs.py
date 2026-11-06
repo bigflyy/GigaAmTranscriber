@@ -1,13 +1,14 @@
-"""Text, timestamped text, SRT and JSON writers."""
+"""Text, timestamped text, Markdown, SRT and JSON writers."""
 
+import datetime
 import json
 
 import pytest
 
 from gigaam_app.asr import Word
 from gigaam_app.engine import Segment, Transcript
-from gigaam_app.outputs import clock, json_text, output_paths, plain_text, srt_text, subtitle_cues, \
-    timestamped_text, write_outputs
+from gigaam_app.outputs import clock, json_text, markdown_escape, markdown_text, output_paths, plain_text, \
+    srt_text, subtitle_cues, timestamped_text, write_outputs
 
 
 def make_transcript(source="talk.mp3"):
@@ -75,11 +76,54 @@ def test_json_has_words_and_full_text():
     assert data["model"] == "RNNT" and data["audio_seconds"] == 40.0
 
 
+DAY = datetime.date(2026, 11, 6)
+
+
+def test_markdown_layout():
+    """Title, info line, then one section per minute or long pause (owner's choice, 2026-11-06)."""
+    assert markdown_text(make_transcript(), today=DAY) == (
+        "# talk.mp3\n\n"
+        "*2026-11-06 · 0:40 · GigaAM v3 RNNT*\n\n"
+        "## 00:00\n\nПривет. Как дела?\n\n"
+        "## 00:29\n\nХорошо спасибо.\n")
+
+
+def test_markdown_sections_join_segments_until_a_minute_or_a_long_pause():
+    segments = [Segment(0, 20, "Один."), Segment(21, 50, "Два."), Segment(51, 70, "Три."),
+                Segment(71, 75, "Четыре."),            # 71 s after the section start: new section
+                Segment(82, 90, "Пять."),              # 7 s pause but the section is only 11 s long
+                Segment(96, 99, "Шесть.")]             # 6 s pause after 25 s of section: new section
+    text = markdown_text(Transcript(source="a.wav", model="", device="", segments=segments), today=DAY)
+    assert text == ("# a.wav\n\n*2026-11-06*\n\n## 00:00\n\nОдин. Два. Три.\n\n"
+                    "## 01:11\n\nЧетыре. Пять.\n\n## 01:36\n\nШесть.\n")
+
+
+def test_markdown_long_files_use_hours_in_every_heading():
+    segments = [Segment(5, 8, "Начало."), Segment(3700, 3710, "Через час.")]
+    text = markdown_text(Transcript(source="a.wav", model="CTC", device="", audio_seconds=3712.4,
+                                    segments=segments), today=DAY)
+    assert "*2026-11-06 · 1:01:52 · GigaAM v3 CTC*" in text
+    assert "## 0:00:05\n" in text and "## 1:01:40\n" in text
+
+
+@pytest.mark.parametrize("plain, escaped", [
+    ("my_lecture.mp3", "my_lecture.mp3"),          # an underscore inside a word stays plain
+    ("_draft_ notes", "\\_draft\\_ notes"),
+    ("*x* [a](b) <b> a\\b `c`", "\\*x\\* \\[a\\](b) \\<b\\> a\\\\b \\`c\\`"),
+    ("# hi", "\\# hi"),
+    ("- dash", "\\- dash"),
+    ("1. one", "1\\. one"),
+    ("2024 год", "2024 год"),
+])
+def test_markdown_escape(plain, escaped):
+    assert markdown_escape(plain) == escaped
+
+
 def test_output_paths(tmp_path):
-    paths = output_paths(tmp_path / "a" / "talk.final.mp3", ["txt", "timestamps", "srt", "json"])
+    paths = output_paths(tmp_path / "a" / "talk.final.mp3", ["txt", "timestamps", "md", "srt", "json"])
     assert {fmt: path.name for fmt, path in paths.items()} == {
         "txt": "talk.final-transcript.txt", "timestamps": "talk.final-transcript-timestamps.txt",
-        "srt": "talk.final-transcript.srt", "json": "talk.final-transcript.json"}
+        "md": "talk.final-transcript.md", "srt": "talk.final-transcript.srt", "json": "talk.final-transcript.json"}
     assert all(path.parent == tmp_path / "a" for path in paths.values())
     assert output_paths("x.wav", ["txt"], tmp_path / "out")["txt"] == tmp_path / "out" / "x-transcript.txt"
 

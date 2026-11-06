@@ -35,10 +35,10 @@ FILE_DIALOG_TYPES = ("Аудио и видео (" + ";".join("*" + suffix for su
 
 DEVICES = (("Auto", "Авто"), ("GPU", "Видеокарта"), ("CPU", "Процессор"))
 DEVICE_NAMES = {"GPU (DirectML)": "видеокарта (DirectML)", "GPU (CUDA)": "видеокарта (CUDA)", "CPU": "процессор"}
-FORMAT_LABELS = {"txt": "TXT", "timestamps": "TXT с таймкодами", "srt": "SRT (субтитры)",
-                 "json": "JSON (слова и время)"}
+FORMAT_LABELS = {"txt": "TXT", "timestamps": "TXT с таймкодами", "md": "Markdown (разделы по времени)",
+                 "srt": "SRT (субтитры)", "json": "JSON (слова и время)"}
 # Chips under a finished file: (format, short tag, label).
-OUTPUT_CHIPS = (("txt", "TXT", "Текст"), ("timestamps", "TXT", "С таймкодами"),
+OUTPUT_CHIPS = (("txt", "TXT", "Текст"), ("timestamps", "TXT", "С таймкодами"), ("md", "MD", "Markdown"),
                 ("srt", "SRT", "Субтитры"), ("json", "JSON", "Слова и время"))
 # Russian notes for the model choice; catalog descriptions are English.
 MODEL_NOTES = {

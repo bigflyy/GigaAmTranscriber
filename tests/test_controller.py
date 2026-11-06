@@ -326,13 +326,13 @@ def test_open_create_and_show_outputs(app, media):
     finish(app, media[0], [segment(0.0, 2.0, "Текст.")])
     view = app._file_view(item)
     assert [(o["format"], bool(o["path"])) for o in view["outputs"]] == [
-        ("txt", True), ("timestamps", True), ("srt", False), ("json", False)]
+        ("txt", True), ("timestamps", True), ("md", False), ("srt", False), ("json", False)]
     assert app.open_output(item.id, "txt")
     assert app.desktop.opened == [media[0].with_name("a-transcript.txt").resolve()]
     assert app.create_output(item.id, "srt")
     srt = media[0].with_name("a-transcript.srt")
     assert srt.read_text(encoding="utf-8").startswith("1\n00:00:00,000 --> ")
-    assert app._file_view(item)["outputs"][2]["path"] == str(srt.resolve())
+    assert app._file_view(item)["outputs"][3]["path"] == str(srt.resolve())
     assert app.show_folder(item.id)
     assert app.desktop.shown == [media[0].with_name("a-transcript.txt").resolve()]
 

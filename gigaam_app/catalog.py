@@ -33,6 +33,7 @@ class ModelInfo:
     description: str
     files: tuple = ()  # RemoteFile entries; empty for models bundled with the app
     base_url: str = DOWNLOAD_BASE_URL
+    title: str = ""   # full name for saved files (the Markdown info line); empty means the key
 
     @property
     def bundled(self):
@@ -47,10 +48,17 @@ class ModelInfo:
 
 
 CATALOG = (
-    ModelInfo("RNNT", "v3_e2e_rnnt", "Russian, punctuation and capitals (default)"),
-    ModelInfo("CTC", "v3_e2e_ctc", "Russian, punctuation and capitals, a little faster than RNNT"),
+    ModelInfo("RNNT", "v3_e2e_rnnt", "Russian, punctuation and capitals (default)", title="GigaAM v3 RNNT"),
+    ModelInfo("CTC", "v3_e2e_ctc", "Russian, punctuation and capitals, a little faster than RNNT",
+              title="GigaAM v3 CTC"),
 )
 BY_KEY = {info.key: info for info in CATALOG}
+
+
+def model_title(key):
+    """Full model name for a settings key ("RNNT" -> "GigaAM v3 RNNT"); unknown keys stay as they are."""
+    info = BY_KEY.get(key)
+    return (info.title or info.key) if info else key
 
 # Model names used by v0.1 settings files. The GigaAM multilingual CTC models
 # were dropped in v0.2 (worse than RNNT on Russian, Cyrillic transliteration of

@@ -45,6 +45,7 @@ Results are saved beside the source file:
 | --- | --- | --- |
 | `txt` | `name-transcript.txt` | plain text, one line per speech fragment |
 | `timestamps` | `name-transcript-timestamps.txt` | the same lines with `[start - end]` times |
+| `md` | `name-transcript.md` | Markdown: file name, date, length and model, then the text in sections of about a minute under their start times |
 | `srt` | `name-transcript.srt` | subtitles, short cues built from word times |
 | `json` | `name-transcript.json` | segments and every word with its start and end time |
 
