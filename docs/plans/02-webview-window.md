@@ -13,11 +13,11 @@ The sv-ttk attempt is kept as a patch outside the repo, not committed.
 ### Stage A: Prove pywebview
 
 - [x] **A1** Spike: a pywebview window with a JS-to-Python bridge, a file dialog, drag and drop with real file paths, and Python pushing events to the page; run it on Windows and in WSL Ubuntu (off screen) (works on both; WebView2 does not paint on a hidden desktop, so Windows tests use an off-screen, non-focusable window; under WSL unset WAYLAND_DISPLAY and use GDK_BACKEND=x11 with Xvfb; drop and the file dialog need a check by hand)
-- [x] **A2** Freeze the spike with PyInstaller on Windows; measure start-up time and added size; check the WebView2-missing path shows a clear message (pywebview and pythonnet add about 2 MB; frozen: window frame at 1.3-1.6 s, page at 2.5-2.7 s, against 0.85 s for the Tk window; without WebView2 pywebview silently falls back to the IE engine, so the app must check and explain, see B6)
+- [x] **A2** Freeze the spike with PyInstaller on Windows; measure start-up time and added size; check the WebView2-missing path shows a clear message (pywebview and pythonnet add about 2 MB; frozen: window frame at 1.3-1.6 s, page at 2.5-2.7 s on the first runs, warm medians 1.2 s and 1.75 s, against 0.85 s for the Tk window; without WebView2 pywebview silently falls back to the IE engine, so the app must check and explain, see B6)
 
 ### Stage B: The window
 
-- [ ] **B1** Page in `gigaam_app/web/` (HTML, CSS, JS, no CDN): design B, light and dark following the system
+- [ ] **B1** Page in `gigaam_app/web/` (HTML, CSS, JS, no CDN): design B, light and dark following the system; create the window with `background_color` set to the theme's background, so the frame is never white before the page paints
 - [ ] **B2** Python side: an API object over the existing `Worker`; replaces the Tk `App`
 - [ ] **B3** File list: add by dialog or drop, several files, queue runs one at a time, cancel, remove
 - [ ] **B4** Live text for the selected file, timecodes switch, copy, open the saved files and the folder

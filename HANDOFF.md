@@ -19,6 +19,12 @@ Last updated 2026-11-06 (session 5). Current plan: [docs/plans/02-webview-window
 - Spike results (`experiments/webview_spike/`, pywebview 6.2.1): bridge both ways, pushed
   lines and theme detection work on Windows (WebView2 156) and WSL Ubuntu 24.04 (WebKitGTK 2.52).
   Frozen on Windows: +2 MB; window frame at 1.3-1.6 s, page at 2.5-2.7 s (Tk: 0.85 s).
+  Rechecked warm (5 runs each, from process start, frozen): frame 1.2 s, page 1.75 s.
+  Where it goes: Python + pywebview import 0.45 s, pythonnet/.NET + WinForms 0.7 s,
+  WebView2 start and page 0.5 s. A kept profile (`private_mode=False`) does not help;
+  `background_color` does not change timing but removes the white flash (frame shows
+  in the app's dark colour). Bench (bench.py, bench_frozen.py, a frozen build):
+  `C:\Users\User\AppData\Local\Temp\claude\b3b5ded84d394c69\6a3c0658-6d34-4248-a107-e790afcad1b6\scratchpad\speed`.
   Without WebView2 pywebview falls back to the IE engine silently, so the app must check (B6).
   Drop and the file dialog were not tested (need a real mouse).
 - Testing: WebView2 does not paint on a hidden desktop; use an off-screen window
