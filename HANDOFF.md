@@ -1,8 +1,17 @@
 # Handoff: state and findings
 
-Last updated 2026-11-06 (session 8). Current plan: [docs/plans/02-webview-window.md](docs/plans/02-webview-window.md)
+Last updated 2026-11-06 (session 9). Current plan: [docs/plans/02-webview-window.md](docs/plans/02-webview-window.md)
 (new window; Stages A-C done, D is later); the rewrite plan [docs/plans/01-onnx-runtime-rewrite.md](docs/plans/01-onnx-runtime-rewrite.md)
 still holds B9, F and E. Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
+
+## Session 9 (2026-11-06): app icon mockups
+
+- Owner chose the icon mockups before plan 03 Stage A. The app has no icon of its own (the
+  .spec sets no `icon=`, the window none). Mockups: https://claude.ai/artifact/W1UuSDLLfjZPy1rRvonVm5
+  (A wave into lines, B speech bubble, C page with sound, D wave and cursor, E quoted speech;
+  colors blue, teal, violet, coral, graphite). Source: session 9 scratchpad icon-mockups.html.
+  Waiting for the owner's letter and color; then hand-tune 16/24 px, make .ico and .png, wire
+  them into both .spec files, the pywebview window and the Linux package.
 
 ## Session 8 (2026-11-06): release v0.3.0 prepared (plan 02 Stage E), plan 03 drafted
 
