@@ -310,6 +310,25 @@ def make_assets(app, release):
         print(f"  {name}: {size / 1024 ** 2:.1f} MiB", flush=True)
 
 
+def remove_old_build(dist):
+    """Delete the previous app folder, but only when nothing in it is in use.
+
+    Windows refuses to rename a folder while a program runs from it or holds one of its
+    files. Renaming first turns that into a clean stop; deleting straight away would
+    remove the models and licences before reaching the first locked DLL (it happened
+    once to a copy the owner had open, 2026-11-06)."""
+    if not dist.exists():
+        return
+    doomed = dist.with_name(dist.name + ".old")
+    if doomed.exists():
+        shutil.rmtree(doomed)
+    try:
+        dist.rename(doomed)
+    except PermissionError:
+        fail(f"{dist} is in use (is the app running from it?); close it or pass another --out")
+    shutil.rmtree(doomed)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--models", type=Path, default=ROOT / "models", help="exported models (default: models/)")
@@ -323,8 +342,7 @@ def main():
     ffmpeg, ffmpeg_notices = find_ffmpeg(args.ffmpeg)
     out = args.out.resolve()
     dist = out / "app"
-    if dist.exists():
-        shutil.rmtree(dist)
+    remove_old_build(dist)
     started = time.perf_counter()
     app = run_pyinstaller(out / "pyinstaller", dist)
     check_no_torch(app)
