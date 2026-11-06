@@ -170,7 +170,9 @@ def scenario(window, control, long_audio, short_audio, shoot):
         js("document.querySelectorAll('#files li')[0].click()")
         status = js("$('file-status').textContent")
         check("cancelled status", status.startswith(("Отменено на", "Отменено до")), status)
-        check("cancelled text kept", js("$('text').querySelectorAll('p:not(.placeholder)').length") > 0)
+        # The page asks for the file's text after the click; wait for it instead of reading at once.
+        check("cancelled text kept",
+              wait(lambda: js("$('text').querySelectorAll('p:not(.placeholder)').length") > 0, 10, "cancelled text"))
         shoot("03-cancelled")
 
         # B4: timecodes switch, saved files, create a missing format.
@@ -186,6 +188,11 @@ def scenario(window, control, long_audio, short_audio, shoot):
         srt = Path(short_audio).with_name(Path(short_audio).stem + "-transcript.srt")
         wait(lambda: srt.is_file(), 10, "SRT written")
         check("SRT created from the page", srt.is_file() and srt.stat().st_size > 0)
+        js("document.querySelector('#saved-list .chip[data-format=md]').click()")
+        markdown = Path(short_audio).with_name(Path(short_audio).stem + "-transcript.md")
+        wait(lambda: markdown.is_file(), 10, "Markdown written")
+        check("Markdown created from the page",
+              markdown.is_file() and markdown.read_text(encoding="utf-8").startswith("# " + Path(short_audio).name))
         shoot("04-done")
 
         # Retry the short file, remove the cancelled one.
@@ -262,21 +269,21 @@ def scenario(window, control, long_audio, short_audio, shoot):
             window.destroy()
 
 
-def second_session(window, control, short_audio):
+def second_session(window, control, short_audio, long_audio):
     """The window opened again: files from the first session are back, with their text."""
     js = window.evaluate_js
     try:
         wait(lambda: js("typeof state !== 'undefined' && state.booted"), 30, "page ready again")
         files = js("state.files.map(f => [f.name, f.state])")
         check("files come back in the next session",
-              files[:2] == [[Path(short_audio).name, "done"], ["research-2026.mp4", "cancelled"]], files)
+              files[:2] == [[Path(short_audio).name, "done"], [Path(long_audio).name, "cancelled"]], files)
         check("the newest is selected with its text",
               js("state.selected") == js("state.files[state.files.length - 1].id")
               and js("$('text').querySelectorAll('p:not(.placeholder)').length") > 0)
         js("document.querySelectorAll('#files li')[0].click()")
         wait(lambda: js("$('text').querySelectorAll('p:not(.placeholder)').length") > 0, 10, "restored text")
         chips = js("[...document.querySelectorAll('#saved-list .chip')].map(c => c.dataset.format)")
-        check("restored file offers its saved files", chips[:3] == ["txt", "timestamps", "srt"], chips)
+        check("restored file offers its saved files", chips[:4] == ["txt", "timestamps", "md", "srt"], chips)
         shoot_again("09-next-session")
     except Exception as error:
         check("second session", False, repr(error))
@@ -309,7 +316,8 @@ def main():
                                 short_audio=args.short_audio.resolve(), shoot=shoot_again)
         window_module.main([], scenario=run)
         if confirmed_close:
-            window_module.main([], scenario=functools.partial(second_session, short_audio=args.short_audio.resolve()))
+            window_module.main([], scenario=functools.partial(second_session, short_audio=args.short_audio.resolve(),
+                                                                   long_audio=args.long_audio.resolve()))
     if confirmed_close:
         control = confirmed_close[0]
         check("closing after the question stops the file", control.worker.cancel.is_set())
