@@ -41,7 +41,8 @@ still holds B9, F and E. Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
 - Pushed 2026-11-07 (owner OK'd). Owner saw no icon and no .md: they were running the old
   v0.3.0 build in build/next (16:23, before both commits; PyInstaller's default icon). Fresh
   build made into build/try instead (app open from build/next): smoke tests pass, EXE icon
-  checked. md is off by default (txt + timestamps); asked the owner whether to turn it on.
+  checked. Owner tried build/try: icon and md work. Owner's decision (2026-11-07): md stays
+  off by default (txt + timestamps), on only when ticked in Settings.
 
 ## Session 8 (2026-11-06): release v0.3.0 prepared (plan 02 Stage E), plan 03 drafted
 
