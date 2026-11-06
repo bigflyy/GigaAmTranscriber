@@ -165,6 +165,7 @@ class Controller:
         self.asking = None           # model key the download question is open for
         self.declined = set()        # models the user said "not now" to
         self.loaded_key = None
+        self.failed_load = None      # model whose load failed; its "error" event follows
         self.engine = {"state": "idle", "text": "Запуск...", "detail": ""}
         self.probe_jobs = queue.Queue()
         self.startup_error = ""
@@ -198,8 +199,9 @@ class Controller:
         self.engine = {"state": state, "text": text, "detail": detail}
         self._emit("engine", dict(self.engine))
 
-    def _error(self, text):
-        self._emit("error", {"text": text})
+    def _error(self, text, source=""):
+        """A banner over the right pane. source "engine" banners close once a model loads."""
+        self._emit("error", {"text": text, "source": source})
 
     def _notice(self, text):
         self._emit("notice", {"text": text})
@@ -332,8 +334,8 @@ class Controller:
                     self._notice(f"Файл не найден: {path}")
             if added:
                 self.declined.discard(self.settings.model)
-                self._emit_files()
                 self._pump()
+                self._emit_files()
         return added
 
     def _add(self, path):
@@ -597,6 +599,7 @@ class Controller:
             self._set_engine("ready", f"{model} - {device_name(device)}", f"Загружена за {seconds:.1f} с")
         elif kind == "load_failed":
             self.loaded_key = None
+            self.failed_load = args[0]
             self._set_engine("error", f"{args[0]} - не загрузилась", args[1])
         elif kind == "status" and item:
             item.phase = args[0]
@@ -648,12 +651,16 @@ class Controller:
             self._emit("download", {"phase": "failed", "model": model, "text": ""})
             self._error(f"Не удалось скачать модель {model}: {text}")
         elif self.running:
+            self.failed_load = None
             item, self.running = self.running, None
             item.state = FAILED
             item.error = text
             item.cancelling = False
             self._emit_file(item)
             self._pump()
+        elif self.failed_load:
+            model, self.failed_load = self.failed_load, None
+            self._error(f"Не удалось загрузить модель {model}: {text}", source="engine")
         else:
             self._error("Ошибка: " + text)
 

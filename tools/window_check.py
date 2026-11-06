@@ -1,0 +1,226 @@
+"""Drive the real window off screen and check what the page shows (plan 02, B3-B7).
+
+The window opens at (-6000, -6000) without focus, so nothing appears on the
+screen and the mouse and keyboard are not used. The page is clicked through
+evaluate_js; the clipboard is never touched (copy is covered by the tests).
+
+    python tools/window_check.py LONG_AUDIO SHORT_AUDIO --out FOLDER
+
+LONG_AUDIO should take several seconds to transcribe (it is cancelled midway),
+SHORT_AUDIO is transcribed twice. Transcripts are written beside both files, so
+pass copies. A downloadable test model is served from a local HTTP server to
+show the download dialog; its download folder is a temporary folder.
+On Windows each step also saves a PNG of the window (PrintWindow).
+Set GIGAAM_THEME=light or dark to fix the theme.
+"""
+
+import argparse
+import functools
+import hashlib
+import http.server
+import os
+from pathlib import Path
+import sys
+import tempfile
+import threading
+import time
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from gigaam_app import catalog, controller as controller_module, window as window_module  # noqa: E402
+
+results = []
+
+
+def check(name, ok, detail=""):
+    results.append((name, bool(ok)))
+    print(f"{'ok  ' if ok else 'FAIL'} {name}" + (f": {detail}" if detail else ""), flush=True)
+
+
+def wait(condition, timeout, what):
+    deadline = time.perf_counter() + timeout
+    while time.perf_counter() < deadline:
+        try:
+            if condition():
+                return True
+        except Exception:  # the page may still be loading
+            pass
+        time.sleep(0.1)
+    check(f"wait: {what}", False, f"not within {timeout:.0f} s")
+    return False
+
+
+class SlowFile(http.server.BaseHTTPRequestHandler):
+    """Serves one file in small pieces, so the download dialog shows progress."""
+
+    data = b""
+
+    def do_GET(self):  # noqa: N802 - http.server's name
+        self.send_response(200)
+        self.send_header("Content-Length", str(len(self.data)))
+        self.end_headers()
+        for start in range(0, len(self.data), 65536):
+            self.wfile.write(self.data[start:start + 65536])
+            time.sleep(0.03)
+
+    def log_message(self, *args):
+        pass
+
+
+def add_test_model(folder):
+    """Register a downloadable model "Test" whose only file is 2 MB of zeros (not a real model)."""
+    SlowFile.data = bytes(2 * 1024 * 1024)
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), SlowFile)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    info = catalog.ModelInfo("Test", "test_model", "A test model that is not a real model",
+                             files=(catalog.RemoteFile("model.json", len(SlowFile.data),
+                                                       hashlib.sha256(SlowFile.data).hexdigest()),),
+                             base_url=f"http://127.0.0.1:{server.server_port}")
+    catalog.BY_KEY["Test"] = info
+    controller_module.MODELS["Test"] = info.folder
+    os.environ["GIGAAM_DOWNLOADS"] = str(folder)
+
+
+def screenshot_function(out):
+    if sys.platform != "win32":
+        return lambda name: None
+    import ctypes
+    import gui_smoke_test as smoke
+
+    def find():
+        found = []
+
+        def callback(hwnd, _):
+            pid = ctypes.c_ulong()
+            smoke.user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+            buffer = ctypes.create_unicode_buffer(256)
+            smoke.user32.GetWindowTextW(hwnd, buffer, 256)
+            if pid.value == os.getpid() and buffer.value == window_module.TITLE:
+                found.append(hwnd)
+            return True
+        smoke.user32.EnumWindows(smoke.EnumProc(callback), 0)
+        return found[0] if found else None
+
+    def shoot(name):
+        hwnd = find()
+        if hwnd:
+            time.sleep(0.3)  # let the page finish painting
+            smoke.save_png(hwnd, str(Path(out) / f"{name}.png"))
+    return shoot
+
+
+def scenario(window, control, long_audio, short_audio, shoot):
+    js = window.evaluate_js
+    try:
+        wait(lambda: js("typeof state !== 'undefined' && state.booted"), 30, "page ready")
+        check("page booted", js("state.booted"))
+        wait(lambda: control.engine["state"] == "ready", 60, "model loaded")
+        check("engine text", "RNNT" in js("$('engine-text').textContent"), js("$('engine-text').textContent"))
+        shoot("01-empty")
+
+        # B3: two files, the first runs, the second waits.
+        control.add_files([str(long_audio), str(short_audio)])
+        wait(lambda: js("$('text').querySelectorAll('p:not(.placeholder)').length") >= 2, 120, "live text")
+        items = js("[...document.querySelectorAll('#files li')].map(li => li.className)")
+        check("list shows running and waiting", items == ["file running selected", "file waiting"], items)
+        check("running status", js("$('file-status').textContent").startswith(("Распознаю", "Поиск")),
+              js("$('file-status').textContent"))
+        shoot("02-running")
+
+        # Cancel the long file: its text so far is kept and saved; the short one starts.
+        js("$('file-cancel').click()")
+        wait(lambda: control.files[0].state == "cancelled", 60, "cancelled")
+        wait(lambda: control.files[1].state == "done", 120, "short file done")
+        js("document.querySelectorAll('#files li')[0].click()")
+        status = js("$('file-status').textContent")
+        check("cancelled status", status.startswith(("Отменено на", "Отменено до")), status)
+        check("cancelled text kept", js("$('text').querySelectorAll('p:not(.placeholder)').length") > 0)
+        shoot("03-cancelled")
+
+        # B4: timecodes switch, saved files, create a missing format.
+        before = js("$('text').classList.contains('with-times')")
+        js("$('times').click()")
+        check("timecodes switch", js("$('text').classList.contains('with-times')") != before)
+        js("$('times').click()")
+        js("document.querySelectorAll('#files li')[1].click()")
+        chips = js("[...document.querySelectorAll('#saved-list .chip')].map(c => c.textContent)")
+        check("saved chips", chips[:2] == ["TXTТекст", "TXTС таймкодами"], chips)
+        js("[...document.querySelectorAll('#saved-list .chip')].find(c => c.textContent.includes('Субтитры')).click()")
+        srt = Path(short_audio).with_name(Path(short_audio).stem + "-transcript.srt")
+        wait(lambda: srt.is_file(), 10, "SRT written")
+        check("SRT created from the page", srt.is_file() and srt.stat().st_size > 0)
+        shoot("04-done")
+
+        # Retry the short file, remove the cancelled one.
+        js("$('file-retry').click()")
+        wait(lambda: control.files[1].state == "running", 10, "retry started")
+        wait(lambda: control.files[1].state == "done", 120, "retry done")
+        check("retry finished", control.files[1].state == "done")
+        js("document.querySelectorAll('#files li')[0].querySelector('.remove').click()")
+        wait(lambda: len(control.files) == 1, 10, "removed")
+        check("remove", js("document.querySelectorAll('#files li').length") == 1)
+
+        # B5: settings view, device change reloads the model.
+        js("$('open-settings').click()")
+        check("settings view", not js("$('view-settings').hidden"))
+        shoot("05-settings")
+        js("document.querySelector('#devices input[value=CPU]').click()")
+        wait(lambda: "процессор" in control.engine["text"], 60, "CPU model")
+        check("device CPU", "процессор" in js("$('engine-text').textContent"), js("$('engine-text').textContent"))
+        js("document.querySelector('#devices input[value=Auto]').click()")
+        wait(lambda: control.engine["state"] == "ready" and "процессор" not in control.engine["text"], 60, "GPU again")
+
+        # Download dialog: ask, decline, ask again, download with progress.
+        js("document.querySelector('#models input[value=Test]').click()")
+        wait(lambda: js("$('download').open"), 10, "download question")
+        check("download question", "2 МБ" in js("$('download-text').textContent"))
+        shoot("06-download-ask")
+        js("$('download-no').click()")
+        check("decline closes", not js("$('download').open"))
+        js("document.querySelector('#models input[value=RNNT]').click()")
+        js("document.querySelector('#models input[value=Test]').click()")
+        wait(lambda: js("$('download').open"), 10, "download question again")
+        js("$('download-yes').click()")
+        wait(lambda: not js("$('download-progress').hidden"), 10, "download progress")
+        time.sleep(0.4)
+        shoot("07-download-progress")
+        wait(lambda: not js("$('download').open"), 60, "download finished")
+        check("downloaded", catalog.installed_folder(catalog.BY_KEY["Test"]) is not None)
+        # The test model is not a real model, so loading it must fail visibly.
+        wait(lambda: control.engine["state"] == "error", 30, "test model fails to load")
+        check("load error shown", js("$('engine').className") == "engine error")
+        wait(lambda: not js("$('banner').hidden"), 10, "error banner")
+        banner = js("$('banner-text').textContent")
+        check("banner names the model", banner.startswith("Не удалось загрузить модель Test"), banner)
+        js("document.querySelector('#models input[value=RNNT]').click()")
+        js("$('close-settings').click()")
+        wait(lambda: control.engine["state"] == "ready", 60, "RNNT again")
+        time.sleep(0.3)
+        check("banner closes once a model loads", js("$('banner').hidden"))
+        shoot("08-end")
+    except Exception as error:
+        check("scenario", False, repr(error))
+    finally:
+        window.destroy()
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("long_audio", type=Path)
+    parser.add_argument("short_audio", type=Path)
+    parser.add_argument("--out", type=Path, default=Path("."), help="folder for the PNGs")
+    args = parser.parse_args()
+    args.out.mkdir(parents=True, exist_ok=True)
+    os.environ["GIGAAM_WINDOW_OFFSCREEN"] = "1"
+    with tempfile.TemporaryDirectory(prefix="gigaam-check-") as downloads:
+        add_test_model(downloads)
+        run = functools.partial(scenario, long_audio=args.long_audio.resolve(),
+                                short_audio=args.short_audio.resolve(), shoot=screenshot_function(args.out))
+        window_module.main([], scenario=run)
+    failed = [name for name, ok in results if not ok]
+    print(f"{len(results) - len(failed)} passed, {len(failed)} failed")
+    return 1 if failed or not results else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

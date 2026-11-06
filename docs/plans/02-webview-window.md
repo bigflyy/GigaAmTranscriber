@@ -19,9 +19,9 @@ The sv-ttk attempt is kept as a patch outside the repo, not committed.
 
 - [x] **B1** Page in `gigaam_app/web/` (HTML, CSS, JS, no CDN): design B, light and dark following the system; create the window with `background_color` set to the theme's background, so the frame is never white before the page paints
 - [x] **B2** Python side: an API object over the existing `Worker`; replaces the Tk `App`
-- [ ] **B3** File list: add by dialog or drop, several files, queue runs one at a time, cancel, remove
-- [ ] **B4** Live text for the selected file, timecodes switch, copy, open the saved files and the folder
-- [ ] **B5** Settings view: model, device, CPU threads, formats, save as default; model download prompt with progress
+- [x] **B3** File list: add by dialog or drop, several files, queue runs one at a time, cancel, remove (checked off screen by tools/window_check.py; the file dialog and drop need a check by hand)
+- [x] **B4** Live text for the selected file, timecodes switch, copy, open the saved files and the folder (also: create a missing format from the text; copy and opening files need a check by hand)
+- [x] **B5** Settings view: model, device, CPU threads, formats, save as default; model download prompt with progress
 - [ ] **B6** Status: model and device, errors, first-run model load; before opening the window, check for WebView2 (Windows) or WebKitGTK (Linux) and otherwise show a native message with the install link or package name; window background set to the theme colour so the frame is not white while the page loads
 - [ ] **B7** Tests: the API logic with a fake worker; the page driven in a headless browser where it helps
 - [ ] **B8** Remove the Tk window and its smoke test, or keep the smoke test working on the new window

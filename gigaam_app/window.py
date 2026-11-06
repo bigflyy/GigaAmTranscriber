@@ -233,7 +233,9 @@ class Sender(threading.Thread):
 
 # ---------------------------------------------------------------------- main
 
-def main(argv=None):
+def main(argv=None, scenario=None):
+    """Open the window with the files in argv. scenario(window, controller), if given,
+    runs on its own thread once the window has started (tools/window_check.py)."""
     argv = sys.argv[1:] if argv is None else argv
     problem = missing_runtime()
     if problem:
@@ -274,7 +276,11 @@ def main(argv=None):
     worker.start()
     controller.start()
     sender.start()
-    webview.start(gui="edgechromium" if sys.platform == "win32" else "gtk", private_mode=True)
+    gui = "edgechromium" if sys.platform == "win32" else "gtk"
+    if scenario:
+        webview.start(scenario, (window, controller), gui=gui, private_mode=True)
+    else:
+        webview.start(gui=gui, private_mode=True)
     events.put(None)
     return 0
 

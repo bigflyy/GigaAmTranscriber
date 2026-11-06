@@ -60,8 +60,9 @@ function toast(text) {
   toastTimer = setTimeout(() => { node.hidden = true; }, 2500);
 }
 
-function showError(text) {
+function showError(text, source) {
   $('banner-text').textContent = text;
+  $('banner').dataset.source = source || '';
   $('banner').hidden = false;
 }
 
@@ -425,11 +426,16 @@ function apply(message) {
     case 'files': state.files = data; renderFiles(); break;
     case 'file': updateOneFile(data); break;
     case 'segment': onSegment(data); break;
-    case 'engine': state.engine = data; renderEngine(); break;
+    case 'engine':
+      state.engine = data;
+      renderEngine();
+      // A model loaded: an old "could not load" banner is no longer true.
+      if (data.state === 'ready' && $('banner').dataset.source === 'engine') $('banner').hidden = true;
+      break;
     case 'settings': state.settings = data; renderSettings(); break;
     case 'options': state.options = data; renderSettings(); break;
     case 'download': onDownload(data); break;
-    case 'error': showError(data.text); break;
+    case 'error': showError(data.text, data.source); break;
     case 'notice': toast(data.text); break;
     case 'lines_reset': state.lines.set(data.id, []); if (state.selected === data.id) drawLines(data.id); break;
     default: break;
