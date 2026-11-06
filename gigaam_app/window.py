@@ -19,6 +19,8 @@ import threading
 
 from . import __version__
 from .controller import FILE_DIALOG_TYPES, Controller
+from .history import History
+from .paths import history_dir
 from .worker import Worker
 
 WEB_DIR = Path(__file__).resolve().parent / "web"
@@ -260,7 +262,8 @@ def main(argv=None, scenario=None):
     events = queue.Queue()
     worker = Worker(events)
     outbox = queue.Queue()
-    controller = Controller(worker, events, send=outbox.put, initial_files=argv)
+    controller = Controller(worker, events, send=outbox.put, initial_files=argv,
+                            history=History(history_dir()))
     api = Api(controller)
     offscreen = os.environ.get("GIGAAM_WINDOW_OFFSCREEN") == "1"
     window = webview.create_window(
@@ -299,7 +302,7 @@ def main(argv=None, scenario=None):
     else:
         webview.start(gui=gui, private_mode=True)
     worker.stop()
-    events.put(None)
+    controller.stop()
     return 0
 
 

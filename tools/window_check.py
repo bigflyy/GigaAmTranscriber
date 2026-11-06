@@ -181,7 +181,7 @@ def scenario(window, control, long_audio, short_audio, shoot):
         wait(lambda: control.files[1].state == "done", 120, "retry done")
         check("retry finished", control.files[1].state == "done")
         js("document.querySelectorAll('#files li')[0].querySelector('.remove').click()")
-        wait(lambda: len(control.files) == 1, 10, "removed")
+        wait(lambda: js("document.querySelectorAll('#files li').length") == 1, 10, "removed")
         check("remove", js("document.querySelectorAll('#files li').length") == 1)
 
         # B5: settings view, device change reloads the model.
@@ -242,6 +242,31 @@ def scenario(window, control, long_audio, short_audio, shoot):
             window.destroy()
 
 
+def second_session(window, control, short_audio):
+    """The window opened again: files from the first session are back, with their text."""
+    js = window.evaluate_js
+    try:
+        wait(lambda: js("typeof state !== 'undefined' && state.booted"), 30, "page ready again")
+        files = js("state.files.map(f => [f.name, f.state])")
+        check("files come back in the next session",
+              files[:2] == [[Path(short_audio).name, "done"], ["research-2026.mp4", "cancelled"]], files)
+        check("the newest is selected with its text",
+              js("state.selected") == js("state.files[state.files.length - 1].id")
+              and js("$('text').querySelectorAll('p:not(.placeholder)').length") > 0)
+        js("document.querySelectorAll('#files li')[0].click()")
+        wait(lambda: js("$('text').querySelectorAll('p:not(.placeholder)').length") > 0, 10, "restored text")
+        chips = js("[...document.querySelectorAll('#saved-list .chip')].map(c => c.dataset.format)")
+        check("restored file offers its saved files", chips[:3] == ["txt", "timestamps", "srt"], chips)
+        shoot_again("09-next-session")
+    except Exception as error:
+        check("second session", False, repr(error))
+    finally:
+        window.destroy()
+
+
+shoot_again = lambda name: None  # noqa: E731 - set in main()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("long_audio", type=Path)
@@ -254,11 +279,16 @@ def main():
     elif os.environ.get("WAYLAND_DISPLAY") or os.environ.get("GDK_BACKEND") != "x11":
         # Under WSLg the window would show on the real screen: run under Xvfb instead.
         raise SystemExit("Run under Xvfb: unset WAYLAND_DISPLAY, set GDK_BACKEND=x11, use xvfb-run.")
-    with tempfile.TemporaryDirectory(prefix="gigaam-check-") as downloads:
+    global shoot_again
+    with tempfile.TemporaryDirectory(prefix="gigaam-check-") as downloads,             tempfile.TemporaryDirectory(prefix="gigaam-history-") as history:
+        os.environ["GIGAAM_HISTORY"] = history  # never the user's own list
         add_test_model(downloads)
+        shoot_again = screenshot_function(args.out)
         run = functools.partial(scenario, long_audio=args.long_audio.resolve(),
-                                short_audio=args.short_audio.resolve(), shoot=screenshot_function(args.out))
+                                short_audio=args.short_audio.resolve(), shoot=shoot_again)
         window_module.main([], scenario=run)
+        if confirmed_close:
+            window_module.main([], scenario=functools.partial(second_session, short_audio=args.short_audio.resolve()))
     if confirmed_close:
         control = confirmed_close[0]
         check("closing after the question stops the file", control.worker.cancel.is_set())

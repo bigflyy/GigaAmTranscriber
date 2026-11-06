@@ -246,6 +246,7 @@ def smoke_window(app, speech, shots):
                 shutil.copy2(speech, copy)
                 arguments = [str(copy)]
                 text = copy.with_name(copy.stem + "-transcript.txt")
+            env["GIGAAM_HISTORY"] = str(Path(temporary) / "history")  # not the user's own list
             log = open(Path(temporary) / "window.log", "w")
             started = time.perf_counter()
             window = subprocess.Popen([str(app / APP_NAME), *arguments], env=env, cwd=temporary,

@@ -23,6 +23,7 @@ import time
 
 from . import catalog, config
 from .engine import MODELS, Transcript
+from .history import Entry, new_key
 from .outputs import FORMATS, plain_text, timestamped_text, write_outputs
 from .paths import downloads_dir, ffmpeg_executable
 
@@ -137,6 +138,8 @@ class QueuedFile:
     error: str = ""
     elapsed: float = 0.0
     formats: list = field(default_factory=list)  # formats asked for when it started
+    saved_as: str = None         # its entry in the history, once remembered
+    saved_at: float = 0.0        # when it was first remembered (keeps its place in the list)
 
 
 class Controller:
@@ -144,7 +147,7 @@ class Controller:
     the event thread; one lock keeps them in order."""
 
     def __init__(self, worker, events, send, clock=time.perf_counter, probe=probe_duration,
-                 desktop=None, settings_path=None, initial_files=()):
+                 desktop=None, settings_path=None, initial_files=(), history=None):
         self.worker = worker
         self.events = events
         self.send = send
@@ -154,6 +157,7 @@ class Controller:
         self.show_in_folder = desktop.show_in_folder if desktop else show_in_folder
         self.settings_path = settings_path
         self.initial_files = list(initial_files)
+        self.history = history       # gigaam_app.history.History, or None to remember nothing
         self.lock = threading.RLock()
         self.seq = 0
         self.ready_called = False
@@ -174,10 +178,18 @@ class Controller:
         except (OSError, ValueError) as error:
             self.settings = config.Settings()
             self.startup_error = f"Файл настроек не прочитан, используются значения по умолчанию: {error}"
+        self._restore()
 
     def start(self):
-        threading.Thread(target=self._event_loop, name="gigaam-events", daemon=True).start()
+        self.event_thread = threading.Thread(target=self._event_loop, name="gigaam-events", daemon=True)
+        self.event_thread.start()
         threading.Thread(target=self._probe_loop, name="gigaam-probe", daemon=True).start()
+
+    def stop(self, timeout=10):
+        """After the worker has stopped: handle its last events (a cancelled file's result
+        is remembered for the next session), then end the event thread."""
+        self.events.put(None)
+        self.event_thread.join(timeout)
 
     # ------------------------------------------------------------------ messages
 
@@ -353,6 +365,7 @@ class Controller:
             if item is None or item.state == RUNNING:
                 return False
             self.files.remove(item)
+            self._forget(item)
             self._emit_files()
             return True
 
@@ -371,7 +384,8 @@ class Controller:
             item = self._find(file_id)
             if item is None or item.state not in (DONE, CANCELLED, FAILED):
                 return False
-            fresh = QueuedFile(id=item.id, path=item.path, duration=item.duration)
+            fresh = QueuedFile(id=item.id, path=item.path, duration=item.duration,
+                               saved_as=item.saved_as, saved_at=item.saved_at)
             self.files[self.files.index(item)] = fresh
             self.declined.discard(self.settings.model)
             self._emit("lines_reset", {"id": item.id})
@@ -423,6 +437,7 @@ class Controller:
             return False
         with self.lock:
             item.written[fmt] = written[0]
+            self._remember(item)
             self._emit_file(item)
         return True
 
@@ -532,6 +547,48 @@ class Controller:
     def close(self):
         """The window is closing: stop whatever runs; partial text of a running file is saved."""
         self.worker.cancel.set()
+
+    # ------------------------------------------------------------------ history
+
+    def _restore(self):
+        """Put the files remembered from earlier sessions at the top of the list."""
+        if self.history is None:
+            return
+        for entry in self.history.load():
+            self.files.append(QueuedFile(
+                id=str(next(self.ids)), path=entry.path, state=entry.state, duration=entry.duration,
+                progress=1.0 if entry.state == DONE else 0.0, segments=list(entry.transcript.segments),
+                speech_seconds=entry.speech_seconds, result=entry.transcript, written=dict(entry.written),
+                elapsed=entry.elapsed, formats=list(entry.written), saved_as=entry.key, saved_at=entry.saved_at))
+
+    def _remember(self, item):
+        """Save a finished file for the next sessions; a file that ended with nothing to show
+        (failed, or cancelled before any text) is not kept."""
+        if self.history is None:
+            return
+        keep = item.result is not None and (item.state == DONE or (item.state == CANCELLED and item.segments))
+        if not keep:
+            if item.state != FAILED:  # a failed retry keeps the earlier result on disk
+                self._forget(item)
+            return
+        entry = Entry(key=item.saved_as or new_key(), path=item.path, state=item.state, transcript=item.result,
+                      written=dict(item.written), duration=item.duration, elapsed=item.elapsed,
+                      speech_seconds=item.speech_seconds, saved_at=item.saved_at)
+        try:
+            self.history.save(entry)
+        except OSError as error:
+            self._error(f"Не удалось запомнить файл для следующего запуска: {error}")
+            return
+        item.saved_as, item.saved_at = entry.key, entry.saved_at
+
+    def _forget(self, item):
+        if self.history is not None and item.saved_as:
+            try:
+                self.history.delete(item.saved_as)
+            except OSError as error:
+                self._error(f"Не удалось убрать файл из сохранённого списка: {error}")
+                return
+            item.saved_as = None
 
     # ------------------------------------------------------------------ queue
 
@@ -667,6 +724,7 @@ class Controller:
         # write_outputs returns the paths in the order of the formats it was given.
         item.written = dict(zip(item.formats, written))
         self.running = None
+        self._remember(item)
         self._emit_file(item)
         self._pump()
 

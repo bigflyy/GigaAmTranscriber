@@ -90,7 +90,8 @@ function renderFiles() {
   if (state.selected && !fileById(state.selected)) state.selected = null;
   if (!state.selected && state.files.length) {
     const running = state.files.find((file) => file.state === 'running');
-    select((running || state.files[0]).id, false);
+    // Nothing chosen yet: the running file, else the newest (files from earlier sessions come first).
+    select((running || state.files[state.files.length - 1]).id, false);
   } else {
     renderMain();
   }

@@ -35,6 +35,15 @@ def downloads_dir() -> Path:
     return base / "gigaam-transcriber" / "models"
 
 
+def history_dir() -> Path:
+    """The window's list of transcribed files: GIGAAM_HISTORY if set, else a per-user folder
+    beside the downloaded models."""
+    override = os.environ.get("GIGAAM_HISTORY")
+    if override:
+        return Path(override)
+    return downloads_dir().parent / "history"
+
+
 def ffmpeg_executable() -> str:
     """Bundled ffmpeg.exe beside the app first, then whatever is on PATH."""
     for candidate in (app_dir() / "ffmpeg.exe", app_dir() / "bin" / "ffmpeg.exe"):
