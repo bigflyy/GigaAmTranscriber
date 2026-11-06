@@ -1,3 +1,3 @@
 """GigaAM Transcriber: Russian speech recognition on ONNX Runtime, without PyTorch."""
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
