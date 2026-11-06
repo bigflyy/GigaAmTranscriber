@@ -13,7 +13,8 @@ Steps:
    start the windowed EXE off screen (tools/gui_smoke_test.py);
 5. pack the release assets into build/release/:
        GigaAmTranscriber-v<version>-windows-x64.zip   the app folder
-       THIRD_PARTY_LICENSES.zip                      the licences folder alone
+       THIRD_PARTY_LICENSES.zip                      the licences folder alone, under windows/
+                                                     (build_linux.py adds linux/ to it)
        FFmpeg-<version>-source.zip                   source of the bundled FFmpeg (GPL)
        SHA256SUMS.txt
 """
@@ -297,7 +298,7 @@ def make_assets(app, release):
     release.mkdir(parents=True, exist_ok=True)
     zip_name = f"{APP_NAME}-v{__version__}-windows-x64.zip"
     zip_folder(app, release / zip_name, APP_NAME)
-    zip_folder(app / "licenses", release / "THIRD_PARTY_LICENSES.zip", "licenses")
+    zip_folder(app / "licenses", release / "THIRD_PARTY_LICENSES.zip", "windows")
     shutil.copy2(FFMPEG_SOURCE, release / FFMPEG_SOURCE.name)
     assets = [zip_name, "THIRD_PARTY_LICENSES.zip", FFMPEG_SOURCE.name]
     (release / "SHA256SUMS.txt").write_text("".join(f"{sha256(release / name)}  {name}\n" for name in assets),

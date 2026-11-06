@@ -20,7 +20,9 @@ Steps:
    README.txt and licences beside the programs;
 4. smoke test the CLI on a silent file (and on --speech FILE if given), and open the window
    under Xvfb (with --speech it must also write the transcript);
-5. pack <release>/GigaAmTranscriber-v<version>-linux-x64.tar.gz and add it to SHA256SUMS.txt.
+5. pack <release>/GigaAmTranscriber-v<version>-linux-x64.tar.gz and add it to SHA256SUMS.txt;
+   put the licences under linux/ in <release>/THIRD_PARTY_LICENSES.zip, beside the windows/
+   folder that a Windows build into the same release folder wrote (build Windows first).
 """
 
 import argparse
@@ -36,6 +38,7 @@ import sysconfig
 import tarfile
 import tempfile
 import time
+import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -298,6 +301,36 @@ def smoke_missing_webkit(app):
 # ------------------------------------------------------------------ release asset
 
 
+def update_sums(release, name):
+    """Put one asset's line into SHA256SUMS.txt, keeping the other assets' lines."""
+    sums = release / "SHA256SUMS.txt"
+    lines = [line for line in (sums.read_text(encoding="utf-8").splitlines() if sums.is_file() else [])
+             if not line.endswith("  " + name)]
+    lines.append(f"{sha256(release / name)}  {name}")
+    sums.write_text("".join(line + "\n" for line in lines), encoding="utf-8", newline="\n")
+
+
+def merge_licences(app, release):
+    """THIRD_PARTY_LICENSES.zip holds one folder per app: windows/ (from build_windows.py)
+    and linux/ (this build's licences). The linux/ folder is replaced, the rest is kept."""
+    name = "THIRD_PARTY_LICENSES.zip"
+    target = release / name
+    temporary = release / (name + ".tmp")
+    with zipfile.ZipFile(temporary, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as merged:
+        if target.is_file():
+            with zipfile.ZipFile(target) as old:
+                for info in old.infolist():
+                    if not info.filename.startswith("linux/"):
+                        merged.writestr(info, old.read(info))
+        folder = app / "licenses"
+        for path in sorted(folder.rglob("*")):
+            if path.is_file():
+                merged.write(path, f"linux/{path.relative_to(folder).as_posix()}")
+    os.replace(temporary, target)
+    update_sums(release, name)
+    print(f"  {name}: {target.stat().st_size / 1024:.0f} KiB", flush=True)
+
+
 def make_tarball(app, release):
     release.mkdir(parents=True, exist_ok=True)
     name = f"{APP_NAME}-v{__version__}-linux-x64.tar.gz"
@@ -318,11 +351,7 @@ def make_tarball(app, release):
     with tarfile.open(temporary, "w:gz", compresslevel=6) as archive:
         archive.add(app, arcname=APP_NAME, filter=normalise)
     os.replace(temporary, release / name)
-    sums = release / "SHA256SUMS.txt"
-    lines = [line for line in (sums.read_text(encoding="utf-8").splitlines() if sums.is_file() else [])
-             if not line.endswith("  " + name)]
-    lines.append(f"{sha256(release / name)}  {name}")
-    sums.write_text("".join(line + "\n" for line in lines), encoding="utf-8", newline="\n")
+    update_sums(release, name)
     size = (release / name).stat().st_size
     if size >= 2 * 1024 ** 3:
         fail(f"{name} is {size / 1024 ** 3:.2f} GiB; GitHub release assets must stay below 2 GiB")
@@ -361,7 +390,9 @@ def main():
     smoke_window(app, speech, args.shots)
     if not args.no_tar:
         print("Release asset:", flush=True)
-        make_tarball(app, (args.release or out / "release").expanduser().resolve())
+        release = (args.release or out / "release").expanduser().resolve()
+        make_tarball(app, release)
+        merge_licences(app, release)
     return 0
 
 
