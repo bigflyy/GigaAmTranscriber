@@ -15,7 +15,8 @@ Last updated 2026-11-06 (session 5). Current plan: [docs/plans/02-webview-window
 - **Owner decisions:** build it in HTML/CSS with pywebview; Linux too, using the system
   WebKitGTK (the app names the package if it is missing); Linux recognition on the CPU
   first, NVIDIA later; ONNX Runtime WebGPU (Vulkan) as a later experiment for a light
-  Linux GPU option.
+  Linux GPU option. Owner accepted the webview start time (dark frame about 1.2 s, content
+  about 1.75 s, against 0.85 s for Tk) on 2026-11-06; no PyInstaller splash.
 - Spike results (`experiments/webview_spike/`, pywebview 6.2.1): bridge both ways, pushed
   lines and theme detection work on Windows (WebView2 156) and WSL Ubuntu 24.04 (WebKitGTK 2.52).
   Frozen on Windows: +2 MB; window frame at 1.3-1.6 s, page at 2.5-2.7 s (Tk: 0.85 s).
