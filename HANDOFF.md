@@ -26,9 +26,8 @@ still holds B9, F and E. Owner's ideas: [docs/BACKLOG.md](docs/BACKLOG.md).
   "Сбросить настройки" button replaced "Сохранить как настройки по умолчанию"; the reset keeps the
   speech search values, which only the file sets. `GIGAAM_CONFIG` names another settings file
   (window_check.py uses a temporary one; 28 checks).
-- Windows build with all of this: `C:\MyProjects\GigaAmTranscriberuild
-extpp\GigaAmTranscriber\`
-  (the old `buildpp` was locked by the owner's running window and is partly deleted). The Linux
+- Windows build with all of this: `C:\MyProjects\GigaAmTranscriber\build\next\app\GigaAmTranscriber\`
+  (the old `build\app` was locked by the owner's running window and is partly deleted). The Linux
   tarball in build/release-linux predates the settings change; rebuild it for a release.
 - C2, how the frozen Linux app gets PyGObject and WebKitGTK (fits the plan's "system WebKitGTK",
   so not asked): GTK, WebKitGTK, libgirepository, typelibs and FFmpeg come from the system;
