@@ -24,6 +24,8 @@ from .paths import history_dir
 from .worker import Worker
 
 WEB_DIR = Path(__file__).resolve().parent / "web"
+# Window icon: WinForms (Windows) loads an .ico, GTK (Linux) a .png. tools/make_icon.py draws both.
+ICON = Path(__file__).resolve().parent / "icons" / ("gigaam.ico" if sys.platform == "win32" else "gigaam.png")
 TITLE = f"GigaAM - Расшифровка речи {__version__}"
 # Must match --bg of each theme in web/app.css: the frame shows it before the page paints.
 BACKGROUND = {"light": "#f6f7f9", "dark": "#16171b"}
@@ -298,9 +300,9 @@ def main(argv=None, scenario=None):
     sender.start()
     gui = "edgechromium" if sys.platform == "win32" else "gtk"
     if scenario:
-        webview.start(scenario, (window, controller), gui=gui, private_mode=True)
+        webview.start(scenario, (window, controller), gui=gui, private_mode=True, icon=str(ICON))
     else:
-        webview.start(gui=gui, private_mode=True)
+        webview.start(gui=gui, private_mode=True, icon=str(ICON))
     worker.stop()
     controller.stop()
     return 0

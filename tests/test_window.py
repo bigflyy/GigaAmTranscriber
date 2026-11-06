@@ -82,3 +82,19 @@ def test_page_calls_only_existing_api_methods():
     script = (window.WEB_DIR / "app.js").read_text(encoding="utf-8")
     called = set(re.findall(r"call\('(\w+)'", script))
     assert called and called <= {name for name in dir(window.Api) if not name.startswith("_")}
+
+
+def test_window_icon_files():
+    """The icon the window loads exists, and the .ico holds every size Windows asks for
+    (tools/make_icon.py writes them; the 16-32 px ones are hand-drawn)."""
+    import struct
+
+    assert window.ICON.is_file()
+    icons = window.ICON.parent
+    assert (icons / "gigaam.png").is_file() and (icons / "gigaam.svg").is_file()
+    data = (icons / "gigaam.ico").read_bytes()
+    reserved, kind, count = struct.unpack_from("<HHH", data, 0)
+    assert (reserved, kind) == (0, 1)
+    # Each directory entry starts with width and height bytes; 0 means 256.
+    sizes = sorted((data[6 + 16 * i] or 256) for i in range(count))
+    assert sizes == [16, 20, 24, 32, 40, 48, 64, 128, 256]

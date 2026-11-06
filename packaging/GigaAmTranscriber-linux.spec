@@ -109,7 +109,8 @@ def without_system_stack(binaries, names):
 SYSTEM_NAMES = system_stack_names()
 # pywebview picks its backend at run time, so the GTK one is named here.
 gui = analysis("gui_main.py",
-               datas=[(str(ROOT / "gigaam_app" / "web"), "gigaam_app/web")] + gi_files(),
+               datas=[(str(ROOT / "gigaam_app" / "web"), "gigaam_app/web"),
+                      (str(ROOT / "gigaam_app" / "icons" / "gigaam.png"), "gigaam_app/icons")] + gi_files(),
                hiddenimports=["webview.platforms.gtk"] + gi_stdlib_imports())
 cli = analysis("cli_main.py")
 gui.binaries = without_system_stack(gui.binaries, SYSTEM_NAMES)

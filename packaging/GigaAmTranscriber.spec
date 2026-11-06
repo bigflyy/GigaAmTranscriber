@@ -56,14 +56,16 @@ def version_info(name, description):
                                VarFileInfo([VarStruct("Translation", [0x0409, 1200])])])
 
 
-# The page files sit beside gigaam_app/window.py, where it looks for them.
-gui = analysis("gui_main.py", datas=[(str(ROOT / "gigaam_app" / "web"), "gigaam_app/web")])
+# The page files and the window icon sit beside gigaam_app/window.py, where it looks for them.
+ICON = str(ROOT / "gigaam_app" / "icons" / "gigaam.ico")
+gui = analysis("gui_main.py", datas=[(str(ROOT / "gigaam_app" / "web"), "gigaam_app/web"),
+                                     (ICON, "gigaam_app/icons")])
 cli = analysis("cli_main.py")
 
 gui_exe = EXE(PYZ(gui.pure), gui.scripts, [], exclude_binaries=True, name="GigaAmTranscriber",
-              console=False, upx=False, version=version_info("GigaAmTranscriber", "GigaAM Transcriber"))
+              console=False, upx=False, icon=ICON, version=version_info("GigaAmTranscriber", "GigaAM Transcriber"))
 cli_exe = EXE(PYZ(cli.pure), cli.scripts, [], exclude_binaries=True, name="gigaam-cli",
-              console=True, upx=False, version=version_info("gigaam-cli", "GigaAM Transcriber command line"))
+              console=True, upx=False, icon=ICON, version=version_info("gigaam-cli", "GigaAM Transcriber command line"))
 
 COLLECT(gui_exe, gui.binaries, gui.datas, cli_exe, cli.binaries, cli.datas,
         name="GigaAmTranscriber", upx=False)
