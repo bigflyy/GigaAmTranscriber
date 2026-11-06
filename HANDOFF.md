@@ -2,14 +2,14 @@
 
 Last updated 2026-11-06 (session 7). Current plan: [docs/plans/02-webview-window.md](docs/plans/02-webview-window.md)
 (new window; Stages A-C done, D is later); the rewrite plan [docs/plans/01-onnx-runtime-rewrite.md](docs/plans/01-onnx-runtime-rewrite.md)
-still holds B9, F and E. Owner's ideas: [docs/BACKLOG.md](docs/BACKLOG.md).
+still holds B9, F and E. Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
 
 ## Session 7 (2026-11-06): Linux build (C2), docs (C3), owner's requests (B9)
 
 - Owner tried the C1 build ("kinda worked"); auto-start on adding files is fine. Owner asked for
   (1) a question before closing while a file runs and (2) the transcribed files kept between
   sessions. Both done (plan 02 B9). Six commits pushed on the owner's OK; this session's commits
-  are not pushed yet. Ideas from the owner went to docs/BACKLOG.md.
+  are not pushed yet. Ideas from the owner went to docs/IDEAS.md.
 - Close question: `controller.ask_close()` sends `confirm_close` to the page and the closing event
   returns False; the page's "Закрыть" calls `Api.close_anyway()`. On close the window now calls
   `worker.stop()` (cancel, let the job end and write its partial text, drop waiting jobs) and

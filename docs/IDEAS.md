@@ -1,4 +1,4 @@
-# Ideas backlog
+# Ideas
 
 Owner's ideas for later. Ideas only: work that has started lives in docs/plans.
 Older future items already sit in plans: plan 01 (B9 int8 encoder for CPU, Stage F other
