@@ -419,3 +419,23 @@ def test_closing_during_a_download_asks(app, extra):
     app.set_settings({"model": "Extra"})
     app.download()
     assert "Идёт скачивание модели" in app.close_question()
+
+
+def test_worker_stop_ends_the_running_job_and_drops_waiting_ones():
+    """Closing the window waits for the worker: a cancelled job still ends normally."""
+    from gigaam_app.worker import Worker
+    events = queue.Queue()
+    worker = Worker(events)
+    started, ran = threading.Event(), []
+
+    def slow_job(*args):
+        started.set()
+        worker.cancel.wait(5)  # like the engine, it stops once cancel is set
+        ran.append("first")
+    worker._transcribe = slow_job
+    worker.start()
+    worker.jobs.put(("transcribe", "a"))
+    started.wait(5)
+    worker.jobs.put(("transcribe", "b"))
+    worker.stop(timeout=5)
+    assert not worker.is_alive() and ran == ["first"]

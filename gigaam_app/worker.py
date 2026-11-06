@@ -30,6 +30,8 @@ class Worker(threading.Thread):
     def run(self):
         while True:
             job = self.jobs.get()
+            if job is None:  # stop(): the window has closed
+                return
             try:
                 if job[0] == "load":
                     self._ensure(job[1])
@@ -39,6 +41,19 @@ class Worker(threading.Thread):
                     self._download(job[1])
             except Exception as error:  # every failure is shown in the window
                 self.events.put(("error", str(error) or type(error).__name__))
+
+    def stop(self, timeout=60):
+        """Cancel the running job and wait until it has ended: a cancelled file still
+        writes the text found so far. Leaving earlier would also end the process while
+        ONNX Runtime threads run, which aborts it on Linux."""
+        self.cancel.set()
+        while True:  # jobs not started yet are dropped
+            try:
+                self.jobs.get_nowait()
+            except queue.Empty:
+                break
+        self.jobs.put(None)
+        self.join(timeout)
 
     def _ensure(self, key):
         if self.engine is not None and self.engine_key == key:

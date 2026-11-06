@@ -295,6 +295,7 @@ def main(argv=None, scenario=None):
         webview.start(scenario, (window, controller), gui=gui, private_mode=True)
     else:
         webview.start(gui=gui, private_mode=True)
+    worker.stop()
     events.put(None)
     return 0
 

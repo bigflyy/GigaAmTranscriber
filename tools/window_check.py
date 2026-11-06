@@ -225,6 +225,8 @@ def scenario(window, control, long_audio, short_audio, shoot):
         shoot("08-end")
 
         # Closing while a file runs, then "Zakryt": the window closes and the file stops.
+        for written in Path(long_audio).parent.glob(Path(long_audio).stem + "-transcript*"):
+            written.unlink()  # from the cancelled run above; closing must write it again
         control.add_files([str(long_audio)])
         wait(lambda: control.running is not None and control.running.segments, 120, "long file again")
         window.destroy()
@@ -235,8 +237,9 @@ def scenario(window, control, long_audio, short_audio, shoot):
     except Exception as error:
         check("scenario", False, repr(error))
     finally:
-        control.close_question = lambda: None  # close without asking, whatever still runs
-        window.destroy()
+        if not confirmed_close:  # else the window is already closing
+            control.close_question = lambda: None  # close without asking, whatever still runs
+            window.destroy()
 
 
 def main():
@@ -258,8 +261,10 @@ def main():
         window_module.main([], scenario=run)
     if confirmed_close:
         control = confirmed_close[0]
-        check("closing after the question stops the file",
-              control.worker.cancel.is_set() and control.running is not None)
+        check("closing after the question stops the file", control.worker.cancel.is_set())
+        # The window waits for the worker, so the text found before closing is on disk.
+        check("text found before closing is saved",
+              args.long_audio.with_name(args.long_audio.stem + "-transcript.txt").is_file())
     failed = [name for name, ok in results if not ok]
     print(f"{len(results) - len(failed)} passed, {len(failed)} failed")
     return 1 if failed or not results else 0
