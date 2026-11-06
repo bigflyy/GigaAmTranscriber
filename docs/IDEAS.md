@@ -4,10 +4,6 @@ Owner's ideas for later. Ideas only: work that has started lives in docs/plans.
 Older future items already sit in plans: plan 01 (B9 int8 encoder for CPU, Stage F other
 models, Stage E speaker diarization) and plan 02 (D1-D3).
 
-## Export
-
-- 2026-11-06: "add export / save as markdown from the transcript", as a feature.
-
 ## Models
 
 - 2026-11-06: an optimized Whisper variant for inference that I can turn on in the app;
@@ -33,3 +29,5 @@ models, Stage E speaker diarization) and plan 02 (D1-D3).
   picked idea A (wave into lines, blue) from the mockups at
   https://claude.ai/artifact/W1UuSDLLfjZPy1rRvonVm5; commit 86f4f68. The Linux window icon is
   wired but first seen at the next Linux build.
+- 2026-11-06: "add export / save as markdown from the transcript", as a feature. Finished
+  2026-11-06: the md format (owner chose title, info line and timed sections); commit 824c975.

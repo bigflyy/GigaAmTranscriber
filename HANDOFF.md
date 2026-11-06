@@ -4,7 +4,7 @@ Last updated 2026-11-06 (session 9). Current plan: [docs/plans/02-webview-window
 (new window; Stages A-C done, D is later); the rewrite plan [docs/plans/01-onnx-runtime-rewrite.md](docs/plans/01-onnx-runtime-rewrite.md)
 still holds B9, F and E. Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
 
-## Session 9 (2026-11-06): app icon done; Markdown export and Whisper asked for
+## Session 9 (2026-11-06): app icon and Markdown export done; Whisper is next
 
 - Icon: mockups at https://claude.ai/artifact/W1UuSDLLfjZPy1rRvonVm5 (A-E); owner picked A
   (wave into lines), no color named, so blue (app accent). tools/make_icon.py (needs Pillow,
@@ -17,11 +17,28 @@ still holds B9, F and E. Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
   rmtree deleted build/next/app models/ and licenses/ before a locked DLL stopped it. Restored
   all 54 files from the v0.3.0 zip (model SHA-256 checked). build_windows.py now renames the old
   folder first and stops if it is in use. Never build into build/next without asking.
-- Dev venv (session 7's lost python.exe and files): this session's scratchpad `venv-app`,
-  `C:\Users\User\AppData\Local\Temp\claude\b3b5ded84d394c69\60fa1e2d-e6df-441d-a7b2-3be9dbccf2c9\scratchpad\venv-app`
-  (requirements-build.txt + Pillow). Tests: 336 passed, 1 skipped.
-- Owner's new ideas (IDEAS.md): Markdown export of the transcript; an optimized Whisper model
-  to switch on, "one of the most important tasks probably".
+- Dev venv: `C:\Users\User\.venvs\gigaam-app` (requirements-build.txt + Pillow), outside Temp
+  on purpose: venvs in the Temp scratchpads keep losing python.exe and pythonw.exe (and some
+  files) within hours, other .exe files stay; not Defender, cause unknown. Tests: 346 passed,
+  1 skipped; window_check 30/30 (with `PYTHONPATH=.` for launchers/cli_main.py from source).
+- Markdown format `md` done (824c975): owner chose "title + timed sections":
+  `# name.mp3`, `*date · M:SS · GigaAM v3 RNNT*`, then `## MM:SS` sections of about a minute
+  (a new one at the first segment 60 s after the section start, or at a 5 s pause after 15 s;
+  H:MM:SS in every heading for files of an hour or more). Settings checkbox, MD chip, CLI
+  `--formats md`. catalog.ModelInfo got `title` (model_title()). The 45 min phone call gives
+  48 sections and needed no escapes. window_check: MD chip check, plus two fixes (the second
+  session hard-coded research-2026.mp4; the cancelled-text step read the page too early).
+- Owner's order (2026-11-06): Markdown (done), then Whisper, then plan 03 Stage A. Whisper is
+  "one of the most important tasks probably" (IDEAS.md, Models). Next: write
+  docs/plans/04-whisper.md. It takes over plan 01 Stage F for Whisper (Parakeet and Qwen3-ASR
+  stay in Stage F) and feeds plan 03 C1. First step proposed to the owner: a short test of
+  large-v3-turbo through ONNX Runtime DirectML (the app's engine) and through whisper.cpp with
+  Vulkan (any GPU, quantized), on the 455 s lecture and the 45 min call: speed, accuracy
+  against GigaAM, download size. faster-whisper (CTranslate2) is out: NVIDIA only, about 1 GB
+  more DLLs. Then a catalog download with a switch in settings. Told the owner that on Russian
+  GigaAM is usually more accurate than Whisper; Whisper's gain is other languages and a second
+  reading.
+- Not pushed: commits since 6188dca (icon, build guard, md, window_check, notes).
 
 ## Session 8 (2026-11-06): release v0.3.0 prepared (plan 02 Stage E), plan 03 drafted
 
