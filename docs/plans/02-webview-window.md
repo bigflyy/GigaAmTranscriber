@@ -26,14 +26,16 @@ The sv-ttk attempt is kept as a patch outside the repo, not committed.
 - [x] **B7** Tests: the API logic with a fake worker; the page driven in a headless browser where it helps (tests/test_controller.py, tests/test_window.py; instead of a headless browser, tools/window_check.py drives the real window: 19 checks pass on Windows, dark and light, and in WSL Ubuntu under Xvfb)
 - [x] **B8** Remove the Tk window and its smoke test, or keep the smoke test working on the new window (Tk window removed; tools/gui_smoke_test.py runs the EXE off screen, since WebView2 does not run on a hidden desktop)
 
+- [x] **B9** Owner's requests after trying C1 (2026-11-06): ask before closing while a file or a download runs; keep the transcribed files in the list between sessions (gigaam_app/history.py: one JSON per file in the per-user folder, with word times; "Убрать из списка" forgets it, the saved files stay; window_check.py checks a second session, 26 checks)
+
 ### Stage C: Packaging and docs
 
 - [x] **C1** Windows build: pywebview and pythonnet in the build, their licences collected, smoke test on a hidden desktop, real transcription in the built EXE (smoke test off screen instead; program part 121 MiB; window after 1.8-2.0 s; lecture written after 10.5 s; release zip not made)
-- [ ] **C2** Linux build (WSL Ubuntu): PyInstaller onedir, CPU ONNX Runtime, FFmpeg choice (system or bundled), a tar.gz; run it in WSL
+- [x] **C2** Linux build (WSL Ubuntu): PyInstaller onedir, CPU ONNX Runtime, FFmpeg choice (system or bundled), a tar.gz; run it in WSL (tools/build_linux.py; system GTK, WebKitGTK and FFmpeg, PyGObject copied in; tar.gz 825 MiB; window under Xvfb in 0.7-1.3 s; lecture text identical to Windows; needs glibc 2.39+)
 - [ ] **C3** README, THIRD_PARTY_NOTICES, HANDOFF; release notes for the next version
 
 ### Stage D: Later
 
 - [ ] **D1** NVIDIA on Linux (onnxruntime-gpu with CUDA and cuDNN, like the Docker CUDA image)
 - [ ] **D2** Experiment: ONNX Runtime WebGPU provider (Vulkan, any GPU make) as a light GPU option on Linux; check it is packaged and gives the same text
-- [ ] **D3** Optional ideas from the mockups: audio playback from a text line, search in the text, recent files
+- [ ] **D3** Optional ideas from the mockups: audio playback from a text line, search in the text (recent files: done in B9)
