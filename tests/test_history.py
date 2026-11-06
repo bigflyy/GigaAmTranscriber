@@ -48,7 +48,7 @@ def test_damaged_entries_are_skipped(tmp_path):
 def make_controller(tmp_path, monkeypatch, history):
     monkeypatch.setattr(catalog, "installed_folder", lambda info: tmp_path if info.bundled else None)
     sent = []
-    control = Controller(FakeWorker(), queue.Queue(), send=sent.append, probe=lambda path: 61.0,
+    control = Controller(FakeWorker(), queue.Queue(), send=sent.append, probe=lambda path: 61.0, sound_check=lambda path: True,
                          desktop=FakeDesktop(), settings_path=tmp_path / "settings.json", history=history)
     control.sent = sent
     control.ready()

@@ -57,7 +57,8 @@ function toast(text) {
   node.textContent = text;
   node.hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { node.hidden = true; }, 2500);
+  // Long notes (several file names) stay longer: about 60 ms per character, 2.5 s at least.
+  toastTimer = setTimeout(() => { node.hidden = true; }, Math.max(2500, text.length * 60));
 }
 
 function showError(text, source) {

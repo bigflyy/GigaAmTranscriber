@@ -10,6 +10,7 @@ or threads loads it again before the next file. A model that is not bundled
 is downloaded first, after the user agrees.
 """
 
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 import itertools
 import os
@@ -85,15 +86,41 @@ def device_name(label):
 
 # ---------------------------------------------------------------------- desktop helpers
 
-def probe_duration(path):
-    """Length of a media file in seconds from ffmpeg's header dump, or None."""
+def ffmpeg_header(path):
+    """ffmpeg's header dump of a file (its stderr for "ffmpeg -i path"), or None when
+    ffmpeg cannot be run or does not answer in time."""
     try:
         flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
         result = subprocess.run([ffmpeg_executable(), "-hide_banner", "-nostdin", "-i", str(path)],
                                 capture_output=True, timeout=20, creationflags=flags)
     except (OSError, RuntimeError, subprocess.TimeoutExpired):
         return None
-    match = re.search(rb"Duration: (\d+):(\d\d):(\d\d(?:\.\d+)?)", result.stderr)
+    return result.stderr
+
+
+def has_sound(path):
+    """False when ffmpeg finds no sound stream in a file (a txt, a document, a photo, a
+    silent video). The answer comes from the streams, not the extension, so unusual
+    media types (.ts, .3gp, .m4v) are accepted. True when ffmpeg cannot be asked: the
+    file is let in and its job reports the problem."""
+    header = ffmpeg_header(path)
+    if header is None:
+        return True
+    return re.search(rb"Stream #\d+:\d+\S*: Audio:", header) is not None
+
+
+def refused_text(names):
+    """One notice for the files not added: at most three names, then how many more."""
+    shown = ", ".join(names[:3]) + (f" и ещё {len(names) - 3}" if len(names) > 3 else "")
+    return f"Не добавлено, в файле нет звука: {shown}"
+
+
+def probe_duration(path):
+    """Length of a media file in seconds from ffmpeg's header dump, or None."""
+    header = ffmpeg_header(path)
+    if header is None:
+        return None
+    match = re.search(rb"Duration: (\d+):(\d\d):(\d\d(?:\.\d+)?)", header)
     if not match:
         return None
     hours, minutes, seconds = match.groups()
@@ -147,12 +174,13 @@ class Controller:
     the event thread; one lock keeps them in order."""
 
     def __init__(self, worker, events, send, clock=time.perf_counter, probe=probe_duration,
-                 desktop=None, settings_path=None, initial_files=(), history=None):
+                 desktop=None, settings_path=None, initial_files=(), history=None, sound_check=has_sound):
         self.worker = worker
         self.events = events
         self.send = send
         self.clock = clock
         self.probe = probe
+        self.sound_check = sound_check   # path -> bool; files without sound are not added
         self.open_path = desktop.open_path if desktop else open_path
         self.show_in_folder = desktop.show_in_folder if desktop else show_in_folder
         self.settings_path = settings_path
@@ -329,21 +357,45 @@ class Controller:
             return snapshot
 
     def add_files(self, paths):
-        """Add files (or the media files directly inside dropped folders). Returns how many were added."""
+        """Add files (or the media files directly inside dropped folders). Files without
+        sound are not added; one notice names them. Returns how many were added."""
+        candidates = []      # (path, needs the sound check): folder contents pass by extension
+        missing = []
+        empty_folders = []
+        for raw in paths or []:
+            if not raw:
+                continue
+            path = Path(str(raw).strip().strip('"'))
+            if path.is_dir():
+                children = [child for child in sorted(path.iterdir())
+                            if child.is_file() and child.suffix.lower() in MEDIA_SUFFIXES]
+                candidates.extend((child, False) for child in children)
+                if not children:
+                    empty_folders.append(path.name)
+            elif path.is_file():
+                candidates.append((path, True))
+            else:
+                missing.append(path)
+        # The sound check runs ffmpeg once per file, outside the lock and several at a time,
+        # so a big drop does not hold up the window's other calls.
+        to_check = [path for path, check in candidates if check]
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            sound = dict(zip(to_check, pool.map(self.sound_check, to_check)))
+        refused = [path.name for path in to_check if not sound[path]]
+
+        # The page shows one toast at a time, so all the notes go into one notice.
+        notes = [f"Файл не найден: {path}" for path in missing]
+        if refused:
+            notes.append(refused_text(refused))
+        notes.extend(f"В папке нет аудио и видео: {name}" for name in empty_folders)
+
         added = 0
         with self.lock:
-            for raw in paths or []:
-                if not raw:
-                    continue
-                path = Path(str(raw).strip().strip('"'))
-                if path.is_dir():
-                    for child in sorted(path.iterdir()):
-                        if child.is_file() and child.suffix.lower() in MEDIA_SUFFIXES:
-                            added += self._add(child)
-                elif path.is_file():
+            for path, check in candidates:
+                if not check or sound[path]:
                     added += self._add(path)
-                else:
-                    self._notice(f"Файл не найден: {path}")
+            if notes:
+                self._notice(". ".join(notes))
             if added:
                 self.declined.discard(self.settings.model)
                 self._pump()

@@ -12,7 +12,9 @@ same as in v0.2.0.
 - Files in a list on the left (done, running, waiting); the selected file's
   progress and its text as it is recognised on the right. Several files can be
   added at once, by **+ Добавить** or by dragging files or a folder onto the window;
-  they start at once and run one at a time.
+  they start at once and run one at a time. Files without sound (a text file, a
+  document, a photo, a silent video) are not added; a short note names them.
+  Whether a file has sound is asked of FFmpeg, so unusual video types work too.
 - **The list is kept between sessions.** Finished files come back with their text
   when the window opens again; SRT or JSON can still be made from them later.
   **Убрать из списка** forgets a file but keeps its saved transcripts.

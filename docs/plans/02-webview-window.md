@@ -34,6 +34,14 @@ The sv-ttk attempt is kept as a patch outside the repo, not committed.
 - [x] **C2** Linux build (WSL Ubuntu): PyInstaller onedir, CPU ONNX Runtime, FFmpeg choice (system or bundled), a tar.gz; run it in WSL (tools/build_linux.py; system GTK, WebKitGTK and FFmpeg, PyGObject copied in; tar.gz 825 MiB; window under Xvfb in 0.7-1.3 s; lecture text identical to Windows; needs glibc 2.39+)
 - [x] **C3** README, THIRD_PARTY_NOTICES, HANDOFF; release notes for the next version (draft in docs/RELEASE_NOTES_NEXT.md; before a release: rebuild Windows, merge the Linux licences into THIRD_PARTY_LICENSES.zip, bump the version)
 
+### Stage E: Release v0.3.0 (owner's go, 2026-11-06)
+
+- [x] **E1** Owner tried the build ("they kinda work"): refuse files without sound (txt and others) with a note instead of adding them and failing; ffmpeg decides, not the extension (owner chose this) (controller.has_sound; window_check.py 29 checks on Windows and WSL; three waits there now wait for the page, not only the controller)
+- [ ] **E2** Bump the version to 0.3.0; move docs/RELEASE_NOTES_NEXT.md into RELEASE_NOTES.md
+- [ ] **E3** Rebuild Windows (release zip, smoke tests) and Linux (tar.gz, smoke tests in WSL)
+- [ ] **E4** THIRD_PARTY_LICENSES.zip with the Linux licences (pygobject, debian) merged in; SHA256SUMS
+- [ ] **E5** Ask the owner, then tag, push and publish the GitHub release
+
 ### Stage D: Later
 
 - [ ] **D1** NVIDIA on Linux (onnxruntime-gpu with CUDA and cuDNN, like the Docker CUDA image)

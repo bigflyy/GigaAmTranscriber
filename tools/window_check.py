@@ -127,6 +127,8 @@ def scenario(window, control, long_audio, short_audio, shoot):
         wait(lambda: js("typeof state !== 'undefined' && state.booted"), 30, "page ready")
         check("page booted", js("state.booted"))
         wait(lambda: control.engine["state"] == "ready", 60, "model loaded")
+        # The page gets each change a moment after the controller: wait for it before reading it.
+        wait(lambda: js("$('engine').className") == "engine ready", 10, "page shows the model")
         check("engine text", "RNNT" in js("$('engine-text').textContent"), js("$('engine-text').textContent"))
         shoot("01-empty")
 
@@ -138,6 +140,16 @@ def scenario(window, control, long_audio, short_audio, shoot):
         check("running status", js("$('file-status').textContent").startswith(("Распознаю", "Поиск")),
               js("$('file-status').textContent"))
         shoot("02-running")
+
+        # E1: a file without sound (a txt) is not added; a toast names it.
+        notes = Path(tempfile.mkdtemp(prefix="gigaam-check-")) / "notes.txt"
+        notes.write_text("просто текст", encoding="utf-8")
+        count = len(control.files)
+        control.add_files([str(notes)])
+        wait(lambda: not js("$('toast').hidden"), 10, "toast for the txt")
+        toast = js("$('toast').textContent")
+        check("a txt is refused with a note", len(control.files) == count and "notes.txt" in toast, toast)
+        shoot("02a-txt-refused")
 
         # Closing while a file runs asks first; "Ne zakryvat" keeps the window and the file.
         window.destroy()
@@ -154,6 +166,7 @@ def scenario(window, control, long_audio, short_audio, shoot):
         js("$('file-cancel').click()")
         wait(lambda: control.files[0].state == "cancelled", 60, "cancelled")
         wait(lambda: control.files[1].state == "done", 120, "short file done")
+        wait(lambda: js("document.querySelectorAll('#files li')[1].classList.contains('done')"), 10, "page shows done")
         js("document.querySelectorAll('#files li')[0].click()")
         status = js("$('file-status').textContent")
         check("cancelled status", status.startswith(("Отменено на", "Отменено до")), status)
@@ -179,6 +192,7 @@ def scenario(window, control, long_audio, short_audio, shoot):
         js("$('file-retry').click()")
         wait(lambda: control.files[1].state == "running", 10, "retry started")
         wait(lambda: control.files[1].state == "done", 120, "retry done")
+        wait(lambda: js("document.querySelectorAll('#files li')[1].classList.contains('done')"), 10, "page shows done")
         check("retry finished", control.files[1].state == "done")
         js("document.querySelectorAll('#files li')[0].querySelector('.remove').click()")
         wait(lambda: js("document.querySelectorAll('#files li').length") == 1, 10, "removed")
@@ -189,7 +203,8 @@ def scenario(window, control, long_audio, short_audio, shoot):
         check("settings view", not js("$('view-settings').hidden"))
         shoot("05-settings")
         js("document.querySelector('#devices input[value=CPU]').click()")
-        wait(lambda: "процессор" in control.engine["text"], 60, "CPU model")
+        # Wait for the page, not only the controller: its message can arrive a moment later.
+        wait(lambda: "процессор" in js("$('engine-text').textContent"), 60, "CPU model")
         check("device CPU", "процессор" in js("$('engine-text').textContent"), js("$('engine-text').textContent"))
         # Settings are saved at once; "Sbrosit" goes back to the defaults (device Auto).
         check("settings saved at once", '"device": "CPU"' in Path(os.environ["GIGAAM_CONFIG"]).read_text("utf-8"))
@@ -217,7 +232,7 @@ def scenario(window, control, long_audio, short_audio, shoot):
         wait(lambda: not js("$('download').open"), 60, "download finished")
         check("downloaded", catalog.installed_folder(catalog.BY_KEY["Test"]) is not None)
         # The test model is not a real model, so loading it must fail visibly.
-        wait(lambda: control.engine["state"] == "error", 30, "test model fails to load")
+        wait(lambda: js("$('engine').className") == "engine error", 30, "test model fails to load")
         check("load error shown", js("$('engine').className") == "engine error")
         wait(lambda: not js("$('banner').hidden"), 10, "error banner")
         banner = js("$('banner-text').textContent")

@@ -37,6 +37,11 @@ class FakeDesktop:
         self.shown.append(Path(path))
 
 
+def fake_sound_check(path):
+    """Stands in for ffmpeg: files named *.txt or *.jpg have no sound, the rest have."""
+    return Path(path).suffix.lower() not in (".txt", ".jpg")
+
+
 class Clock:
     def __init__(self):
         self.now = 100.0
@@ -63,7 +68,7 @@ def app(tmp_path, monkeypatch):
     worker = FakeWorker()
     desktop = FakeDesktop()
     clock = Clock()
-    control = Controller(worker, queue.Queue(), send=sent.append, clock=clock, probe=lambda path: 61.0,
+    control = Controller(worker, queue.Queue(), send=sent.append, clock=clock, probe=lambda path: 61.0, sound_check=fake_sound_check,
                          desktop=desktop, settings_path=tmp_path / "settings.json")
     control.sent, control.fake_worker, control.desktop, control.fake_clock = sent, worker, desktop, clock
     snapshot = control.ready()
@@ -122,7 +127,7 @@ def test_nothing_is_sent_before_the_page_is_ready(tmp_path, monkeypatch, media):
     monkeypatch.setattr(catalog, "installed_folder", lambda info: tmp_path)
     sent = []
     worker = FakeWorker()
-    control = Controller(worker, queue.Queue(), send=sent.append, probe=lambda path: None,
+    control = Controller(worker, queue.Queue(), send=sent.append, probe=lambda path: None, sound_check=fake_sound_check,
                          settings_path=tmp_path / "s.json", initial_files=[str(media[0])])
     control.handle(("loading", "RNNT"))
     assert sent == [] and worker.jobs.empty()
@@ -181,6 +186,41 @@ def test_a_dropped_folder_adds_its_media_files(app, media, tmp_path):
     (tmp_path / "notes.txt").write_text("x", encoding="utf-8")
     assert app.add_files([str(tmp_path)]) == 3
     assert [item.path.name for item in app.files] == ["a.mp3", "b.wav", "c.m4a"]
+
+
+def test_files_without_sound_are_refused_with_one_notice(app, media, tmp_path):
+    notes = tmp_path / "notes.txt"
+    notes.write_text("x", encoding="utf-8")
+    photo = tmp_path / "photo.jpg"
+    photo.write_bytes(b"x")
+    assert app.add_files([str(notes), str(media[0]), str(photo)]) == 1
+    assert [item.path.name for item in app.files] == ["a.mp3"]
+    assert last(app.sent, "notice")["text"] == "Не добавлено, в файле нет звука: notes.txt, photo.jpg"
+
+
+def test_the_notice_names_three_files_and_counts_the_rest():
+    assert controller_module.refused_text(["1.txt", "2.txt", "3.txt", "4.txt", "5.txt"]) == \
+        "Не добавлено, в файле нет звука: 1.txt, 2.txt, 3.txt и ещё 2"
+
+
+def test_a_folder_without_media_gets_a_notice(app, tmp_path):
+    folder = tmp_path / "docs"
+    folder.mkdir()
+    (folder / "notes.txt").write_text("x", encoding="utf-8")
+    assert app.add_files([str(folder)]) == 0
+    assert last(app.sent, "notice")["text"] == "В папке нет аудио и видео: docs"
+
+
+@pytest.mark.parametrize("header, expected", [
+    (b"  Stream #0:0[0x1](und): Video: h264\n  Stream #0:1[0x2](rus): Audio: aac (LC)\n", True),
+    (b"  Stream #0:0: Audio: mp3, 44100 Hz\n  Stream #0:1: Video: mjpeg (attached pic)\n", True),
+    (b"  Stream #0:0: Video: mjpeg (Baseline), yuvj420p\n", False),   # a photo or a silent video
+    (b"notes.txt: Invalid data found when processing input\n", False),  # not media at all
+    (None, True),                                                    # ffmpeg missing: let the job say so
+])
+def test_has_sound_reads_the_streams(monkeypatch, header, expected):
+    monkeypatch.setattr(controller_module, "ffmpeg_header", lambda path: header)
+    assert controller_module.has_sound("x") is expected
 
 
 def test_cancel_keeps_the_text_found_so_far(app, media):
@@ -451,3 +491,18 @@ def test_worker_stop_ends_the_running_job_and_drops_waiting_ones():
     worker.jobs.put(("transcribe", "b"))
     worker.stop(timeout=5)
     assert not worker.is_alive() and ran == ["first"]
+
+
+def test_has_sound_with_the_real_ffmpeg(tmp_path):
+    from gigaam_app.paths import ffmpeg_executable
+    import subprocess
+    try:
+        ffmpeg = ffmpeg_executable()
+    except RuntimeError:
+        pytest.skip("no ffmpeg")
+    notes = tmp_path / "notes.txt"
+    notes.write_text("просто текст", encoding="utf-8")
+    sound = tmp_path / "tone.oddext"     # an extension the app does not know: the streams decide
+    subprocess.run([ffmpeg, "-v", "error", "-f", "lavfi", "-i", "sine=d=1", "-f", "wav", str(sound)], check=True)
+    assert controller_module.has_sound(notes) is False
+    assert controller_module.has_sound(sound) is True
