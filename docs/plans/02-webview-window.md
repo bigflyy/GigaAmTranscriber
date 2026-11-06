@@ -32,7 +32,7 @@ The sv-ttk attempt is kept as a patch outside the repo, not committed.
 
 - [x] **C1** Windows build: pywebview and pythonnet in the build, their licences collected, smoke test on a hidden desktop, real transcription in the built EXE (smoke test off screen instead; program part 121 MiB; window after 1.8-2.0 s; lecture written after 10.5 s; release zip not made)
 - [x] **C2** Linux build (WSL Ubuntu): PyInstaller onedir, CPU ONNX Runtime, FFmpeg choice (system or bundled), a tar.gz; run it in WSL (tools/build_linux.py; system GTK, WebKitGTK and FFmpeg, PyGObject copied in; tar.gz 825 MiB; window under Xvfb in 0.7-1.3 s; lecture text identical to Windows; needs glibc 2.39+)
-- [ ] **C3** README, THIRD_PARTY_NOTICES, HANDOFF; release notes for the next version
+- [x] **C3** README, THIRD_PARTY_NOTICES, HANDOFF; release notes for the next version (draft in docs/RELEASE_NOTES_NEXT.md; before a release: rebuild Windows, merge the Linux licences into THIRD_PARTY_LICENSES.zip, bump the version)
 
 ### Stage D: Later
 

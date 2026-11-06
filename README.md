@@ -1,8 +1,8 @@
 # GigaAM Transcriber
 
 Offline transcription of Russian speech from audio and video files, with the
-[GigaAM v3](https://github.com/salute-developers/GigaAM) models. A Windows app
-(window and command line) and Linux Docker images.
+[GigaAM v3](https://github.com/salute-developers/GigaAM) models. An app for
+Windows and Linux (window and command line) and Linux Docker images.
 
 Since v0.2.0 the app runs on [ONNX Runtime](https://onnxruntime.ai/) instead of
 PyTorch: the download is a quarter of the old CUDA build, it starts in a few
@@ -15,6 +15,13 @@ and about 25 s on the CPU; see [BENCHMARK.md](BENCHMARK.md).
 - **Windows:** [`GigaAmTranscriber-v0.2.0-windows-x64.zip`](https://github.com/bigflyy/GigaAmTranscriber/releases/latest)
   (about 920 MB, 1.2 GB unpacked). Unzip it anywhere and run `GigaAmTranscriber.exe`.
   No Python, CUDA, FFmpeg or model download is needed; both models are inside.
+- **Linux (from the next release):** `GigaAmTranscriber-v<version>-linux-x64.tar.gz`
+  (about 830 MB, 1 GB unpacked). Unpack it and run `./GigaAmTranscriber/GigaAmTranscriber`.
+  Recognition runs on the CPU. The system must have glibc 2.39 or newer (Ubuntu 24.04,
+  Debian 13, Fedora 40 and later), FFmpeg and, for the window, WebKitGTK 4.1:
+  `sudo apt install ffmpeg gir1.2-webkit2-4.1` (Fedora:
+  `sudo dnf install ffmpeg-free webkit2gtk4.1 gobject-introspection`).
+  Without WebKitGTK the app says what to install; `gigaam-cli` works without it.
 - **Docker (Linux, command line):** CPU and NVIDIA CUDA images, see [DOCKER.md](DOCKER.md).
 
 ## Using the app
@@ -24,8 +31,15 @@ are transcribed one at a time, in the order added: the list on the left shows
 which are done, running and waiting, and the right side shows the selected
 file's progress and its text as it is recognised. **Отмена** stops the running
 file and keeps the finished part. The model loads in the background as soon as
-the window opens and stays loaded between files. Results are saved beside the
-source file:
+the window opens and stays loaded between files. Closing the window while a file
+runs asks first; the part recognised so far is saved.
+
+The list is kept between sessions: finished files come back with their text the
+next time the window opens, and missing formats can still be written from it.
+**Убрать из списка** forgets a file; its saved transcripts stay where they are. The
+list lives in `%LOCALAPPDATA%\GigaAmTranscriber\history` on Windows and
+`~/.local/share/gigaam-transcriber/history` on Linux (`GIGAAM_HISTORY` overrides it).
+Results are saved beside the source file:
 
 | Format | File | Contents |
 | --- | --- | --- |
@@ -43,7 +57,7 @@ beside the app. The window follows the system's light or dark theme.
 
 The window is a web page shown by Microsoft Edge WebView2, which Windows 10 and
 11 normally have; if it is missing, the app says so and links to Microsoft's
-installer.
+installer. On Linux it is shown by the system's WebKitGTK.
 
 The command line uses the same models and settings file:
 
@@ -151,6 +165,25 @@ window off screen ([tools/gui_smoke_test.py](tools/gui_smoke_test.py)),
 then writes the zip, `THIRD_PARTY_LICENSES.zip`, the FFmpeg source and
 `SHA256SUMS.txt` to `build/release/`.
 
+**Linux release.** Built and tested on Ubuntu 24.04 (WSL works) with the system
+Python 3.12, because the app carries the system's PyGObject, which fits only that
+Python. The build machine needs `python3-venv python3-gi gir1.2-webkit2-4.1 ffmpeg xvfb x11-utils`:
+
+```bash
+python3 -m venv ~/.venvs/gigaam-build      # without --system-site-packages
+~/.venvs/gigaam-build/bin/pip install -r requirements-build.txt
+~/.venvs/gigaam-build/bin/python tools/build_linux.py --out ~/gigaam-build --speech sample.m4a
+```
+
+[packaging/GigaAmTranscriber-linux.spec](packaging/GigaAmTranscriber-linux.spec)
+bundles Python, numpy, ONNX Runtime (CPU), pywebview and PyGObject; GTK,
+WebKitGTK, GObject introspection and FFmpeg come from the system. The script
+checks that every bundled library resolves, runs the command line on silence and
+on the `--speech` file, checks the missing-WebKitGTK message, opens the window on
+a private Xvfb display and lets it transcribe the file, then writes the tar.gz and
+`SHA256SUMS.txt`. When running from source on Linux, make the venv with
+`--system-site-packages` so it sees the system's `gi`.
+
 **Docker.** `docker build -t gigaam-transcriber:cpu .` exports the models in a
 build stage and produces an image without PyTorch; see [DOCKER.md](DOCKER.md).
 
@@ -160,8 +193,8 @@ build stage and produces an image without PyTorch; see [DOCKER.md](DOCKER.md).
 | --- | --- |
 | `gigaam_app/` | the app: audio, VAD, ASR, pipeline, outputs, settings, model catalog and downloads, CLI, window (`window.py`, `controller.py`, the page in `web/`) |
 | `launchers/` | PyInstaller entry points |
-| `packaging/` | PyInstaller spec, README for the app folder, licences not shipped by packages |
-| `tools/` | model export, Silero loop builder, download asset staging, Windows build, off-screen window tests (`gui_smoke_test.py` for the EXE, `window_check.py` for the page) |
+| `packaging/` | PyInstaller specs (Windows, Linux), READMEs for the app folders, licences not shipped by packages |
+| `tools/` | model export, Silero loop builder, download asset staging, Windows and Linux builds, off-screen window tests (`gui_smoke_test.py` for the EXE, `window_check.py` for the page) |
 | `tests/` | pytest suite |
 | `gigaam/` | upstream GigaAM PyTorch package (MIT), used only by the export tools |
 | `experiments/` | prototypes and profiling scripts behind the v0.2 design |
@@ -171,7 +204,8 @@ build stage and produces an image without PyTorch; see [DOCKER.md](DOCKER.md).
 
 MIT, like upstream GigaAM. Bundled components keep their licences; see
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The Windows app includes
-FFmpeg (GPLv3) as a separate program; its source is a release download.
+FFmpeg (GPLv3) as a separate program; its source is a release download. The Linux
+app uses the system's FFmpeg and does not include it.
 
 GigaAM itself, its papers and model documentation:
 [salute-developers/GigaAM](https://github.com/salute-developers/GigaAM).

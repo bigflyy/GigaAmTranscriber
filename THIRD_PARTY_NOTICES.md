@@ -2,8 +2,8 @@
 
 GigaAM Transcriber source is distributed under the repository's MIT license.
 Bundled components keep their own licenses. Their texts are in the `licenses`
-folder of the Windows app, in the `THIRD_PARTY_LICENSES.zip` release download,
-and at the sources below.
+folder of the Windows and Linux apps, in the `THIRD_PARTY_LICENSES.zip` release
+download, and at the sources below.
 
 - **GigaAM v3 models (RNNT, CTC):** [upstream repository](https://github.com/salute-developers/GigaAM), MIT.
   The app ships them converted to ONNX by `tools/export_models.py`; the weights are unchanged
@@ -18,9 +18,10 @@ and at the sources below.
   [Microsoft Software License Terms](https://www.nuget.org/packages/Microsoft.AI.DirectML/1.15.4/License)
   (`licenses/directml/LICENSE.txt`). Windows only.
 - **NumPy:** [numpy.org](https://numpy.org/), BSD-3-Clause, with the licenses of the libraries it bundles.
-- **Python:** [Python licensing](https://docs.python.org/3/license.html). Libraries that Python
-  loads (zlib, OpenSSL, libffi, xz, bzip2 and others) are listed with their licenses under
-  `licenses/conda`.
+- **Python:** [Python licensing](https://docs.python.org/3/license.html). Windows: libraries that
+  Python loads (zlib, OpenSSL, libffi, xz, bzip2 and others) are listed with their licenses under
+  `licenses/conda`. Linux: Ubuntu's Python 3.12; the system libraries that came with it
+  (libpython, OpenSSL) have their Debian copyright files under `licenses/debian`.
 - **pywebview 6.2.1:** [pywebview](https://github.com/r0x0r/pywebview), BSD-3-Clause; the window.
   Its dependencies: [pythonnet](https://github.com/pythonnet/pythonnet) (MIT) with
   [clr_loader](https://github.com/pythonnet/clr-loader) (MIT), [cffi](https://github.com/python-cffi/cffi)
@@ -28,6 +29,15 @@ and at the sources below.
   [bottle](https://bottlepy.org/) (MIT), [proxy_tools](https://github.com/jtushman/proxy_tools)
   (MIT, declared in its metadata; it ships no license file) and
   [typing_extensions](https://github.com/python/typing_extensions) (PSF-2.0).
+  pythonnet, clr_loader, cffi and pycparser are in the Windows app only.
+- **PyGObject 3.48.2 (Linux only):** [PyGObject](https://gitlab.gnome.org/GNOME/pygobject),
+  LGPL-2.1-or-later, the Python binding pywebview uses for GTK. The Linux app carries the
+  unmodified files of Ubuntu 24.04's `python3-gi` 3.48.2-1 as a separate folder
+  (`_internal/gi`), which can be replaced by another build of the same version; its copyright
+  file is in `licenses/pygobject`. Source:
+  [pygobject-3.48.2.tar.xz](https://download.gnome.org/sources/pygobject/3.48/pygobject-3.48.2.tar.xz)
+  and Ubuntu's source package `pygobject` 3.48.2-1. GTK 3, WebKitGTK 4.1 and GObject
+  introspection come from the user's system and are not included.
 - **Microsoft WebView2 SDK 1.0.3856.49:** `Microsoft.Web.WebView2.Core.dll`,
   `Microsoft.Web.WebView2.WinForms.dll` and `WebView2Loader.dll`, shipped inside pywebview,
   under Microsoft's BSD-style SDK license with its notices (`licenses/webview2-sdk`). The
@@ -41,6 +51,8 @@ and at the sources below.
   [exact FFmpeg source revision](https://github.com/FFmpeg/FFmpeg/commit/894da5ca7d).
   The release also supplies `FFmpeg-8.0.1-source.zip` with this source revision.
   The external libraries keep their own licenses.
+
+The Linux app does not include FFmpeg: it runs the system's `ffmpeg`.
 
 The Docker images contain Debian's `ffmpeg` package (with its copyright files in
 `/usr/share/doc`), Python, NumPy and ONNX Runtime (CPU image) or ONNX Runtime GPU

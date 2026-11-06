@@ -1,7 +1,61 @@
 # Handoff: state and findings
 
-Last updated 2026-11-06 (session 6). Current plan: [docs/plans/02-webview-window.md](docs/plans/02-webview-window.md)
-(new window); the rewrite plan [docs/plans/01-onnx-runtime-rewrite.md](docs/plans/01-onnx-runtime-rewrite.md) still holds B9, F and E.
+Last updated 2026-11-06 (session 7). Current plan: [docs/plans/02-webview-window.md](docs/plans/02-webview-window.md)
+(new window; Stages A-C done, D is later); the rewrite plan [docs/plans/01-onnx-runtime-rewrite.md](docs/plans/01-onnx-runtime-rewrite.md)
+still holds B9, F and E. Owner's ideas: [docs/BACKLOG.md](docs/BACKLOG.md).
+
+## Session 7 (2026-11-06): Linux build (C2), docs (C3), owner's requests (B9)
+
+- Owner tried the C1 build ("kinda worked"); auto-start on adding files is fine. Owner asked for
+  (1) a question before closing while a file runs and (2) the transcribed files kept between
+  sessions. Both done (plan 02 B9). Six commits pushed on the owner's OK; this session's commits
+  are not pushed yet. Ideas from the owner went to docs/BACKLOG.md.
+- Close question: `controller.ask_close()` sends `confirm_close` to the page and the closing event
+  returns False; the page's "Закрыть" calls `Api.close_anyway()`. On close the window now calls
+  `worker.stop()` (cancel, let the job end and write its partial text, drop waiting jobs) and
+  `controller.stop()` (handle the last events, so the cancelled file is remembered). Before this,
+  closing mid-file aborted the process on Linux ("terminate called without an active exception")
+  and the partial text was not sure to be written.
+- History: `gigaam_app/history.py`, one JSON per remembered file (whole transcript with word
+  times) in `paths.history_dir()` = `%LOCALAPPDATA%\GigaAmTranscriber\history` or
+  `~/.local/share/gigaam-transcriber/history`; `GIGAAM_HISTORY` overrides. Kept: done files and
+  cancelled files with text. Controller without `history=` remembers nothing (tests). Restored files
+  come first; the page selects the newest at start. Retry keeps the entry's place; a failed retry
+  keeps the old result on disk. Settings are still saved only by the button (asked the owner).
+- C2, how the frozen Linux app gets PyGObject and WebKitGTK (fits the plan's "system WebKitGTK",
+  so not asked): GTK, WebKitGTK, libgirepository, typelibs and FFmpeg come from the system;
+  PyGObject is copied in as plain files from Ubuntu's `python3-gi` 3.48.2 (`GIGAAM_GI_DIR`, gi is
+  excluded from analysis because PyInstaller's gi hooks would bundle WebKitGTK and set
+  GI_TYPELIB_PATH inside the app); libraries in the ldd closure of the system's WebKitGTK, GTK and
+  girepository (plus libstdc++, libgcc_s) are dropped from the bundle; `readline` is excluded
+  (GPL-3, unused). `paths.restore_child_environment()` (called by both launchers) gives started
+  processes the user's LD_LIBRARY_PATH back. Checked: WebKitNetworkProcess and WebKitWebProcess map
+  no app libraries, no library name is loaded twice in the window process.
+- Build: `tools/build_linux.py` with WSL venv `~/.venvs/gigaam-build` (system Python 3.12.3, no
+  system site packages, requirements-build.txt). Run through agg-queue, for example
+  `agg-queue.exe run --kind build --what "..." -- wsl.exe -d Ubuntu -- bash <script>` (Git Bash needs
+  `MSYS_NO_PATHCONV=1`). Wrapper scripts of this session: scratchpad `wsl/` (build.sh, verify.sh,
+  wcheck.sh, unpack.sh) under
+  `C:\Users\User\AppData\Local\Temp\claude\b3b5ded84d394c69\5297a77e-1f2f-44cc-b6de-976f4752fc6a\scratchpad`.
+  Output: `~/gigaam-build/app/GigaAmTranscriber` (973 MiB, program 115 MiB) and
+  `C:\MyProjects\GigaAmTranscriber\build\release-linux\GigaAmTranscriber-v0.2.0-linux-x64.tar.gz`
+  (825 MiB, version not bumped yet). Smoke tests pass: CLI 60 s file in 4-9 s, missing WebKitGTK
+  message (names only gir1.2-webkit2-4.1), window under a private Xvfb `:97` in 0.7-1.3 s and
+  transcribing. Unpacked tarball: permissions 0755 only for the two programs; 455 s lecture on the
+  CPU in 34 s, 1.5 GB RAM, text byte-identical to the Windows build.
+- Tests: 325 passed, 1 skipped on Windows (dev venv: this session's scratchpad `venv-app`); WSL
+  from source with `~/.venvs/gigaam-spike`. New `pytest.ini` (testpaths = tests: on Linux pytest
+  collected tools/gui_smoke_test.py). `tools/window_check.py`: 26 checks, both answers of the close
+  question, a second window session that must show the remembered files; passes on Windows and
+  in WSL under Xvfb; it uses a temporary history folder.
+- C3: README (Linux download and build, the list and its folder, close question), THIRD_PARTY_NOTICES
+  (PyGObject LGPL with source link, Debian copyrights, no FFmpeg on Linux), draft release notes in
+  `docs/RELEASE_NOTES_NEXT.md` (v0.3.0 proposed).
+- Open before a release: the Windows build is from C1 (no close question, no history): rebuild;
+  `THIRD_PARTY_LICENSES.zip` is built from the Windows licences only, so merge in the Linux ones
+  (pygobject, debian); bump the version. Not checked: a real Linux desktop (only WSL + Xvfb), and on
+  Linux by hand the file dialog, drop, copy and opening files. ONNX Runtime prints a "GPU device
+  discovery failed ... /sys/class/drm/card0" warning in WSL (no DRM device there); harmless.
 
 ## Session 6 (2026-11-06): the new window built, Stage B done
 
