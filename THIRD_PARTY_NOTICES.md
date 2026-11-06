@@ -3,7 +3,7 @@
 GigaAM Transcriber source is distributed under the repository's MIT license.
 Bundled components keep their own licenses. Their texts are in the `licenses`
 folder of the Windows and Linux apps, in the `THIRD_PARTY_LICENSES.zip` release
-download, and at the sources below.
+download (one folder per app, `windows/` and `linux/`), and at the sources below.
 
 - **GigaAM v3 models (RNNT, CTC):** [upstream repository](https://github.com/salute-developers/GigaAM), MIT.
   The app ships them converted to ONNX by `tools/export_models.py`; the weights are unchanged

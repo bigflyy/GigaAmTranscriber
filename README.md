@@ -181,7 +181,9 @@ WebKitGTK, GObject introspection and FFmpeg come from the system. The script
 checks that every bundled library resolves, runs the command line on silence and
 on the `--speech` file, checks the missing-WebKitGTK message, opens the window on
 a private Xvfb display and lets it transcribe the file, then writes the tar.gz and
-`SHA256SUMS.txt`. When running from source on Linux, make the venv with
+`SHA256SUMS.txt`. For a release, build Windows first and pass
+`--release /mnt/c/<repo>/build/release`: the Linux licences then go into the same
+`THIRD_PARTY_LICENSES.zip` (folders `windows/` and `linux/`) and its line in `SHA256SUMS.txt`. When running from source on Linux, make the venv with
 `--system-site-packages` so it sees the system's `gi`.
 
 **Docker.** `docker build -t gigaam-transcriber:cpu .` exports the models in a

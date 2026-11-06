@@ -51,6 +51,7 @@ NVIDIA GPUs on Linux: use the CUDA Docker image for now.
 
 - `GigaAmTranscriber-v0.3.0-windows-x64.zip` - Windows app.
 - `GigaAmTranscriber-v0.3.0-linux-x64.tar.gz` - Linux app.
-- `THIRD_PARTY_LICENSES.zip` - licences of the bundled components (also inside the app folders).
+- `THIRD_PARTY_LICENSES.zip` - licences of the bundled components, one folder per app
+  (`windows/`, `linux/`; also inside the app folders).
 - `FFmpeg-8.0.1-source.zip` - source of the FFmpeg build in the Windows app (GPLv3).
 - `SHA256SUMS.txt` - checksums of the files above.
