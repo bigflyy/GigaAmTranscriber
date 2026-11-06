@@ -4,14 +4,24 @@ Last updated 2026-11-06 (session 9). Current plan: [docs/plans/02-webview-window
 (new window; Stages A-C done, D is later); the rewrite plan [docs/plans/01-onnx-runtime-rewrite.md](docs/plans/01-onnx-runtime-rewrite.md)
 still holds B9, F and E. Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
 
-## Session 9 (2026-11-06): app icon mockups
+## Session 9 (2026-11-06): app icon done; Markdown export and Whisper asked for
 
-- Owner chose the icon mockups before plan 03 Stage A. The app has no icon of its own (the
-  .spec sets no `icon=`, the window none). Mockups: https://claude.ai/artifact/W1UuSDLLfjZPy1rRvonVm5
-  (A wave into lines, B speech bubble, C page with sound, D wave and cursor, E quoted speech;
-  colors blue, teal, violet, coral, graphite). Source: session 9 scratchpad icon-mockups.html.
-  Waiting for the owner's letter and color; then hand-tune 16/24 px, make .ico and .png, wire
-  them into both .spec files, the pywebview window and the Linux package.
+- Icon: mockups at https://claude.ai/artifact/W1UuSDLLfjZPy1rRvonVm5 (A-E); owner picked A
+  (wave into lines), no color named, so blue (app accent). tools/make_icon.py (needs Pillow,
+  not an app dependency) writes gigaam_app/icons/gigaam.ico (16-256; 16, 20, 24, 32 px drawn on
+  the pixel grid), .png (GTK window) and .svg. Both specs set it; window.py passes
+  `icon=` to webview.start (WinForms loads the .ico, otherwise it takes sys.executable's icon).
+  Checked: the off-screen dev window carries it (WM_GETICON small and big), both built EXEs
+  carry it at 16-256 (PrivateExtractIcons), build smoke tests pass. Linux: wired, not built yet.
+- Incident: a build with `--out build/next` ran while the owner had the app open from there;
+  rmtree deleted build/next/app models/ and licenses/ before a locked DLL stopped it. Restored
+  all 54 files from the v0.3.0 zip (model SHA-256 checked). build_windows.py now renames the old
+  folder first and stops if it is in use. Never build into build/next without asking.
+- Dev venv (session 7's lost python.exe and files): this session's scratchpad `venv-app`,
+  `C:\Users\User\AppData\Local\Temp\claude\b3b5ded84d394c69\60fa1e2d-e6df-441d-a7b2-3be9dbccf2c9\scratchpad\venv-app`
+  (requirements-build.txt + Pillow). Tests: 336 passed, 1 skipped.
+- Owner's new ideas (IDEAS.md): Markdown export of the transcript; an optimized Whisper model
+  to switch on, "one of the most important tasks probably".
 
 ## Session 8 (2026-11-06): release v0.3.0 prepared (plan 02 Stage E), plan 03 drafted
 
