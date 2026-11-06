@@ -1,6 +1,6 @@
 # PyInstaller spec: one onedir folder with two launchers that share one _internal folder.
 #
-#   GigaAmTranscriber.exe  windowed Tk app
+#   GigaAmTranscriber.exe  windowed app: the page in gigaam_app/web shown by pywebview (Edge WebView2)
 #   gigaam-cli.exe         console app
 #
 # Build with tools/build_windows.py, which also copies the models, ffmpeg.exe and
@@ -29,12 +29,19 @@ EXCLUDES = [
 ]
 
 
-def analysis(script, needs_tk):
-    excludes = list(EXCLUDES)
-    if not needs_tk:
-        excludes += ["tkinter", "_tkinter"]
-    return Analysis([str(ROOT / "launchers" / script)], pathex=[str(ROOT)], excludes=excludes,
-                    noarchive=False, optimize=1)
+# pywebview backends other than WebView2 (WinForms) never run on Windows.
+WEBVIEW_OTHER = ["webview.platforms.gtk", "webview.platforms.qt", "webview.platforms.cocoa",
+                 "webview.platforms.android", "webview.platforms.cef", "gi", "qtpy", "PyQt5", "PyQt6",
+                 "PySide2", "PySide6", "cefpython3",
+                 # cffi's compiler side (pythonnet's clr_loader only calls cffi at run time);
+                 # it imports distutils, which PyInstaller cannot alias once excluded.
+                 "cffi.recompiler", "cffi.setuptools_ext", "cffi.vengine_cpy", "cffi.vengine_gen",
+                 "cffi.verifier", "cffi._shimmed_dist_utils", "cffi.ffiplatform"]
+
+
+def analysis(script, datas=()):
+    return Analysis([str(ROOT / "launchers" / script)], pathex=[str(ROOT)], datas=list(datas),
+                    excludes=EXCLUDES + ["tkinter", "_tkinter"] + WEBVIEW_OTHER, noarchive=False, optimize=1)
 
 
 def version_info(name, description):
@@ -49,8 +56,9 @@ def version_info(name, description):
                                VarFileInfo([VarStruct("Translation", [0x0409, 1200])])])
 
 
-gui = analysis("gui_main.py", needs_tk=True)
-cli = analysis("cli_main.py", needs_tk=False)
+# The page files sit beside gigaam_app/window.py, where it looks for them.
+gui = analysis("gui_main.py", datas=[(str(ROOT / "gigaam_app" / "web"), "gigaam_app/web")])
+cli = analysis("cli_main.py")
 
 gui_exe = EXE(PYZ(gui.pure), gui.scripts, [], exclude_binaries=True, name="GigaAmTranscriber",
               console=False, upx=False, version=version_info("GigaAmTranscriber", "GigaAM Transcriber"))

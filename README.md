@@ -19,10 +19,13 @@ and about 25 s on the CPU; see [BENCHMARK.md](BENCHMARK.md).
 
 ## Using the app
 
-Choose a file and press **Распознать**. The model loads in the background as
-soon as the window opens and stays loaded between files. Text appears while the
-file is processed; **Отмена** stops and keeps the finished part. Results are
-saved beside the source file:
+Add files with **+ Добавить** or drag them (or a folder) onto the window. They
+are transcribed one at a time, in the order added: the list on the left shows
+which are done, running and waiting, and the right side shows the selected
+file's progress and its text as it is recognised. **Отмена** stops the running
+file and keeps the finished part. The model loads in the background as soon as
+the window opens and stays loaded between files. Results are saved beside the
+source file:
 
 | Format | File | Contents |
 | --- | --- | --- |
@@ -31,10 +34,16 @@ saved beside the source file:
 | `srt` | `name-transcript.srt` | subtitles, short cues built from word times |
 | `json` | `name-transcript.json` | segments and every word with its start and end time |
 
-TXT and timestamped TXT are on by default; **Настройки** chooses the formats,
-the model (RNNT by default, or CTC), the device
-(Авто, GPU, CPU) and CPU threads. **Сохранить как настройки по умолчанию** writes
-them to `gigaam-config.json` beside the app.
+TXT and timestamped TXT are on by default; a finished file also offers the
+other formats, made from the text already recognised. **Настройки** (bottom left)
+chooses the formats, the model (RNNT by default, or CTC), the device (Авто,
+Видеокарта, Процессор) and CPU threads; changes count from the next file.
+**Сохранить как настройки по умолчанию** writes them to `gigaam-config.json`
+beside the app. The window follows the system's light or dark theme.
+
+The window is a web page shown by Microsoft Edge WebView2, which Windows 10 and
+11 normally have; if it is missing, the app says so and links to Microsoft's
+installer.
 
 The command line uses the same models and settings file:
 
@@ -138,7 +147,7 @@ It verifies the models, builds both EXEs into one folder with
 [packaging/GigaAmTranscriber.spec](packaging/GigaAmTranscriber.spec), copies the
 models, `ffmpeg.exe` (Gyan's 8.0.1 full build, matching the source archive in
 `third_party/ffmpeg/`) and the licences, runs the console EXE and starts the
-window on a hidden desktop ([tools/gui_smoke_test.py](tools/gui_smoke_test.py)),
+window off screen ([tools/gui_smoke_test.py](tools/gui_smoke_test.py)),
 then writes the zip, `THIRD_PARTY_LICENSES.zip`, the FFmpeg source and
 `SHA256SUMS.txt` to `build/release/`.
 
@@ -149,10 +158,10 @@ build stage and produces an image without PyTorch; see [DOCKER.md](DOCKER.md).
 
 | Path | Contents |
 | --- | --- |
-| `gigaam_app/` | the app: audio, VAD, ASR, pipeline, outputs, settings, model catalog and downloads, CLI, GUI |
+| `gigaam_app/` | the app: audio, VAD, ASR, pipeline, outputs, settings, model catalog and downloads, CLI, window (`window.py`, `controller.py`, the page in `web/`) |
 | `launchers/` | PyInstaller entry points |
 | `packaging/` | PyInstaller spec, README for the app folder, licences not shipped by packages |
-| `tools/` | model export, Silero loop builder, download asset staging, Windows build, hidden GUI test |
+| `tools/` | model export, Silero loop builder, download asset staging, Windows build, off-screen window tests (`gui_smoke_test.py` for the EXE, `window_check.py` for the page) |
 | `tests/` | pytest suite |
 | `gigaam/` | upstream GigaAM PyTorch package (MIT), used only by the export tools |
 | `experiments/` | prototypes and profiling scripts behind the v0.2 design |

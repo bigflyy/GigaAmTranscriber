@@ -24,11 +24,11 @@ The sv-ttk attempt is kept as a patch outside the repo, not committed.
 - [x] **B5** Settings view: model, device, CPU threads, formats, save as default; model download prompt with progress
 - [x] **B6** Status: model and device, errors, first-run model load; before opening the window, check for WebView2 (Windows) or WebKitGTK (Linux) and otherwise show a native message with the install link or package name; window background set to the theme colour so the frame is not white while the page loads (message checked with GIGAAM_PRETEND_NO_WEBVIEW=1: MessageBox on a hidden desktop, stderr and xmessage under Xvfb)
 - [x] **B7** Tests: the API logic with a fake worker; the page driven in a headless browser where it helps (tests/test_controller.py, tests/test_window.py; instead of a headless browser, tools/window_check.py drives the real window: 19 checks pass on Windows, dark and light, and in WSL Ubuntu under Xvfb)
-- [ ] **B8** Remove the Tk window and its smoke test, or keep the smoke test working on the new window
+- [x] **B8** Remove the Tk window and its smoke test, or keep the smoke test working on the new window (Tk window removed; tools/gui_smoke_test.py runs the EXE off screen, since WebView2 does not run on a hidden desktop)
 
 ### Stage C: Packaging and docs
 
-- [ ] **C1** Windows build: pywebview and pythonnet in the build, their licences collected, smoke test on a hidden desktop, real transcription in the built EXE
+- [x] **C1** Windows build: pywebview and pythonnet in the build, their licences collected, smoke test on a hidden desktop, real transcription in the built EXE (smoke test off screen instead; program part 121 MiB; window after 1.8-2.0 s; lecture written after 10.5 s; release zip not made)
 - [ ] **C2** Linux build (WSL Ubuntu): PyInstaller onedir, CPU ONNX Runtime, FFmpeg choice (system or bundled), a tar.gz; run it in WSL
 - [ ] **C3** README, THIRD_PARTY_NOTICES, HANDOFF; release notes for the next version
 

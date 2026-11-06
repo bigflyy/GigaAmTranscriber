@@ -1,7 +1,49 @@
 # Handoff: state and findings
 
-Last updated 2026-11-06 (session 5). Current plan: [docs/plans/02-webview-window.md](docs/plans/02-webview-window.md)
+Last updated 2026-11-06 (session 6). Current plan: [docs/plans/02-webview-window.md](docs/plans/02-webview-window.md)
 (new window); the rewrite plan [docs/plans/01-onnx-runtime-rewrite.md](docs/plans/01-onnx-runtime-rewrite.md) still holds B9, F and E.
+
+## Session 6 (2026-11-06): the new window built, Stage B done
+
+- Code: `gigaam_app/web/` (index.html, app.css, app.js; inlined by window.py, no server, no CDN),
+  `gigaam_app/controller.py` (queue, settings, status texts; no GUI toolkit), `gigaam_app/window.py`
+  (theme, WebView2/WebKitGTK check, `Api` bridge, `Sender`, `main`), `gigaam_app/worker.py` (the
+  old Tk `Worker`, moved; now emits `loading` / `load_failed`). `gigaam_app/gui.py` (Tk) is deleted;
+  `python -m gigaam_app` and `launchers/gui_main.py` open the new window.
+- Behaviour choices made without asking (owner may change them): files start as soon as they are
+  added (no "Распознать" button; the mockup had none); settings apply at once, to the next file;
+  closing the window while a file runs cancels it (no confirm); a dropped folder adds the media
+  files directly inside it; saved-file chips also offer to create a missing format from the text.
+- **pywebview bug on GTK:** `evaluate_js` passes the script length in characters where WebKit
+  wants bytes, so any script with Cyrillic is cut short ("Unexpected end of script"). The sender
+  uses `json.dumps(ensure_ascii=True)`; scripts in tools stay ASCII.
+- The model load holds the GIL for about 2 s; the worker sleeps 0.1 s after `loading` so the page
+  can show it first. Bridge calls wait during the load.
+- Tests: `tests/test_controller.py` (fake worker), `tests/test_window.py`; 313 passed, 1 skipped.
+  `tools/window_check.py LONG SHORT --out DIR` drives the real window (19 checks: queue, cancel
+  midway, timecodes, create SRT, retry, remove, device change, download dialog against a local
+  test model, load error banner): passes on Windows in both themes and in WSL Ubuntu under Xvfb
+  (WSL venv `~/.venvs/gigaam-spike` now has requirements.txt installed). Not testable without a
+  real mouse: the file dialog, drop, copy to clipboard, opening files and the folder.
+- Missing engine: `GIGAAM_PRETEND_NO_WEBVIEW=1` shows the message (MessageBox checked on a hidden
+  desktop; on Linux stderr plus zenity/kdialog/xmessage). `GIGAAM_THEME=light|dark` forces a theme.
+- `tools/gui_smoke_test.py` now runs the EXE off screen (`GIGAAM_WINDOW_OFFSCREEN=1`) on the
+  normal desktop, because WebView2 does not run on a hidden desktop.
+- C1 build (`python tools/build_windows.py --no-zip`, through agg-queue): spec drops Tk, adds
+  `gigaam_app/web` as data, excludes other pywebview backends and cffi's compiler modules (they
+  import distutils, which broke the analysis). Licences added: pywebview, pythonnet, clr_loader,
+  cffi, pycparser, bottle, typing_extensions from their metadata; `packaging/licenses/`
+  WebView2-SDK-LICENSE/NOTICE (from the 1.0.3856.49 NuGet package) and proxy_tools-LICENSE (MIT
+  text; the package has no licence file). Results: program 121 MiB, folder 1180 MiB; CLI smoke
+  CPU and DirectML pass; GUI window after 1.8-2.0 s; the 455 s lecture written after 10.5 s
+  (`build/app/GigaAmTranscriber/`). No release zip was made.
+- Next: C2 (Linux build). Open question there: a frozen app cannot import the system's PyGObject
+  (gi is ABI-tied to the system Python); options are PyInstaller's gi hooks (bundle GTK/WebKit,
+  large) or building with the system Python 3.12 and adding the system dist-packages path
+  (works only on matching distros). Linux FFmpeg: planned to use the system package (the app
+  already finds ffmpeg on PATH). Then C3 (README parts done this session; Linux and release notes left).
+- Sample audio copies for checks: scratchpad of this session, `audio/` (research-2026.mp4 and a
+  60 s cut). Screenshots: its `shots/` folder.
 
 ## Session 5 (2026-11-06): new window on pywebview, Stage A done
 

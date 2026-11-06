@@ -167,15 +167,6 @@ def distribution_licences(name):
     return found
 
 
-def find_tk_licence():
-    base = Path(sys.base_prefix)
-    for candidate in (base / "tcl" / "tk8.6" / "license.terms", base / "Library" / "lib" / "tk8.6" / "license.terms",
-                      base / "tcl" / "tcl8.6" / "license.terms"):
-        if candidate.is_file():
-            return candidate
-    fail("Tcl/Tk license.terms not found in the base Python")
-
-
 def find_python_licence():
     base = Path(sys.base_prefix)
     for candidate in (base / "LICENSE.txt", base / "LICENSE_PYTHON.txt"):
@@ -200,11 +191,20 @@ def collect_licences(app, ffmpeg_notices):
     ort_dir = Path(onnxruntime.__file__).parent
     for name in ("LICENSE", "ThirdPartyNotices.txt", "Privacy.md"):
         put(ort_dir / name, f"onnxruntime/{name}")
-    for package, folder in (("numpy", "numpy"), ("pyinstaller", "pyinstaller")):
-        for source, relative in distribution_licences(package):
-            put(source, Path(folder) / relative)
+    # numpy, PyInstaller's bootloader, and the window: pywebview with pythonnet (.NET bridge)
+    # and their own dependencies.
+    for package in ("numpy", "pyinstaller", "pywebview", "pythonnet", "clr_loader", "cffi", "pycparser",
+                    "bottle", "typing_extensions"):
+        found = distribution_licences(package)
+        if not found:
+            fail(f"no licence file found in the metadata of {package}")
+        for source, relative in found:
+            put(source, Path(package) / relative)
+    put(REPO_LICENCES / "proxy_tools-LICENSE.txt", "proxy_tools/LICENSE.txt")
+    # Microsoft.Web.WebView2.Core/WinForms.dll and WebView2Loader.dll come with pywebview.
+    put(REPO_LICENCES / "WebView2-SDK-LICENSE.txt", "webview2-sdk/LICENSE.txt")
+    put(REPO_LICENCES / "WebView2-SDK-NOTICE.txt", "webview2-sdk/NOTICE.txt")
     put(find_python_licence(), "python/LICENSE.txt")
-    put(find_tk_licence(), "tcl-tk/license.terms")
     put(ffmpeg_notices / "LICENSE", "ffmpeg/LICENSE.txt")
     put(ffmpeg_notices / "README.txt", "ffmpeg/README.txt")
     conda_licences(app, target)
@@ -270,7 +270,7 @@ def smoke_test(app):
                 fail(f"smoke test on {device} failed:\n{run.stdout}\n{run.stderr}")
             print(f"smoke test {device}: {run.stdout.splitlines()[0]} ({time.perf_counter() - started:.1f} s)",
                   flush=True)
-    # The windowed EXE: start it on a hidden desktop, let the model load, close it.
+    # The windowed EXE: start it off screen, let the model load, close it.
     import gui_smoke_test  # tools/gui_smoke_test.py, beside this script
     timings = gui_smoke_test.run(app, log=lambda message: None)
     print(f"smoke test GUI: window after {timings['window_seconds']:.1f} s, closed cleanly", flush=True)

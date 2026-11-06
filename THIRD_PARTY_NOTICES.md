@@ -18,10 +18,20 @@ and at the sources below.
   [Microsoft Software License Terms](https://www.nuget.org/packages/Microsoft.AI.DirectML/1.15.4/License)
   (`licenses/directml/LICENSE.txt`). Windows only.
 - **NumPy:** [numpy.org](https://numpy.org/), BSD-3-Clause, with the licenses of the libraries it bundles.
-- **Python and Tcl/Tk:** [Python licensing](https://docs.python.org/3/license.html),
-  [Tcl/Tk licensing](https://www.tcl.tk/software/tcltk/license.html). Libraries that Python
+- **Python:** [Python licensing](https://docs.python.org/3/license.html). Libraries that Python
   loads (zlib, OpenSSL, libffi, xz, bzip2 and others) are listed with their licenses under
   `licenses/conda`.
+- **pywebview 6.2.1:** [pywebview](https://github.com/r0x0r/pywebview), BSD-3-Clause; the window.
+  Its dependencies: [pythonnet](https://github.com/pythonnet/pythonnet) (MIT) with
+  [clr_loader](https://github.com/pythonnet/clr-loader) (MIT), [cffi](https://github.com/python-cffi/cffi)
+  (MIT-0), [pycparser](https://github.com/eliben/pycparser) (BSD-3-Clause),
+  [bottle](https://bottlepy.org/) (MIT), [proxy_tools](https://github.com/jtushman/proxy_tools)
+  (MIT, declared in its metadata; it ships no license file) and
+  [typing_extensions](https://github.com/python/typing_extensions) (PSF-2.0).
+- **Microsoft WebView2 SDK 1.0.3856.49:** `Microsoft.Web.WebView2.Core.dll`,
+  `Microsoft.Web.WebView2.WinForms.dll` and `WebView2Loader.dll`, shipped inside pywebview,
+  under Microsoft's BSD-style SDK license with its notices (`licenses/webview2-sdk`). The
+  WebView2 Runtime itself is part of Windows and is not bundled. Windows only.
 - **PyInstaller bootloader:** [PyInstaller](https://pyinstaller.org/), GPL 2.0 with the
   bootloader exception, which allows distributing the EXEs under any license.
 - **FFmpeg:** unmodified `8.0.1-full_build-www.gyan.dev`, a separate executable
