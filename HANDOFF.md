@@ -64,8 +64,8 @@ holds B9, F (Parakeet, Qwen3-ASR) and E. Owner's ideas: [docs/IDEAS.md](docs/IDE
 - Owner tried it from source (dev venv, `-m gigaam_app`): "it does work"; asked how it works and why
   readings differ (answered: another cut of the audio, CTC another decoder, Whisper another model).
   Owner: "i cant click away from the selected part. i kinda want to?" Read as the fix dialog: a click
-  on its backdrop now closes it unless the text field was edited (window_check 49/49). Asked the
-  owner to confirm that reading; not answered yet. Not built into a frozen app (no release asked).
+  on its backdrop now closes it unless the text field was edited (window_check 49/49). Owner
+  confirmed: "i highlight text. and i couldnt click away. i needed to press esc. now it works i guess." Not built into a frozen app (no release asked).
 - Next: owner tries it from source or a build; then plan 03 Stage B (RNNT beam N-best, doubtful
   words marked) or other work the owner picks.
 
