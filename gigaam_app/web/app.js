@@ -212,6 +212,7 @@ function renderMain() {
   renderSaved(file);
   $('text-label').textContent = file.state === 'running' ? 'Текст появляется по ходу' : 'Текст';
   $('copy').disabled = !file.segments;
+  renderAudioBar(file);
   const lines = state.lines.get(file.id);
   if (lines && lines.length === 0) {
     const text = $('text');
@@ -262,6 +263,7 @@ async function showLines(id) {
 }
 
 function drawLines(id) {
+  wordTimes = null;  // the word index of the player is built again on demand
   const text = $('text');
   text.textContent = '';
   const lines = state.lines.get(id) || [];
@@ -547,13 +549,186 @@ async function playPart(fileId, first, last, button) {
 player.addEventListener('ended', stopPlaying);
 
 function playLine(index) {
+  // A timecode plays from its line and keeps going (plan 05 B2).
   const file = fixableFile();
   const lines = file ? state.lines.get(file.id) || [] : [];
   const line = lines[index];
-  if (!line || !line.words || !line.words.length) return;
-  const node = $('text').querySelector(`p[data-seg="${index}"] time`);
-  playPart(file.id, [index, 0], [index, line.words.length - 1], node);
+  if (!line) return;
+  const first = line.words && line.words.length ? line.words[0][0] : line.start;
+  playFrom(first);
 }
+
+// ---- the player for the whole file (plan 05)
+//
+// The file's sound comes from Python's local server (controller.audio): the file itself
+// when the window plays its format, else a copy made once. Play/pause, time, seek and
+// speed sit in a bar under the text; the word being spoken is highlighted and the text
+// follows it unless the reader scrolled away in the last few seconds.
+
+const filePlayer = new Audio();
+filePlayer.preload = 'metadata';
+const audio = { fileId: null, url: null, waiting: null, converted: false, stopAt: null };
+let wordTimes = null;      // [[start, end, line, word]] of the shown file, sorted by start
+let nowWord = null;        // the highlighted span
+let readerScrolled = 0;    // when the reader last scrolled the text by hand (ms)
+let seeking = false;       // the seek bar is being dragged
+
+function playerFile() {
+  // The file the bar is for: a finished or cancelled file on screen.
+  const file = fileById(state.selected);
+  return file && (file.state === 'done' || file.state === 'cancelled') && file.segments ? file : null;
+}
+
+function renderAudioBar(file) {
+  const show = !!file && (file.state === 'done' || file.state === 'cancelled') && !!file.segments;
+  $('audio-bar').hidden = !show;
+  if (audio.fileId && (!show || audio.fileId !== file.id)) resetAudio();
+  if (show && audio.fileId !== file.id) showTime(0, file.duration || 0);
+}
+
+function resetAudio() {
+  filePlayer.pause();
+  filePlayer.removeAttribute('src');
+  filePlayer.load();
+  Object.assign(audio, { fileId: null, url: null, waiting: null, converted: false, stopAt: null });
+  markNow(null);
+  showPlaying(false);
+}
+
+function showTime(now, total) {
+  $('audio-time').textContent = `${clock(now)} / ${clock(total)}`;
+  if (!seeking) $('audio-seek').value = total ? Math.round((now / total) * 1000) : 0;
+}
+
+function showPlaying(on) {
+  $('audio-play').innerHTML = on ? '&#10074;&#10074;' : '&#9654;';
+  $('audio-play').setAttribute('aria-label', on ? 'Пауза' : 'Слушать');
+  $('audio-play').title = on ? 'Пауза (пробел)' : 'Слушать (пробел)';
+}
+
+async function loadAudio(convert) {
+  // Ask Python where the selected file's sound is; wait for a copy when one is being made.
+  const file = playerFile();
+  if (!file) return false;
+  if (audio.fileId === file.id && audio.url && !convert) return true;
+  const answer = await call('audio', file.id, !!convert);
+  if (!answer || playerFile() !== file) return false;
+  Object.assign(audio, { fileId: file.id, converted: !!convert });
+  let url = answer.url;
+  if (answer.preparing) {
+    $('audio-time').textContent = 'Готовлю звук...';
+    $('audio-play').disabled = true;
+    url = await new Promise((resolve) => { audio.waiting = { id: file.id, resolve }; });
+    $('audio-play').disabled = false;
+    if (audio.fileId !== file.id) return false;
+  }
+  if (!url) {
+    showTime(0, file.duration || 0);
+    return false;
+  }
+  audio.url = url;
+  filePlayer.src = url;
+  filePlayer.playbackRate = Number($('audio-speed').value);
+  return true;
+}
+
+function onAudioReady(data) {
+  // A playable copy is ready (or could not be made: url null).
+  if (audio.waiting && audio.waiting.id === data.id) {
+    const { resolve } = audio.waiting;
+    audio.waiting = null;
+    resolve(data.url);
+  }
+}
+
+async function playFrom(seconds, stopAt) {
+  // Play the shown file from a time; stopAt (seconds) pauses there (a selection).
+  stopPlaying();  // the fix dialog's clip
+  if (!(await loadAudio(false))) return;
+  audio.stopAt = stopAt === undefined ? null : stopAt;
+  try {
+    if (filePlayer.readyState < 1) await new Promise((resolve, reject) => {
+      filePlayer.addEventListener('loadedmetadata', resolve, { once: true });
+      filePlayer.addEventListener('error', reject, { once: true });
+    });
+    filePlayer.currentTime = Math.max(0, seconds);
+    readerScrolled = 0;  // a new start: follow the words again
+    await filePlayer.play();
+  } catch (error) {
+    // The error listener below tries the converted copy.
+  }
+}
+
+async function togglePlay() {
+  if (!playerFile()) return;
+  if (!filePlayer.paused) { filePlayer.pause(); return; }
+  stopPlaying();
+  if (!(await loadAudio(false))) return;
+  audio.stopAt = null;
+  try { await filePlayer.play(); } catch (error) { /* handled by the error listener */ }
+}
+
+function buildWordTimes() {
+  const lines = state.lines.get(state.selected) || [];
+  wordTimes = [];
+  lines.forEach((line) => (line.words || []).forEach((word, index) => {
+    wordTimes.push([word[0], word[1], line.index, index]);
+  }));
+  wordTimes.sort((a, b) => a[0] - b[0]);
+}
+
+function wordAt(seconds) {
+  // The last word that started by this time (binary search); null before the first one.
+  if (!wordTimes) buildWordTimes();
+  let low = 0, high = wordTimes.length - 1, found = -1;
+  while (low <= high) {
+    const middle = (low + high) >> 1;
+    if (wordTimes[middle][0] <= seconds) { found = middle; low = middle + 1; } else high = middle - 1;
+  }
+  return found < 0 ? null : wordTimes[found];
+}
+
+function markNow(span) {
+  if (nowWord === span) return;
+  if (nowWord) nowWord.classList.remove('now');
+  nowWord = span;
+  if (!span) return;
+  span.classList.add('now');
+  // Follow the words, unless the reader scrolled away in the last few seconds.
+  if (Date.now() - readerScrolled < 4000) return;
+  const box = $('text').getBoundingClientRect();
+  const word = span.getBoundingClientRect();
+  if (word.top < box.top + 8 || word.bottom > box.bottom - 8) span.scrollIntoView({ block: 'center', behavior: 'smooth' });
+}
+
+function followPlayer() {
+  // Runs on every frame while playing: time, seek bar, the spoken word, the selection's end.
+  const now = filePlayer.currentTime;
+  if (audio.stopAt !== null && now >= audio.stopAt) {
+    filePlayer.pause();
+    audio.stopAt = null;
+  }
+  showTime(now, filePlayer.duration || (playerFile() || {}).duration || 0);
+  const word = wordAt(now);
+  const span = word && word[1] + 1.0 >= now
+    ? $('text').querySelector(`p[data-seg="${word[2]}"] .w[data-w="${word[3]}"]`) : null;
+  markNow(span);
+  if (!filePlayer.paused) requestAnimationFrame(followPlayer);
+}
+
+filePlayer.addEventListener('play', () => { showPlaying(true); requestAnimationFrame(followPlayer); });
+filePlayer.addEventListener('pause', () => showPlaying(false));
+filePlayer.addEventListener('ended', () => { showPlaying(false); markNow(null); });
+filePlayer.addEventListener('timeupdate', () => { if (filePlayer.paused) followPlayer(); });
+filePlayer.addEventListener('error', async () => {
+  // The window cannot play this file as it is: ask once for a converted copy.
+  if (!audio.fileId || audio.converted || !filePlayer.getAttribute('src')) {
+    if (audio.fileId) toast('Не удалось воспроизвести звук');
+    return;
+  }
+  const at = filePlayer.currentTime || 0;
+  if (await loadAudio(true)) playFrom(at);
+});
 
 // ---- the fix dialog
 
@@ -819,6 +994,7 @@ function apply(message) {
     case 'confirm_close': askClose(data.text); break;
     case 'lines_reset': state.lines.set(data.id, []); if (state.selected === data.id) drawLines(data.id); break;
     case 'lines_changed': refreshLines(data.id); break;
+    case 'audio_ready': onAudioReady(data); break;
     case 'reading': onReading(data); break;
     default: break;
   }
@@ -936,13 +1112,23 @@ window.addEventListener('resize', () => { if (selection) updateBar(); });
 $('text').addEventListener('click', (event) => {
   const time = event.target.closest('time.playable');
   if (time && fixableFile()) playLine(Number(time.parentNode.dataset.seg));
+  else if (event.altKey) {
+    // Alt+click on a word plays from that word.
+    const word = event.target.closest('.w');
+    const line = word && word.parentNode.dataset.seg;
+    const times = word && wordOf(state.selected, [Number(line), Number(word.dataset.w)]);
+    if (times) playFrom(times[0]);
+  }
 });
 // Clicking the bar must not clear the selection it is about.
 $('sel-bar').addEventListener('mousedown', (event) => event.preventDefault());
-$('sel-play').addEventListener('click', () => selection && playPart(selection.fileId, selection.first, selection.last, $('sel-play')));
+$('sel-play').addEventListener('click', () => {
+  if (!selection) return;
+  playFrom(wordOf(selection.fileId, selection.first)[0], wordOf(selection.fileId, selection.last)[1]);
+});
 $('sel-reread').addEventListener('click', () => openFix(true));
 $('sel-edit').addEventListener('click', () => openFix(false));
-$('fix-play').addEventListener('click', () => playPart(fix.fileId, fix.first, fix.last, $('fix-play')));
+$('fix-play').addEventListener('click', () => { filePlayer.pause(); playPart(fix.fileId, fix.first, fix.last, $('fix-play')); });
 $('fix-reread').addEventListener('click', startReread);
 $('fix-terms').addEventListener('keydown', (event) => { if (event.key === 'Enter') startReread(); });
 $('fix-cancel').addEventListener('click', () => $('fix').close());
@@ -981,6 +1167,36 @@ document.addEventListener('drop', (event) => {
   dragDepth = 0;
   $('drop-overlay').hidden = true;
   state.followRunning = true;
+});
+
+$('audio-play').addEventListener('click', togglePlay);
+$('audio-seek').addEventListener('input', () => {
+  seeking = true;
+  const total = filePlayer.duration || (playerFile() || {}).duration || 0;
+  $('audio-time').textContent = `${clock((Number($('audio-seek').value) / 1000) * total)} / ${clock(total)}`;
+});
+$('audio-seek').addEventListener('change', async () => {
+  seeking = false;
+  const share = Number($('audio-seek').value) / 1000;
+  if (!(await loadAudio(false))) return;
+  if (filePlayer.readyState < 1) await new Promise((resolve) => filePlayer.addEventListener('loadedmetadata', resolve, { once: true }));
+  filePlayer.currentTime = share * filePlayer.duration;
+  readerScrolled = 0;
+  followPlayer();
+});
+$('audio-speed').addEventListener('change', () => { filePlayer.playbackRate = Number($('audio-speed').value); });
+for (const kind of ['wheel', 'touchmove']) {
+  $('text').addEventListener(kind, () => { readerScrolled = Date.now(); }, { passive: true });
+}
+
+// Space plays or pauses the file, unless typing or a dialog is open.
+document.addEventListener('keydown', (event) => {
+  if (event.code !== 'Space' || event.ctrlKey || event.altKey || event.metaKey) return;
+  const target = event.target;
+  if (target.closest && target.closest('input, textarea, select, button, dialog[open]')) return;
+  if (document.querySelector('dialog[open]') || $('audio-bar').hidden || state.view !== 'file') return;
+  event.preventDefault();
+  togglePlay();
 });
 
 // Ctrl+O adds files; Ctrl+, opens settings.

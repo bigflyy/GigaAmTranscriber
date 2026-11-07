@@ -284,6 +284,21 @@ button.icon:hover { color: var(--text); background: var(--card); }
 
 /* The bar above selected words (plan 03): listen, recognise again, edit. */
 .file-view { position: relative; }
+
+/* The player for the whole file (plan 05) and the word being spoken. */
+.audio-bar {
+  display: flex; align-items: center; gap: 12px; padding: 8px 28px;
+  border-top: 1px solid var(--line); background: var(--bg);
+}
+.audio-play {
+  width: 36px; height: 36px; padding: 0; border-radius: 50%; flex: none;
+  background: var(--accent); color: var(--accent-text); border: none; font-size: 14px;
+}
+.audio-play:disabled { opacity: 0.6; }
+.audio-time { font-size: 13px; color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; min-width: 104px; }
+.audio-bar input[type=range] { flex: 1; min-width: 0; accent-color: var(--accent); }
+.audio-bar select { height: 30px; width: auto; flex: none; font: inherit; font-size: 13px; }
+.text .w.now { background: var(--accent-track); border-radius: 3px; box-shadow: 0 0 0 2px var(--accent-track); }
 .sel-bar {
   position: absolute; z-index: 5; display: flex; gap: 2px; padding: 3px;
   background: var(--card); border: 1px solid var(--card-line); border-radius: 10px; box-shadow: var(--shadow);
@@ -384,5 +399,5 @@ input[type="number"] { width: 72px; }
 @media (max-width: 640px) {
   .app { flex-direction: column; }
   .side { flex: 0 0 auto; max-height: 40%; border-right: none; border-bottom: 1px solid var(--line); }
-  .file-head, .text-tools, .text, .settings-head, .settings-body { padding-left: 16px; padding-right: 16px; }
+  .file-head, .text-tools, .text, .settings-head, .settings-body, .audio-bar { padding-left: 16px; padding-right: 16px; }
 }

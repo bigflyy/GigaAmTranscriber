@@ -28,12 +28,12 @@ Findings (2026-11-08):
 
 ### Stage B: The player bar
 
-- [ ] **B1** Bar under the text of a finished or cancelled file: play/pause, time / total, a seek bar, speed (0.75x to 2x)
-- [ ] **B2** A click on a timecode plays from that line and keeps going; the selection bar's "Слушать" plays the selection and stops at its end; the fix dialog keeps its own clip
-- [ ] **B3** The word being spoken is highlighted; while playing, the text follows it unless the reader has scrolled away
+- [x] **B1** Bar under the text of a finished or cancelled file: play/pause, time / total, a seek bar, speed (0.75x to 2x)
+- [x] **B2** A click on a timecode plays from that line and keeps going; the selection bar's "Слушать" plays the selection and stops at its end; the fix dialog keeps its own clip
+- [x] **B3** The word being spoken is highlighted; while playing, the text follows it unless the reader has scrolled away
 
 ### Stage C: Checks
 
-- [ ] **C1** Tests: the server (Range, token, unknown paths refused), controller.audio (original or converted), clean-up at close
-- [ ] **C2** window_check.py steps (muted): play, pause, seek, the highlighted word moves; screenshots
+- [x] **C1** Tests: the server (Range, token, unknown paths refused), controller.audio (original or converted), clean-up at close
+- [x] **C2** window_check.py steps (muted): play, pause, seek, the highlighted word moves; screenshots
 - [ ] **C3** Linux: the player under WebKitGTK at the next Linux build (formats it plays without extra GStreamer plugins)

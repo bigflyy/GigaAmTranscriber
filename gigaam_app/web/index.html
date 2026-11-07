@@ -81,6 +81,19 @@
         <button id="copy-llm" type="button" title="Текст с отмеченными сомнительными словами, чтобы вставить в чат с ИИ">Копировать для ИИ</button>
       </div>
       <div id="text" class="text" tabindex="0" aria-live="off"></div>
+      <!-- The player for the whole file (plan 05): under the text of a finished or cancelled file. -->
+      <div id="audio-bar" class="audio-bar" hidden>
+        <button id="audio-play" class="audio-play" type="button" title="Слушать (пробел)" aria-label="Слушать">&#9654;</button>
+        <span id="audio-time" class="audio-time">00:00 / 00:00</span>
+        <input id="audio-seek" type="range" min="0" max="1000" step="1" value="0" aria-label="Позиция в записи">
+        <select id="audio-speed" aria-label="Скорость" title="Скорость">
+          <option value="0.75">0.75x</option>
+          <option value="1" selected>1x</option>
+          <option value="1.25">1.25x</option>
+          <option value="1.5">1.5x</option>
+          <option value="2">2x</option>
+        </select>
+      </div>
       <!-- Shown right above selected words of a finished file (plan 03): listen, recognise again, edit. -->
       <div id="sel-bar" class="sel-bar" role="toolbar" aria-label="Выделенный фрагмент" hidden>
         <button id="sel-play" type="button" title="Прослушать выделенный фрагмент">&#9654; Слушать</button>

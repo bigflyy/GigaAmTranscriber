@@ -196,10 +196,14 @@ def fix_steps(js, control, item, short_audio, shoot):
     check("selection maps to words", js("selection && selection.first.join() + '-' + selection.last.join()") == "0,1-0,3",
           js("selection && selection.first.join() + '-' + selection.last.join()"))
     shoot("04a-selection-bar")
-    js("player.muted = true; $('sel-play').click()")  # never sound during a test
-    wait(lambda: js("player.src.startsWith('data:audio/wav')"), 10, "clip")
-    check("listen gets a WAV clip", js("player.src.startsWith('data:audio/wav') && player.src.length > 1000"))
-    js("stopPlaying()")
+    js("filePlayer.muted = true; player.muted = true; $('sel-play').click()")  # never sound during a test
+    wait(lambda: js("!filePlayer.paused && filePlayer.currentTime > 0"), 10, "selection playing")
+    check("listen plays the file from the local server", js("filePlayer.src.startsWith('http://127.0.0.1:')"))
+    end = js("wordOf(selection.fileId, selection.last)[1]")
+    wait(lambda: js("filePlayer.paused"), 10, "selection played to its end")
+    stopped = js("filePlayer.currentTime")
+    check("the selection stops at its end", js("filePlayer.paused") and end - 0.05 <= stopped <= end + 0.5,
+          f"stopped at {stopped:.2f}, ends at {end:.2f}")
     current = js("wordsBetween(selection.fileId, selection.first, selection.last).join(' ')")
     js("$('sel-reread').click()")
     wait(lambda: js("$('fix').open"), 5, "fix dialog")
@@ -210,6 +214,10 @@ def fix_steps(js, control, item, short_audio, shoot):
     check("a reading per installed model", len(readings) == len(models) + 1
           and all("Распознаю" not in text and "Загрузка" not in text for text in readings), readings)
     check("dialog shows the selected text", js("$('fix-text').value") == current, js("$('fix-text').value"))
+    js("$('fix-play').click()")
+    wait(lambda: js("player.src.startsWith('data:audio/wav')"), 10, "clip")
+    check("the dialog plays its own WAV clip", js("player.src.startsWith('data:audio/wav') && player.src.length > 1000"))
+    js("stopPlaying()")
     shoot("04b-fix-dialog")
     # A click on the backdrop closes the dialog; with the text changed by hand it does not.
     click_outside = "$('fix').dispatchEvent(new MouseEvent('click', {bubbles: true, clientX: 2, clientY: 2}))"
@@ -283,6 +291,34 @@ def doubt_steps(js, control, item, shoot):
     shoot("04e-doubt-colours")
     js("document.querySelector('input[name=doubt-style][value=underline]').click()")
     wait(lambda: js("$('text').classList.contains('doubts-underline')"), 5, "underline style again")
+
+
+def player_steps(js, control, item, shoot):
+    """Plan 05 on the finished short file (muted): play, pause, seek, the spoken word is
+    highlighted, a timecode plays from its line."""
+    js("document.querySelectorAll('#files li')[1].click()")
+    wait(lambda: js("$('text').querySelectorAll('.w').length") > 4, 10, "words of the short file")
+    check("player bar under a finished file", not js("$('audio-bar').hidden"))
+    js("filePlayer.muted = true; $('audio-play').click()")
+    wait(lambda: js("!filePlayer.paused && filePlayer.currentTime > 1.2"), 15, "playing")
+    check("play button plays the file", js("!filePlayer.paused") and js("filePlayer.src.startsWith('http://127.0.0.1:')"))
+    check("time runs in the bar", js("$('audio-time').textContent").startswith("00:01"),
+          js("$('audio-time').textContent"))
+    check("the spoken word is highlighted", js("$('text').querySelectorAll('.w.now').length") == 1)
+    shoot("04f-player")
+    js("$('audio-play').click()")
+    wait(lambda: js("filePlayer.paused"), 5, "pause")
+    check("pause", js("filePlayer.paused"))
+    js("$('audio-seek').value = 500; $('audio-seek').dispatchEvent(new Event('change'))")
+    wait(lambda: abs(js("filePlayer.currentTime - filePlayer.duration / 2")) < 0.3, 5, "seek")
+    check("seek bar moves the position", abs(js("filePlayer.currentTime - filePlayer.duration / 2")) < 0.3,
+          js("[filePlayer.currentTime, filePlayer.duration]"))
+    js("$('text').querySelector('p[data-seg=\"0\"] time').click()")
+    wait(lambda: js("!filePlayer.paused"), 10, "timecode plays")
+    first = item.segments[0].words[0].start
+    check("a timecode plays from its line", js("!filePlayer.paused") and js("filePlayer.currentTime") < first + 1.5,
+          js("filePlayer.currentTime"))
+    js("filePlayer.pause()")
 
 
 def scenario(window, control, long_audio, short_audio, shoot, whisper=False):
@@ -367,6 +403,7 @@ def scenario(window, control, long_audio, short_audio, shoot, whisper=False):
         check("copy for an LLM button", js("!!$('copy-llm') && !$('copy-llm').hidden"))
         shoot("04-done")
         doubt_steps(js, control, control.files[1], shoot)
+        player_steps(js, control, control.files[1], shoot)
         fix_steps(js, control, control.files[1], short_audio, shoot)
 
         # Retry the short file, remove the cancelled one.

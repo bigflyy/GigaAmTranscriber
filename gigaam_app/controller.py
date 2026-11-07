@@ -288,6 +288,7 @@ class Controller:
             "id": item.id, "name": item.path.name, "path": str(item.path), "state": item.state,
             "detail": self._detail(item), "status": self._status(item), "model": self._model_name(item),
             "progress": item.progress, "segments": len(item.segments), "outputs": outputs,
+            "duration": item.duration,
             "cancelling": item.cancelling, "can_cancel": item.state == RUNNING and not item.cancelling,
             "can_retry": item.state in (DONE, CANCELLED, FAILED), "can_remove": item.state != RUNNING,
         }
