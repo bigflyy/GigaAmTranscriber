@@ -1,8 +1,46 @@
 # Handoff: state and findings
 
-Last updated 2026-11-07 (session 13). Current plan: [docs/plans/04-whisper.md](docs/plans/04-whisper.md)
+Last updated 2026-11-07 (session 14). Current plan: [docs/plans/04-whisper.md](docs/plans/04-whisper.md)
 (Whisper; done: v0.4.0 published 2026-11-07). Owner's order after Whisper: plan 03 Stage A (docs/plans/03-fix-a-part.md). Plan 02 (window) has D for later; plan 01 still
 holds B9, F (Parakeet, Qwen3-ASR) and E. Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
+
+## Session 14 (2026-11-07): Whisper beam 5 and a term list as prompt, measured
+
+- Owner: "beam search we can try. a list of terms i dk, you may test it a bit. maybe it will
+  even transfer to 03 stage A". experiments/whisper/variants.py runs the app's Transcriber
+  (Whisper q5_0, Vulkan on the 4070, language auto, the app's VAD chunks) with other
+  whisper_full parameters; outputs in build/whisper-test/results/variants/ (gitignored).
+  whisper.cpp clears the carried text (no_context) before it adds initial_prompt, so the prompt
+  sits in front of every chunk.
+- Term lists (picked after seeing the greedy errors, so a best case): lecture "LLM, fine tuning,
+  prompt engineering, boilerplate, DeepSeek, Lean 4, ИИ-агент, ТРИЗ, BIM, STEP, UML, Tools
+  Calling, reasoning"; call "Ethernet, Wi-Fi, CSMA/CD, CSMA/CA, коллизия, слотовое время, кадр,
+  распределение Пуассона". "Wrong terms" = the other file's list.
+
+  | Run | Lecture s | Lecture differ % | Call s | Call differ % |
+  | --- | --- | --- | --- | --- |
+  | greedy (app today) | 17.5 | 3.61 | 63.9 | 30.5 |
+  | beam 5 | 31.0 | 3.83 | 90.7 | 28.9 |
+  | greedy + terms | 21.1 | 4.57 | 63.8 | 28.5 |
+  | beam 5 + terms | 27.1 | 4.25 | 96.5 | 29.5 |
+  | greedy + wrong terms | 14.0 | 4.46 | 76.9 | 28.4 |
+
+  (differ % = words differing from GigaAM RNNT, not an error rate; times vary with GPU load:
+  an emulator ran beside it.) No loops in any run; the call's one "is" chunk stays.
+- Beam 5: 1.4-1.8x slower, no clear gain (lecture: "бейлер-плейта", "DeepSeq", "Интерсофт";
+  call: Ethernet 3 misspellings -> 0, Poisson still wrong). Not worth it for whole files.
+- Terms: every listed term came out right. Lecture: Lean 0/5 -> 5/5 (was "LIND-4", "ЛИН"),
+  boilerplate (was "Baylor Plate'а"), DeepSeek (was "DeepSync"), ИИ-агента (was "ЕАгента"),
+  prompt engineering; also "построй мне каркас" (greedy "построим не каркас"). Call: Пуассон
+  0/6 -> 6/6 (was "паосона", "по ассо-классу", "полосонодискретное"), CSMA 1 -> 6.
+  Costs: neighbouring Russian forms of English words turn Latin ("промпта" -> "promptа",
+  "промптинга" -> "prompting", "пруф" -> "proof"), which is why differ % vs GigaAM goes up;
+  one wrong insertion on the call ("и к маме" -> "CSMA" where the talk was about extrema).
+  A list from another subject inserted none of its words (0 in both files), but nudged Latin
+  spellings too ("LIN", "EA-агента"). No time cost.
+- For plan 03: GigaAM (RNNT, CTC) takes no text hint, so a term list only helps when Whisper
+  gives one of the readings (now possible: Whisper ships since v0.4.0, plan 03 C1).
+- Next: plan 03 Stage A after the owner's answers.
 
 ## Session 13 (2026-11-07): builds with Whisper (C1), release v0.4.0 (C2), plan 04 done
 

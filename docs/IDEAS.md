@@ -8,6 +8,7 @@ models, Stage E speaker diarization) and plan 02 (D1-D3).
 
 - 2026-11-07: Whisper model size: q5_0 is the default, but make it "configurable (to download) in the future" (q8_0 874 MB, f16 1.6 GB).
 - 2026-11-07: merge the two models' strengths: "gigaam does bad with english namings and whisper is good with english namings. idk if we can merge these capabilities, but if we could it d be nice. somehow. in the future." (On the lecture GigaAM wrote "tullz colling", "deps", "umail" where Whisper wrote "tools calling", "deepsync", "uml".) For now only Whisper as a model you can choose and run (plan 04).
+- 2026-11-07: a user's list of terms (for example "LLM, fine tuning") given to Whisper as a hint (initial prompt), and beam search on our fragments. Owner: "beam search we can try. a list of terms i dk, you may test it a bit. maybe it will even transfer to 03 stage A" (the hint when a selected part is recognised again). Measured in session 14 (experiments/whisper/variants.py; results in HANDOFF.md).
 
 ## Languages and speakers
 
