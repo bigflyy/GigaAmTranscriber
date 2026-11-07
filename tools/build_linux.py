@@ -20,7 +20,8 @@ Steps:
 3. copy models/, the example settings, README.txt and licences beside the programs and the
    whisper.cpp libraries into _internal/whisper_cpp/, then check that every bundled library resolves;
 4. smoke test the CLI on a silent file (and on --speech FILE if given), check that it loads
-   whisper.cpp (gigaam-cli --devices), and open the window
+   whisper.cpp (gigaam-cli --devices), transcribe a short speech file with Whisper on the CPU
+   (a downloaded model folder linked in, see build_windows.py --whisper-model), and open the window
    under Xvfb (with --speech it must also write the transcript);
 5. pack <release>/GigaAmTranscriber-v<version>-linux-x64.tar.gz and add it to SHA256SUMS.txt;
    put the licences under linux/ in <release>/THIRD_PARTY_LICENSES.zip, beside the windows/
@@ -46,8 +47,10 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tools"))
 from gigaam_app import __version__  # noqa: E402
-from build_windows import (APP_NAME, BUNDLED_MODELS, REPO_LICENCES, VAD_MODEL, check_models,  # noqa: E402
-                           check_no_torch, check_whisper_cpp, distribution_licences, folder_size, sha256)
+from build_windows import (APP_NAME, BUNDLED_MODELS, REPO_LICENCES, VAD_MODEL,  # noqa: E402
+                           add_whisper_arguments, check_models, check_no_torch, check_whisper_cpp,
+                           distribution_licences, folder_size, sha256, whisper_smoke_test,
+                           whisper_test_files)
 
 WHISPER_CPP = ROOT / "third_party" / "whisper.cpp" / "linux-x64"  # tools/build_whisper_cpp.py
 
@@ -196,7 +199,8 @@ def clean_env():
     return env
 
 
-def smoke_cli(app, speech):
+def smoke_cli(app, speech, whisper=None):
+    """The CLI on silence, on SPEECH if given, and with Whisper (model folder, audio) if given."""
     with tempfile.TemporaryDirectory() as temporary:
         audio = Path(temporary) / "silence.wav"
         subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "anullsrc=r=16000:cl=mono", "-t", "2",
@@ -227,6 +231,8 @@ def smoke_cli(app, speech):
             words = len(text.read_text(encoding="utf-8").split())
             print(f"smoke test CLI on {speech.name}: {words} words in {time.perf_counter() - started:.1f} s",
                   flush=True)
+    if whisper:
+        whisper_smoke_test(str(app / "gigaam-cli"), *whisper, clean_env(), "cpu")  # no Vulkan GPU in WSL
 
 
 def window_titles(env):
@@ -382,11 +388,13 @@ def main():
     parser.add_argument("--speech", type=Path, help="a short speech file for the CLI and window smoke tests")
     parser.add_argument("--shots", type=Path, help="save a screenshot of the window here")
     parser.add_argument("--no-tar", action="store_true", help="stop after the app folder and the smoke tests")
+    add_whisper_arguments(parser)
     args = parser.parse_args()
 
     check_environment(args.gi)
     check_models(args.models)
     check_whisper_cpp(WHISPER_CPP)
+    whisper = whisper_test_files(args.whisper_model, args.whisper_audio, args.no_whisper_test)
     out = args.out.expanduser().resolve()
     dist = out / "app"
     if dist.exists():
@@ -401,7 +409,7 @@ def main():
     print(f"App folder {app}: {folder_size(app) / 1024 ** 2:.0f} MiB "
           f"(program {code_size / 1024 ** 2:.0f} MiB), built in {time.perf_counter() - started:.0f} s", flush=True)
     speech = args.speech.resolve() if args.speech else None
-    smoke_cli(app, speech)
+    smoke_cli(app, speech, whisper)
     smoke_missing_webkit(app)
     smoke_window(app, speech, args.shots)
     if not args.no_tar:

@@ -35,6 +35,7 @@ import time
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from gigaam_app import catalog, controller as controller_module, window as window_module  # noqa: E402
+from build_windows import link_model_folder  # noqa: E402  (tools/, beside this script)
 
 results = []
 confirmed_close = []   # the controller, once the scenario has confirmed closing
@@ -73,18 +74,6 @@ class SlowFile(http.server.BaseHTTPRequestHandler):
 
     def log_message(self, *args):
         pass
-
-
-def add_whisper(source, downloads):
-    """Put a downloaded Whisper model folder into the temporary download folder: the
-    ggml file as a hard link (no copy of 574 MB) when the drive allows it."""
-    target = Path(downloads) / source.name
-    target.mkdir()
-    for item in source.iterdir():
-        try:
-            os.link(item, target / item.name)
-        except OSError:
-            shutil.copy2(item, target / item.name)
 
 
 def add_test_model(folder):
@@ -378,7 +367,8 @@ def main():
         os.environ["GIGAAM_CONFIG"] = str(Path(history) / "settings.json")  # nor the user's settings
         add_test_model(downloads)
         if args.whisper:
-            add_whisper(args.whisper.resolve(), downloads)
+            # Linked, not copied (574 MB): hard links, or symbolic ones across drives (WSL).
+            link_model_folder(args.whisper.resolve(), downloads)
         shoot_again = screenshot_function(args.out)
         run = functools.partial(scenario, long_audio=args.long_audio.resolve(),
                                 short_audio=args.short_audio.resolve(), shoot=shoot_again,

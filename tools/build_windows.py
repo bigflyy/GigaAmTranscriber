@@ -13,7 +13,9 @@ Steps:
 3. copy models/, ffmpeg.exe, the example settings, README.txt and licences beside the EXEs,
    and the whisper.cpp libraries into _internal/whisper_cpp/;
 4. smoke test the console EXE on a silent file with ffmpeg removed from PATH, check that
-   it loads whisper.cpp (gigaam-cli --devices), and start the windowed EXE off screen
+   it loads whisper.cpp (gigaam-cli --devices), transcribe a short speech file with Whisper
+   on the GPU and the CPU (a downloaded model folder linked in, --whisper-model and
+   --whisper-audio; defaults in build/whisper-test), and start the windowed EXE off screen
    (tools/gui_smoke_test.py);
 5. pack the release assets into build/release/:
        GigaAmTranscriber-v<version>-windows-x64.zip   the app folder
@@ -278,8 +280,67 @@ def check_no_torch(app):
         fail(f"torch files ended up in the build: {leftovers[:5]}")
 
 
-def smoke_test(app):
-    """Run the console EXE on 2 s of silence, with no ffmpeg on PATH and no Python around."""
+def link_model_folder(source, downloads):
+    """Put a downloaded model folder into a download folder without copying 574 MB:
+    hard links where the drive allows them, else symbolic links (WSL: /mnt/c to /tmp),
+    else a copy."""
+    target = Path(downloads) / source.name
+    target.mkdir()
+    for item in source.iterdir():
+        try:
+            os.link(item, target / item.name)
+        except OSError:
+            try:
+                os.symlink(item, target / item.name)
+            except OSError:
+                shutil.copy2(item, target / item.name)
+
+
+def whisper_test_files(model_folder, audio, skip):
+    """(model folder, audio) for the Whisper smoke test, or None when it is skipped.
+
+    The build does not download the 574 MB model: it uses a downloaded model folder
+    (default: the test area build/whisper-test, see HANDOFF.md session 11)."""
+    if skip:
+        print("Whisper smoke test skipped (--no-whisper-test)", flush=True)
+        return None
+    model_folder, audio = Path(model_folder).expanduser().resolve(), Path(audio).expanduser().resolve()
+    if not (model_folder / "model.json").is_file():
+        fail(f"no Whisper model folder at {model_folder}; pass --whisper-model (a downloaded "
+             "whisper_large_v3_turbo_q5_0 folder) or --no-whisper-test")
+    if not audio.is_file():
+        fail(f"{audio} not found; pass --whisper-audio (a short Russian speech file) or --no-whisper-test")
+    return model_folder, audio
+
+
+def whisper_smoke_test(cli, model_folder, audio, env, device):
+    """Transcribe a short Russian speech file with Whisper through the built CLI.
+
+    The model folder is linked into a temporary download folder (GIGAAM_DOWNLOADS), so
+    this also checks that the app finds a downloaded Whisper model and loads the bundled
+    whisper.cpp libraries on DEVICE. The transcript must contain Cyrillic words."""
+    with tempfile.TemporaryDirectory() as temporary:
+        downloads = Path(temporary) / "downloads"
+        downloads.mkdir()
+        link_model_folder(model_folder, downloads)
+        copy = Path(temporary) / audio.name
+        shutil.copy2(audio, copy)
+        started = time.perf_counter()
+        run = subprocess.run([cli, str(copy), "--model", "Whisper", "--language", "ru", "--device", device,
+                              "--formats", "txt"], capture_output=True, text=True, encoding="utf-8",
+                             env={**env, "GIGAAM_DOWNLOADS": str(downloads)}, cwd=temporary)
+        text_path = copy.with_name(copy.stem + "-transcript.txt")
+        text = text_path.read_text(encoding="utf-8") if text_path.is_file() else ""
+        words = text.split()
+        if run.returncode != 0 or not re.search("[а-яё]", text, re.I) or len(words) < 5:
+            fail(f"Whisper smoke test on {device} failed:\n{run.stdout}\n{run.stderr}\ntext: {text!r}")
+        print(f"smoke test Whisper {device}: {run.stdout.splitlines()[0]}; {len(words)} words in "
+              f"{time.perf_counter() - started:.1f} s: {' '.join(words[:8])} ...", flush=True)
+
+
+def smoke_test(app, whisper=None):
+    """Run the console EXE on 2 s of silence, with no ffmpeg on PATH and no Python around;
+    with whisper = (model folder, audio), also transcribe the audio with Whisper."""
     with tempfile.TemporaryDirectory() as temporary:
         audio = Path(temporary) / "silence.wav"
         subprocess.run([str(app / "ffmpeg.exe"), "-v", "error", "-f", "lavfi", "-i", "anullsrc=r=16000:cl=mono",
@@ -304,6 +365,9 @@ def smoke_test(app):
                 fail(f"smoke test on {device} failed:\n{run.stdout}\n{run.stderr}")
             print(f"smoke test {device}: {run.stdout.splitlines()[0]} ({time.perf_counter() - started:.1f} s)",
                   flush=True)
+    if whisper:
+        for device in ("auto", "cpu"):
+            whisper_smoke_test(cli, *whisper, env, device)
     # The windowed EXE: start it off screen, let the model load, close it.
     import gui_smoke_test  # tools/gui_smoke_test.py, beside this script
     timings = gui_smoke_test.run(app, log=lambda message: None)
@@ -362,17 +426,31 @@ def remove_old_build(dist):
     shutil.rmtree(doomed)
 
 
+def add_whisper_arguments(parser):
+    """Options of the Whisper smoke test, shared with build_linux.py."""
+    test_area = ROOT / "build" / "whisper-test"
+    parser.add_argument("--whisper-model", type=Path,
+                        default=test_area / "app-models" / "whisper_large_v3_turbo_q5_0",
+                        help="a downloaded Whisper model folder for the smoke test "
+                             "(default: build/whisper-test/app-models/whisper_large_v3_turbo_q5_0)")
+    parser.add_argument("--whisper-audio", type=Path, default=test_area / "clips" / "lecture-4.mp3",
+                        help="a short Russian speech file for it (default: build/whisper-test/clips/lecture-4.mp3)")
+    parser.add_argument("--no-whisper-test", action="store_true", help="do not transcribe with Whisper")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--models", type=Path, default=ROOT / "models", help="exported models (default: models/)")
     parser.add_argument("--ffmpeg", help=f"ffmpeg.exe {FFMPEG_BUILD} (default: the one on PATH)")
     parser.add_argument("--out", type=Path, default=ROOT / "build", help="build folder (default: build/)")
     parser.add_argument("--no-zip", action="store_true", help="stop after the app folder and the smoke test")
+    add_whisper_arguments(parser)
     args = parser.parse_args()
 
     check_environment()
     check_models(args.models)
     check_whisper_cpp()
+    whisper = whisper_test_files(args.whisper_model, args.whisper_audio, args.no_whisper_test)
     ffmpeg, ffmpeg_notices = find_ffmpeg(args.ffmpeg)
     out = args.out.resolve()
     dist = out / "app"
@@ -386,7 +464,7 @@ def main():
     collect_licences(app, ffmpeg_notices)
     print(f"App folder {app}: {folder_size(app) / 1024 ** 2:.0f} MiB "
           f"(program {code_size / 1024 ** 2:.0f} MiB), built in {time.perf_counter() - started:.0f} s", flush=True)
-    smoke_test(app)
+    smoke_test(app, whisper)
     if not args.no_zip:
         print("Release assets:", flush=True)
         make_assets(app, out / "release")

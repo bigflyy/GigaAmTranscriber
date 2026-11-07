@@ -185,10 +185,15 @@ python tools/build_windows.py
 It verifies the models, builds both EXEs into one folder with
 [packaging/GigaAmTranscriber.spec](packaging/GigaAmTranscriber.spec), copies the
 models, `ffmpeg.exe` (Gyan's 8.0.1 full build, matching the source archive in
-`third_party/ffmpeg/`) and the licences, runs the console EXE and starts the
+`third_party/ffmpeg/`) and the licences, runs the console EXE, transcribes a
+short Russian file with Whisper on the GPU and the CPU, and starts the
 window off screen ([tools/gui_smoke_test.py](tools/gui_smoke_test.py)),
 then writes the zip, `THIRD_PARTY_LICENSES.zip`, the FFmpeg source and
-`SHA256SUMS.txt` to `build/release/`.
+`SHA256SUMS.txt` to `build/release/`. The Whisper test does not download the model: it links in a
+downloaded model folder, `--whisper-model FOLDER` (a `whisper_large_v3_turbo_q5_0`
+folder, for example from `%LOCALAPPDATA%\GigaAmTranscriber\models`) with
+`--whisper-audio FILE`; both default to the test area `build/whisper-test/`, and
+`--no-whisper-test` skips it. The Linux build takes the same options.
 
 **Linux release.** Built and tested on Ubuntu 24.04 (WSL works) with the system
 Python 3.12, because the app carries the system's PyGObject, which fits only that
@@ -203,8 +208,8 @@ python3 -m venv ~/.venvs/gigaam-build      # without --system-site-packages
 [packaging/GigaAmTranscriber-linux.spec](packaging/GigaAmTranscriber-linux.spec)
 bundles Python, numpy, ONNX Runtime (CPU), pywebview and PyGObject; GTK,
 WebKitGTK, GObject introspection and FFmpeg come from the system. The script
-checks that every bundled library resolves, runs the command line on silence and
-on the `--speech` file, checks the missing-WebKitGTK message, opens the window on
+checks that every bundled library resolves, runs the command line on silence,
+on the `--speech` file and with Whisper on the CPU, checks the missing-WebKitGTK message, opens the window on
 a private Xvfb display and lets it transcribe the file, then writes the tar.gz and
 `SHA256SUMS.txt`. For a release, build Windows first and pass
 `--release /mnt/c/<repo>/build/release`: the Linux licences then go into the same
