@@ -1,4 +1,4 @@
-"""gigaam_app/paths.py: the ffmpeg message and the frozen Linux child environment."""
+"""gigaam_app/paths.py: the ffmpeg message, the frozen Linux child environment, replace_file."""
 
 import os
 import sys
@@ -46,3 +46,33 @@ def test_child_environment_is_left_alone_from_source(monkeypatch):
     monkeypatch.setenv("LD_LIBRARY_PATH", "/somewhere")
     paths.restore_child_environment()
     assert os.environ["LD_LIBRARY_PATH"] == "/somewhere"
+
+
+def test_replace_file_waits_for_a_short_lock(tmp_path, monkeypatch):
+    """Windows refuses a replace while another program holds the old file for a moment
+    (an antivirus, a reader); replace_file tries again instead of failing the save."""
+    source, target = tmp_path / "new.tmp", tmp_path / "settings.json"
+    source.write_text("new", encoding="utf-8")
+    target.write_text("old", encoding="utf-8")
+    real_replace, calls = os.replace, []
+
+    def busy_twice(a, b):
+        calls.append(a)
+        if len(calls) <= 2:
+            raise PermissionError(5, "Access is denied")
+        real_replace(a, b)
+
+    monkeypatch.setattr(paths.os, "replace", busy_twice)
+    monkeypatch.setattr(paths, "REPLACE_PAUSE", 0)
+    paths.replace_file(source, target)
+    assert len(calls) == 3 and target.read_text(encoding="utf-8") == "new"
+
+
+def test_replace_file_gives_up_on_a_lasting_lock(tmp_path, monkeypatch):
+    def always_busy(a, b):
+        raise PermissionError(5, "Access is denied")
+
+    monkeypatch.setattr(paths.os, "replace", always_busy)
+    monkeypatch.setattr(paths, "REPLACE_PAUSE", 0)
+    with pytest.raises(PermissionError):
+        paths.replace_file(tmp_path / "a", tmp_path / "b")

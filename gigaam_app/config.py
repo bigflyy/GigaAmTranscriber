@@ -15,7 +15,7 @@ import tempfile
 from .catalog import ALIASES
 from .engine import DEFAULT_MODEL, MODELS
 from .outputs import DEFAULT_FORMATS, FORMATS
-from .paths import app_dir
+from .paths import app_dir, replace_file
 from .vad import VadOptions
 
 CONFIG_NAME = "gigaam-config.json"
@@ -124,7 +124,7 @@ def save(settings, path=None):
     try:
         with os.fdopen(handle, "w", encoding="utf-8") as stream:
             stream.write(settings.to_json())
-        os.replace(temporary, path)
+        replace_file(temporary, path)
     except BaseException:
         Path(temporary).unlink(missing_ok=True)
         raise

@@ -9,6 +9,7 @@ import re
 import tempfile
 
 from .catalog import model_title
+from .paths import replace_file
 
 FORMATS = ("txt", "timestamps", "md", "srt", "json")
 DEFAULT_FORMATS = ("txt", "timestamps")
@@ -176,7 +177,7 @@ def write_outputs(transcript, formats=DEFAULT_FORMATS, out_dir=None):
         try:
             with os.fdopen(handle, "w", encoding="utf-8", newline="\n") as stream:
                 stream.write(RENDERERS[fmt](transcript))
-            os.replace(temporary, path)
+            replace_file(temporary, path)
         except BaseException:
             Path(temporary).unlink(missing_ok=True)
             raise

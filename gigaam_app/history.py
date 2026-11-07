@@ -18,6 +18,7 @@ import time
 import uuid
 
 from .engine import Segment, Transcript, Word
+from .paths import replace_file
 
 VERSION = 1
 
@@ -88,7 +89,7 @@ class History:
         try:
             with os.fdopen(handle, "w", encoding="utf-8", newline="\n") as stream:
                 json.dump(data, stream, ensure_ascii=False)
-            os.replace(temporary, target)
+            replace_file(temporary, target)
         except BaseException:
             Path(temporary).unlink(missing_ok=True)
             raise

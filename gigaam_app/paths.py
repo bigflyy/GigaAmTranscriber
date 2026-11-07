@@ -4,6 +4,27 @@ import os
 from pathlib import Path
 import shutil
 import sys
+import time
+
+REPLACE_TRIES = 10        # replace_file: tries while Windows says the target is busy
+REPLACE_PAUSE = 0.1       # seconds between them (about 1 s in all)
+
+
+def replace_file(source, target):
+    """os.replace(source, target), retried for about a second on PermissionError.
+
+    On Windows a file cannot be replaced while another process has it open without
+    delete sharing: an antivirus scanning the previous version, a search indexer, or
+    a program reading it at that moment. Those holds last milliseconds, so a short
+    wait turns a failed save into a normal one. A lasting lock still raises."""
+    for attempt in range(REPLACE_TRIES):
+        try:
+            os.replace(source, target)
+            return
+        except PermissionError:
+            if attempt == REPLACE_TRIES - 1:
+                raise
+            time.sleep(REPLACE_PAUSE)
 
 
 def app_dir() -> Path:
