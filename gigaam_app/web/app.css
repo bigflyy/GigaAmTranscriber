@@ -275,6 +275,12 @@ button.icon:hover { color: var(--text); background: var(--card); }
 .text.doubts-colors .w.c2 { color: var(--conf-2); }
 .text.doubts-colors .w.c3 { color: var(--conf-3); }
 .text.doubts-colors .w.c4 { color: var(--conf-4); font-weight: 600; }
+/* The colour style as a smooth gradient: each word's --wc mixes the two nearest steps
+   (app.js wordColor). The steps above stay as the fallback where color-mix is missing. */
+@supports (color: color-mix(in oklab, red 50%, blue)) {
+  .text.doubts-colors .w[data-c] { color: var(--wc); }
+}
+#doubt-light, #doubt-strong { width: 64px; }
 
 /* The bar above selected words (plan 03): listen, recognise again, edit. */
 .file-view { position: relative; }

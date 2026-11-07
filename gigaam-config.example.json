@@ -7,6 +7,8 @@
   "include_timestamps": false,
   "doubt_marks": true,
   "doubt_style": "underline",
+  "doubt_light": 0.97,
+  "doubt_strong": 0.8,
   "outputs": ["txt", "timestamps"],
   "vad_threshold": 0.5,
   "vad_min_speech_ms": 300,

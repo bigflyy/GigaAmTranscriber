@@ -272,22 +272,47 @@ function drawLines(id) {
 }
 
 // Word confidence (plan 03 B2): how sure the model was of a word, 0..1 (null when not known:
-// text typed by hand, older files). Below DOUBT_LIGHT a word is doubtful (dotted underline),
-// below DOUBT_STRONG it is likely wrong (wavy underline). The colour style paints every word
-// with one of the steps c0 (sure, green) .. c4 (red); COLOR_STEPS are their lower bounds.
-const DOUBT_LIGHT = 0.97;
-const DOUBT_STRONG = 0.80;
-const COLOR_STEPS = [0.97, 0.90, 0.80, 0.65];
+// text typed by hand, older files). Underline style: below Settings doubt_light a word is
+// doubtful (d1, dotted), below doubt_strong likely wrong (d2, wavy). Colour style: every
+// word gets a colour that slides smoothly through the steps --conf-0 (sure, green) ..
+// --conf-4 (red), placed at the GRADIENT confidences; the class c0..c4 is the nearest
+// step, the fallback where color-mix is missing.
+const GRADIENT = [0.98, 0.92, 0.85, 0.75, 0.60];
 
-function confidenceClasses(confidence) {
-  if (confidence === null || confidence === undefined) return [];
-  const classes = [];
-  if (confidence < DOUBT_STRONG) classes.push('d2');
-  else if (confidence < DOUBT_LIGHT) classes.push('d1');
-  let step = COLOR_STEPS.findIndex((bound) => confidence >= bound);
-  if (step < 0) step = COLOR_STEPS.length;
-  classes.push(`c${step}`);
-  return classes;
+function doubtLevel(confidence) {
+  const light = state.settings.doubt_light || 0.97;
+  const strong = state.settings.doubt_strong || 0.80;
+  return confidence < strong ? 'd2' : confidence < light ? 'd1' : '';
+}
+
+function wordColor(confidence) {
+  // The two gradient steps around the confidence, mixed in proportion (oklab keeps the
+  // in-between colours bright). The tokens differ per theme, so the mix follows the theme.
+  if (confidence >= GRADIENT[0]) return 'var(--conf-0)';
+  for (let step = 1; step < GRADIENT.length; step++) {
+    if (confidence >= GRADIENT[step]) {
+      const share = (confidence - GRADIENT[step]) / (GRADIENT[step - 1] - GRADIENT[step]);
+      return `color-mix(in oklab, var(--conf-${step - 1}) ${(share * 100).toFixed(1)}%, var(--conf-${step}))`;
+    }
+  }
+  return `var(--conf-${GRADIENT.length - 1})`;
+}
+
+function markWord(span) {
+  // The classes and the colour of one word span, from its data-c.
+  const confidence = Number(span.dataset.c);
+  span.classList.remove('d1', 'd2', 'c0', 'c1', 'c2', 'c3', 'c4');
+  const level = doubtLevel(confidence);
+  if (level) span.classList.add(level);
+  let step = GRADIENT.findIndex((bound) => confidence >= bound);
+  if (step < 0) step = GRADIENT.length - 1;
+  span.classList.add(`c${step}`);
+  span.style.setProperty('--wc', wordColor(confidence));
+}
+
+function markAllWords() {
+  // The thresholds changed in Settings: mark the shown words again.
+  for (const span of $('text').querySelectorAll('.w[data-c]')) markWord(span);
 }
 
 function lineNode(line) {
@@ -311,7 +336,7 @@ function lineNode(line) {
     const confidence = word[3];
     if (confidence !== null && confidence !== undefined) {
       span.dataset.c = confidence;
-      span.classList.add(...confidenceClasses(confidence));
+      markWord(span);
     }
     p.appendChild(span);
   });
@@ -368,9 +393,12 @@ function showConfidence(event) {
   const word = event.target.closest && event.target.closest('.w');
   if (!word || word.dataset.c === undefined) return;
   const text = $('text');
-  const shown = text.classList.contains('doubts-colors') ||
-    (text.classList.contains('doubts-underline') && (word.classList.contains('d1') || word.classList.contains('d2')));
-  word.title = shown ? `Уверенность модели: ${Math.round(Number(word.dataset.c) * 100)} %` : '';
+  const percent = Math.round(Number(word.dataset.c) * 100);
+  if (text.classList.contains('doubts-colors')) word.title = `Уверенность модели: ${percent} %`;
+  else if (!text.classList.contains('doubts-underline')) word.title = '';
+  else if (word.classList.contains('d2')) word.title = `Скорее ошибка: уверенность модели ${percent} %`;
+  else if (word.classList.contains('d1')) word.title = `Возможно ошибка: уверенность модели ${percent} %`;
+  else word.title = '';
 }
 
 async function copyText() {
@@ -727,6 +755,9 @@ function renderSettings() {
   const style = settings.doubt_style || 'underline';
   for (const input of document.querySelectorAll('input[name="doubt-style"]')) input.checked = input.value === style;
   applyDoubts(settings.doubt_marks !== false, style);
+  $('doubt-light').value = Math.round((settings.doubt_light || 0.97) * 100);
+  $('doubt-strong').value = Math.round((settings.doubt_strong || 0.80) * 100);
+  markAllWords();
 }
 
 async function changeSetting(change) {
@@ -852,6 +883,20 @@ for (const input of document.querySelectorAll('input[name="doubt-style"]')) {
   input.addEventListener('change', () => changeSetting({ doubt_style: input.value }));
 }
 $('text').addEventListener('mouseover', showConfidence);
+for (const id of ['doubt-light', 'doubt-strong']) {
+  $(id).addEventListener('change', () => {
+    // Percent in the fields, 0..1 in the settings; the wavy threshold stays below the dotted one.
+    const light = Math.floor(Number($('doubt-light').value)) / 100;
+    const strong = Math.floor(Number($('doubt-strong').value)) / 100;
+    if (!(strong > 0 && strong < light && light <= 1)) {
+      toast('Порог волны должен быть меньше порога пунктира');
+      $('doubt-light').value = Math.round((state.settings.doubt_light || 0.97) * 100);
+      $('doubt-strong').value = Math.round((state.settings.doubt_strong || 0.80) * 100);
+      return;
+    }
+    changeSetting({ doubt_light: light, doubt_strong: strong });
+  });
+}
 $('language').addEventListener('change', () => changeSetting({ language: $('language').value }));
 $('threads').addEventListener('change', () => {
   const value = Math.max(0, Math.floor(Number($('threads').value) || 0));

@@ -374,7 +374,8 @@ def test_settings_apply_to_the_next_file_and_reload_the_model(app, media):
     app.set_settings({"device": "CPU", "cpu_threads": 4, "outputs": ["srt", "txt"]})
     assert last(app.sent, "settings") == {"model": "RNNT", "language": "auto", "device": "CPU", "cpu_threads": 4,
                                           "outputs": ["txt", "srt"], "include_timestamps": False, "terms": "",
-                                          "doubt_marks": True, "doubt_style": "underline"}
+                                          "doubt_marks": True, "doubt_style": "underline",
+                                          "doubt_light": 0.97, "doubt_strong": 0.80}
     assert app.fake_worker.take() == [("load", ("RNNT", "cpu", 4))]
     app.add_files([str(media[0])])
     job = app.fake_worker.take()[0]
@@ -393,9 +394,15 @@ def test_doubt_marks_are_a_view_setting_without_a_reload(app):
     assert (config.load(app.settings_path).doubt_marks, config.load(app.settings_path).doubt_style) == (False, "colors")
     with pytest.raises(ValueError):
         app.set_settings({"doubt_style": "bold"})
+    app.set_settings({"doubt_light": 0.9, "doubt_strong": 0.6})
+    assert (config.load(app.settings_path).doubt_light, config.load(app.settings_path).doubt_strong) == (0.9, 0.6)
+    with pytest.raises(ValueError):
+        app.set_settings({"doubt_strong": 0.95})  # the wavy threshold must stay below the dotted one
+    assert app.settings.doubt_strong == 0.6
     app.reset_settings()
     view = last(app.sent, "settings")
-    assert (view["doubt_marks"], view["doubt_style"]) == (True, "underline")
+    assert (view["doubt_marks"], view["doubt_style"], view["doubt_light"], view["doubt_strong"]) == \
+        (True, "underline", 0.97, 0.80)
 
 
 def test_language_goes_with_each_file_without_a_reload(app, media):

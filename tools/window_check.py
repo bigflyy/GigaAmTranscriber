@@ -46,6 +46,17 @@ def check(name, ok, detail=""):
     print(f"{'ok  ' if ok else 'FAIL'} {name}" + (f": {detail}" if detail else ""), flush=True)
 
 
+def settings_text():
+    """The test's settings file. On Windows a read can meet the moment the app replaces the
+    file (PermissionError); try again for up to a second, then give up with ""."""
+    for _ in range(10):
+        try:
+            return Path(os.environ["GIGAAM_CONFIG"]).read_text("utf-8")
+        except PermissionError:
+            time.sleep(0.1)
+    return ""
+
+
 def wait(condition, timeout, what):
     deadline = time.perf_counter() + timeout
     while time.perf_counter() < deadline:
@@ -139,7 +150,7 @@ def whisper_steps(js, control, short_audio, shoot, real):
     check("language choice for Whisper", not js("$('language-box').hidden")
           and js("$('language').value") == "auto")
     js("$('language').value = 'ru'; $('language').dispatchEvent(new Event('change'))")
-    saved = lambda: '"language": "ru"' in Path(os.environ["GIGAAM_CONFIG"]).read_text("utf-8")  # noqa: E731
+    saved = lambda: '"language": "ru"' in settings_text()  # noqa: E731
     wait(saved, 10, "language saved")
     check("language saved at once", saved())
     wait(lambda: "Whisper" in js("$('engine-text').textContent") and control.engine["state"] == "ready",
@@ -240,19 +251,35 @@ def doubt_steps(js, control, item, shoot):
     check("dotted and wavy underlines", looks == ["underline dotted", "underline wavy"], looks)
     title = js("(() => { const w = $('text').querySelector('.w.d1, .w.d2'); if (!w) return 'none';"
                " w.dispatchEvent(new MouseEvent('mouseover', {bubbles: true})); return w.title; })()")
-    check("hover names the confidence", title == "none" or (title.startswith("Уверенность модели:") and title.endswith("%")),
+    check("hover names the confidence", title == "none" or ("ошибка: уверенность модели" in title and title.endswith("%")),
           title)
+    # A higher dotted threshold in Settings marks more words at once.
+    js("$('doubt-light').value = 99; $('doubt-light').dispatchEvent(new Event('change'))")
+    more = sum(1 for word in known if word.confidence < 0.99)
+    wait(lambda: js("$('text').querySelectorAll('.w.d1, .w.d2').length") == more, 5, "threshold 99 %")
+    wait(lambda: '"doubt_light": 0.99' in settings_text(), 5, "threshold saved")
+    check("threshold from Settings", js("$('text').querySelectorAll('.w.d1, .w.d2').length") == more
+          and '"doubt_light": 0.99' in settings_text(), more)
+    js("$('doubt-light').value = 97; $('doubt-light').dispatchEvent(new Event('change'))")
+    js("$('doubt-strong').value = 98; $('doubt-strong').dispatchEvent(new Event('change'))")
+    check("wavy threshold above dotted is refused", js("$('doubt-strong').value") == "80")
     shoot("04d-doubts")
     js("$('doubts').click()")
     check("switch hides the marks", not js("$('text').classList.contains('doubts-underline')"))
-    wait(lambda: '"doubt_marks": false' in Path(os.environ["GIGAAM_CONFIG"]).read_text("utf-8"), 5, "switch saved")
+    wait(lambda: '"doubt_marks": false' in settings_text(), 5, "switch saved")
     js("$('doubts').click()")
     js("document.querySelector('input[name=doubt-style][value=colors]').click()")
     wait(lambda: js("$('text').classList.contains('doubts-colors')"), 5, "colour style")
     colours = js("(() => { const w = $('text').querySelector('.w.c0'); return w ? [getComputedStyle(w).color,"
                  " getComputedStyle($('text')).color] : null; })()")
     check("colour style paints the words", colours is not None and colours[0] != colours[1], colours)
-    check("colour style saved", '"doubt_style": "colors"' in Path(os.environ["GIGAAM_CONFIG"]).read_text("utf-8"))
+    # The gradient: a word between two steps gets a colour between theirs.
+    blend = js("(() => { const w = $('text').querySelector('.w'); const had = w.dataset.c; const out = [];"
+               " for (const c of ['0.98', '0.95', '0.92']) { w.dataset.c = c; markWord(w); out.push(getComputedStyle(w).color); }"
+               " w.dataset.c = had; markWord(w); return out; })()")
+    check("colours slide between the steps", len(set(blend)) == 3, blend)
+    wait(lambda: '"doubt_style": "colors"' in settings_text(), 5, "colour style saved")
+    check("colour style saved", '"doubt_style": "colors"' in settings_text())
     shoot("04e-doubt-colours")
     js("document.querySelector('input[name=doubt-style][value=underline]').click()")
     wait(lambda: js("$('text').classList.contains('doubts-underline')"), 5, "underline style again")
@@ -355,11 +382,11 @@ def scenario(window, control, long_audio, short_audio, shoot, whisper=False):
         wait(lambda: "процессор" in js("$('engine-text').textContent"), 60, "CPU model")
         check("device CPU", "процессор" in js("$('engine-text').textContent"), js("$('engine-text').textContent"))
         # Settings are saved at once; "Sbrosit" goes back to the defaults (device Auto).
-        check("settings saved at once", '"device": "CPU"' in Path(os.environ["GIGAAM_CONFIG"]).read_text("utf-8"))
+        check("settings saved at once", '"device": "CPU"' in settings_text())
         js("$('reset-settings').click()")
         wait(lambda: js("$('reset-note').textContent") != "", 10, "reset note")
         check("reset to defaults", js("document.querySelector('#devices input[value=Auto]').checked")
-              and '"device": "Auto"' in Path(os.environ["GIGAAM_CONFIG"]).read_text("utf-8"))
+              and '"device": "Auto"' in settings_text())
         time.sleep(0.5)
         wait(lambda: control.engine["state"] == "ready", 60, "model with Auto")
 

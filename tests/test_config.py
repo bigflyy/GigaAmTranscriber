@@ -62,9 +62,10 @@ def test_whisper_and_its_language_load():
 
 def test_doubt_marks_default_on_and_round_trip():
     assert (config.Settings().doubt_marks, config.Settings().doubt_style) == (True, "underline")
-    settings = config.parse({"doubt_marks": False, "doubt_style": "colors"})
+    settings = config.parse({"doubt_marks": False, "doubt_style": "colors", "doubt_light": 0.9, "doubt_strong": 0.5})
     again = config.parse(json.loads(settings.to_json()))
-    assert (again.doubt_marks, again.doubt_style) == (False, "colors")
+    assert (again.doubt_marks, again.doubt_style, again.doubt_light, again.doubt_strong) == (False, "colors", 0.9, 0.5)
+    assert (config.Settings().doubt_light, config.Settings().doubt_strong) == (0.97, 0.80)
 
 
 def test_vad_ints_stay_ints():
@@ -86,6 +87,10 @@ def test_vad_ints_stay_ints():
     ({"include_timestamps": "yes"}, "include_timestamps"),
     ({"doubt_marks": 1}, "doubt_marks"),
     ({"doubt_style": "bold"}, "doubt_style"),
+    ({"doubt_light": 0}, "doubt_light"),
+    ({"doubt_light": 1.5}, "doubt_light"),
+    ({"doubt_strong": "0.8"}, "doubt_strong"),
+    ({"doubt_light": 0.7, "doubt_strong": 0.8}, "below doubt_light"),
     ({"outputs": []}, "outputs"),
     ({"outputs": ["txt", "docx"]}, "outputs"),
     ({"vad_threshold": 0}, "vad_threshold"),

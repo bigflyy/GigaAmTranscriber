@@ -369,7 +369,8 @@ class Controller:
         s = self.settings
         return {"model": s.model, "language": s.language, "device": s.device, "cpu_threads": s.cpu_threads,
                 "outputs": list(s.outputs), "include_timestamps": s.include_timestamps,
-                "terms": s.terms, "doubt_marks": s.doubt_marks, "doubt_style": s.doubt_style}
+                "terms": s.terms, "doubt_marks": s.doubt_marks, "doubt_style": s.doubt_style,
+                "doubt_light": s.doubt_light, "doubt_strong": s.doubt_strong}
 
     # ------------------------------------------------------------------ page calls
 
@@ -689,6 +690,12 @@ class Controller:
                 if change["doubt_style"] not in config.DOUBT_STYLES:
                     raise ValueError(f"Unknown doubt style {change['doubt_style']!r}")
                 s.doubt_style = change["doubt_style"]
+            if "doubt_light" in change or "doubt_strong" in change:
+                light = float(change.get("doubt_light", s.doubt_light))
+                strong = float(change.get("doubt_strong", s.doubt_strong))
+                if not 0 < strong < light <= 1:
+                    raise ValueError("Doubt thresholds: expected 0 < strong < light <= 1")
+                s.doubt_light, s.doubt_strong = light, strong
             self._save_settings()
             self._emit("settings", self._settings_view())
             if self._engine_key() != before:
@@ -706,7 +713,8 @@ class Controller:
         return self.set_settings({"model": defaults.model, "device": defaults.device,
                                   "cpu_threads": defaults.cpu_threads, "outputs": list(defaults.outputs),
                                   "include_timestamps": defaults.include_timestamps,
-                                  "doubt_marks": defaults.doubt_marks, "doubt_style": defaults.doubt_style})
+                                  "doubt_marks": defaults.doubt_marks, "doubt_style": defaults.doubt_style,
+                                  "doubt_light": defaults.doubt_light, "doubt_strong": defaults.doubt_strong})
 
     def _save_settings(self):
         """Every change is kept for the next start (gigaam-config.json, also read by the CLI)."""
