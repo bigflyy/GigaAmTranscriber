@@ -23,7 +23,7 @@ Findings (2026-11-08):
 
 ### Stage A: Audio for the page
 
-- [ ] **A1** Local audio server: 127.0.0.1 on a free port, a random token in every path, Range requests, serves only files the controller registered; starts with the window and stops when it closes. Check first that the page (loaded from a string) may play http://127.0.0.1 media in WebView2
+- [x] **A1** Local audio server: 127.0.0.1 on a free port, a random token in every path, Range requests, serves only files the controller registered; starts with the window and stops when it closes. Check first that the page (loaded from a string) may play http://127.0.0.1 media in WebView2
 - [ ] **A2** controller.audio(file_id) -> {url, duration}: the original file when its format plays in the window (mp3, m4a, aac, wav, ogg, opus, flac, webm, mp4 by extension), else a temporary Ogg Opus made in the background ("audio_ready" message); the page also asks for the converted copy when the original fails to play. Temporary copies are deleted when the window closes
 
 ### Stage B: The player bar
