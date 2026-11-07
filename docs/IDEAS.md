@@ -13,10 +13,12 @@ models, Stage E speaker diarization) and plan 02 (D1-D3).
 
 - 2026-11-06: detect the language (there, in the selected part or the file).
 - 2026-11-06: speaker segments somehow, somewhere ("idea for now").
+  2026-11-08: owner: speaker labels are the next big task after suggested fixes (plan 06): "we are going to want this really", probably for v0.6.0, "unless something you or i think of something cool and better". Plan 01 Stage E holds the earlier diarization work.
 
 ## Links and summaries
 
 - 2026-11-07: send a video by link (YouTube for example) and get it transcribed, then summarised automatically: "an addon to firefox / chrome / just some kind of service, maybe even in our app idk". Summary with Claude / Codex / an API; a local model as experimental, for the future ("i dont have a good one").
+  2026-11-08 (repeated): paste a YouTube link, "or possible in the future other types of link", and get a transcript; summarise it later with a local Codex or Claude Code, or a local model ("i dont have good ones, so i barely think last one is usable").
 
 ## Started
 
