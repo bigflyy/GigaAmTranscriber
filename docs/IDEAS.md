@@ -6,11 +6,6 @@ models, Stage E speaker diarization) and plan 02 (D1-D3).
 
 ## Models
 
-- 2026-11-06: an optimized Whisper variant for inference that I can turn on in the app;
-  "one of the most important tasks probably". It may also help fix selected parts, "but
-  just the model itself is already more important". Close to plan 01 Stage F (F2 compares
-  Whisper large-v3-turbo with Parakeet and Qwen3-ASR) and plan 03 C1.
-
 ## Languages and speakers
 
 - 2026-11-06: detect the language (there, in the selected part or the file).
@@ -18,6 +13,10 @@ models, Stage E speaker diarization) and plan 02 (D1-D3).
 
 ## Started
 
+- 2026-11-06: an optimized Whisper variant for inference that I can turn on in the app;
+  "one of the most important tasks probably". It may also help fix selected parts, "but
+  just the model itself is already more important". Close to plan 01 Stage F (F2 compares
+  Whisper large-v3-turbo with Parakeet and Qwen3-ASR) and plan 03 C1. Plan: docs/plans/04-whisper.md (started 2026-11-07).
 - 2026-11-06: select a part of the text and try to fix it somehow: decode again with
   another temperature or other heuristics, something smart, auto fixing; maybe run another
   model on that part (Whisper or similar). Plan: docs/plans/03-fix-a-part.md (owner chose it

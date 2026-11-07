@@ -32,4 +32,4 @@ Owner's decisions (2026-11-06):
 
 ### Stage C: Another model for the part
 
-- [ ] **C1** Depends on plan 01 Stage F (Whisper large-v3-turbo, Parakeet, Qwen3-ASR compared on Russian): offer the winner as an optional download and as one more reading in A3
+- [ ] **C1** Depends on plan 04 Stage B (Whisper in the app, [04-whisper.md](04-whisper.md)) and plan 01 Stage F (Parakeet, Qwen3-ASR): offer the winner as an optional download and as one more reading in A3

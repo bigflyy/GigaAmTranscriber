@@ -54,6 +54,8 @@ Findings and measurements behind this plan are in [HANDOFF.md](../../HANDOFF.md)
 
 ### Stage F: English and other languages (before Stage E)
 
+Whisper moved to its own plan, [04-whisper.md](04-whisper.md) (2026-11-07); Parakeet and Qwen3-ASR stay here.
+
 - [ ] **F1** Get labelled test audio: Russian and English, with reference text (public sets such as FLEURS or LibriSpeech, plus own files)
 - [ ] **F2** Compare candidates on WER and speed: NVIDIA Parakeet TDT 0.6B v3 (25 European languages incl. Russian, a transducer like RNNT), Whisper large-v3-turbo (99 languages, slower), Qwen3-ASR (top of the Open ASR leaderboard, 1.7B, LLM decoder)
 - [ ] **F3** Export the chosen model to ONNX with a numpy decoder; check DirectML and CPU
