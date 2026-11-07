@@ -241,15 +241,154 @@ def selected_text(segments, first, last):
     return " ".join(word_at(segments, position).text for position in positions_between(segments, first, last))
 
 
+# ---------------------------------------------------------------------- suggested fixes (plan 06)
+#
+# After a file is recognised, each group of doubtful words is recognised again with the
+# other models, the same way as a selection above (context, cuts). Where a reading
+# differs from the current text at the group, the differing words are offered to the
+# user as a suggestion, kept on the first current word they would replace
+# (Word.suggestions).
+
+# Doubtful words join one group when at most this many sure words lie between them.
+DOUBT_GAP_WORDS = 1
+# A suggestion may replace at most this many words more than its group holds: a reading
+# that differs over a longer run has gone its own way and is not offered.
+SUGGEST_EXTRA_WORDS = 4
+# How far back replace_words looks for suggestions that reach into the replaced words.
+SUGGEST_REACH = 100
+
+
+def doubt_groups(segments, below):
+    """Groups of doubtful words: a list of (first, last) word positions, in text order.
+
+    A word is doubtful when its confidence is known and below `below`. A group stays
+    inside one line; two doubtful words with at most DOUBT_GAP_WORDS sure words between
+    them join, unless the group would then last longer than MAX_SECONDS.
+    """
+    groups = []
+    for segment_index, segment in enumerate(segments):
+        group = None
+        for word_index, word in enumerate(segment.words):
+            if word.confidence is None or word.confidence >= below:
+                continue
+            if (group is not None and word_index - group[1][1] - 1 <= DOUBT_GAP_WORDS
+                    and word.end - segment.words[group[0][1]].start <= MAX_SECONDS):
+                group = (group[0], (segment_index, word_index))
+                continue
+            if group is not None:
+                groups.append(group)
+            group = ((segment_index, word_index), (segment_index, word_index))
+        if group is not None:
+            groups.append(group)
+    return groups
+
+
+def positions_from(segments, position, count):
+    """count word positions in text order starting with position; fewer at the end of the text."""
+    found = [tuple(position)]
+    while len(found) < count:
+        following = neighbour(segments, found[-1], +1)
+        if following is None:
+            break
+        found.append(following)
+    return found
+
+
+def suggestion_from(reading, context_words, first_selected, last_selected):
+    """What a reading of the piece offers in place of the doubtful words, or None when
+    it agrees with the current text there.
+
+    reading: Words recognised from the piece (group plus context); context_words: the
+    current Words of the piece, first_selected..last_selected (indices, both included)
+    being the group. Returns (first, count, words): count current words from index
+    first are to be replaced by the reading's words.
+
+    The reading is lined up with the current words (word keys, as in trim_reading).
+    Every differing run that overlaps the group joins into one, with the matching words
+    between them, so "Tullz Colling" -> "Tools Calling" is one offer even when only
+    "Tullz" was doubtful. A run that only adds or only drops words takes one matching
+    neighbour along, so an offer always replaces at least one word with at least one.
+    """
+    current = [word_key(word.text) for word in context_words]
+    heard = [word_key(word.text) for word in reading]
+    opcodes = difflib.SequenceMatcher(a=current, b=heard, autojunk=False).get_opcodes()
+    low, high = first_selected, last_selected + 1
+    touching = [(i1, i2, j1, j2) for tag, i1, i2, j1, j2 in opcodes
+                if tag != "equal" and ((i1 < high and i2 > low) or (i1 == i2 and low <= i1 <= high))]
+    if not touching:
+        return None
+    i1, i2 = min(op[0] for op in touching), max(op[1] for op in touching)
+    j1, j2 = min(op[2] for op in touching), max(op[3] for op in touching)
+    if i1 == i2 or j1 == j2:
+        # Next to a differing run difflib always has matching words (or the edge of the piece).
+        if i1 > 0 and j1 > 0:
+            i1, j1 = i1 - 1, j1 - 1
+        elif i2 < len(current) and j2 < len(heard):
+            i2, j2 = i2 + 1, j2 + 1
+        else:
+            return None
+    if i2 - i1 > high - low + SUGGEST_EXTRA_WORDS:
+        return None
+    return i1, i2 - i1, list(reading[j1:j2])
+
+
+def add_suggestion(segments, position, count, words, model):
+    """Keep an offer of words (read by model) in place of count words from position.
+
+    The same offer from a second model (same words, ignoring case and punctuation)
+    only adds that model to it. Returns True when a new offer was added."""
+    word = word_at(segments, position)
+    keys = [word_key(new.text) for new in words]
+    for offer in word.suggestions or []:
+        if offer["count"] == count and [word_key(item[2]) for item in offer["words"]] == keys:
+            if model not in offer["models"]:
+                offer["models"].append(model)
+            return False
+    offer = {"models": [model], "count": count,
+             "words": [[new.start, new.end, new.text, new.confidence] for new in words]}
+    word.suggestions = (word.suggestions or []) + [offer]
+    return True
+
+
+def suggestion_words(offer):
+    """The Words of an offer, as they go into the text."""
+    return [Word(start, end, text, confidence) for start, end, text, confidence in offer["words"]]
+
+
+def drop_suggestion(segments, position, index):
+    """Forget one offer kept on the word at position (the user left the text as it is)."""
+    word = word_at(segments, position)
+    offers = list(word.suggestions or [])
+    del offers[index]
+    word.suggestions = offers or None
+
+
+def _drop_reaching(segments, first):
+    """Before words from first on are replaced: offers on earlier words that would
+    replace some of them no longer fit the text and are dropped."""
+    position, distance = first, 0
+    while distance < SUGGEST_REACH:
+        position = neighbour(segments, position, -1)
+        if position is None:
+            return
+        distance += 1
+        word = word_at(segments, position)
+        if word.suggestions:
+            kept = [offer for offer in word.suggestions if offer["count"] <= distance]
+            word.suggestions = kept or None
+
+
 def replace_words(segments, first, last, new_words):
     """Put new_words in place of the words first..last, in place.
 
     The new words go where the first selected word was; selected words in later
     segments are removed. Every touched segment gets its text joined again from its
     words, so segment.text and segment.words stay in step. Segment boundaries do
-    not move. Returns the indices of the changed segments.
+    not move. Offers kept on the replaced words go with them, and offers on earlier
+    words that reach into them are dropped. Returns the indices of the changed segments.
     """
     check_selection(segments, first, last)
+    _drop_reaching(segments, tuple(first))
     changed = list(range(first[0], last[0] + 1))
     for segment_index in reversed(changed):
         segment = segments[segment_index]

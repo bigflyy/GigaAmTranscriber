@@ -113,3 +113,89 @@ def test_replace_words_across_lines(segments):
     assert segments[0].text == "Раз два три, четыре"
     assert segments[1].text == "пять."
     assert [w.text for w in segments[1].words] == ["пять."]
+
+
+# ---------------------------------------------------------------------- suggested fixes (plan 06)
+
+def sure_line(*items):
+    """A segment from (text, start, end, confidence) words."""
+    found = [Word(start, end, text, confidence) for text, start, end, confidence in items]
+    return Segment(start=found[0].start, end=found[-1].end, text=" ".join(w.text for w in found), words=found)
+
+
+def test_doubt_groups_join_near_words_and_stay_in_one_line():
+    segments = [sure_line(("a", 0, 1, 0.5), ("b", 1, 2, 0.99), ("c", 2, 3, 0.6), ("d", 3, 4, 0.99),
+                          ("e", 4, 5, 0.99), ("f", 5, 6, 0.9), ("g", 6, 7, None)),
+                sure_line(("h", 8, 9, 0.9), ("i", 9, 10, 0.99))]
+    # a and c have one sure word between them: one group; f is two sure words away: its own;
+    # g has no confidence; h starts a new line, so a new group.
+    assert fix.doubt_groups(segments, 0.97) == [((0, 0), (0, 2)), ((0, 5), (0, 5)), ((1, 0), (1, 0))]
+    assert fix.doubt_groups(segments, 0.55) == [((0, 0), (0, 0))]
+
+
+def test_doubt_groups_split_when_too_long():
+    long_line = sure_line(*[(f"w{i}", i * 2.0, i * 2.0 + 1.0, 0.5) for i in range(20)])
+    groups = fix.doubt_groups([long_line], 0.97)
+    assert len(groups) == 2
+    for first, last in groups:
+        assert long_line.words[last[1]].end - long_line.words[first[1]].start <= fix.MAX_SECONDS
+
+
+CONTEXT = words(("любимый", 1.4, 1.9), ("механизм", 2.0, 2.6), ("Tullz", 2.7, 3.0), ("Colling,", 3.0, 3.5),
+                ("и", 3.6, 3.7))
+
+
+def test_suggestion_covers_the_whole_differing_run():
+    heard = words(("любимый", 1.4, 1.9), ("механизм", 2.0, 2.6), ("Tools", 2.7, 3.0), ("Calling,", 3.0, 3.5),
+                  ("и", 3.6, 3.7))
+    first, count, offered = fix.suggestion_from(heard, CONTEXT, 2, 2)  # only "Tullz" was doubtful
+    assert (first, count, [w.text for w in offered]) == (2, 2, ["Tools", "Calling,"])
+
+
+def test_suggestion_none_when_the_reading_agrees_or_differs_elsewhere():
+    same = words(("Любимый", 1.4, 1.9), ("механизм", 2.0, 2.6), ("Tullz", 2.7, 3.0), ("Colling", 3.0, 3.5),
+                 ("и.", 3.6, 3.7))
+    assert fix.suggestion_from(same, CONTEXT, 2, 2) is None  # case and punctuation do not count
+    elsewhere = words(("любимой", 1.4, 1.9), ("механизм", 2.0, 2.6), ("Tullz", 2.7, 3.0), ("Colling,", 3.0, 3.5),
+                      ("и", 3.6, 3.7))
+    assert fix.suggestion_from(elsewhere, CONTEXT, 2, 2) is None
+
+
+def test_suggestion_of_an_added_or_dropped_word_takes_a_neighbour():
+    current = words(("решение", 0, 1), ("принятии", 1, 2), ("задачи", 2, 3))
+    added = words(("решение", 0, 1), ("в", 1, 1.1), ("принятии", 1.1, 2), ("задачи", 2, 3))
+    first, count, offered = fix.suggestion_from(added, current, 1, 1)
+    assert (first, count, [w.text for w in offered]) == (0, 1, ["решение", "в"])
+    dropped = words(("решение", 0, 1), ("задачи", 2, 3))
+    first, count, offered = fix.suggestion_from(dropped, current, 1, 1)
+    assert (first, count, [w.text for w in offered]) == (0, 2, ["решение"])
+
+
+def test_suggestion_none_when_the_reading_went_its_own_way():
+    current = words(*[(f"w{i}", i, i + 1) for i in range(12)])
+    other = words(*[(f"x{i}", i, i + 1) for i in range(12)])
+    assert fix.suggestion_from(other, current, 5, 5) is None
+
+
+def test_add_suggestion_joins_the_same_offer_from_two_models():
+    segments = [sure_line(("Tullz", 2.7, 3.0, 0.5), ("Colling,", 3.0, 3.5, 0.99))]
+    offer = words(("Tools", 2.7, 3.0), ("Calling,", 3.0, 3.5))
+    assert fix.add_suggestion(segments, (0, 0), 2, offer, "Whisper")
+    assert not fix.add_suggestion(segments, (0, 0), 2, words(("tools", 2.7, 3.0), ("calling", 3.0, 3.5)), "CTC")
+    assert fix.add_suggestion(segments, (0, 0), 1, words(("Tulls", 2.7, 3.0)), "RNNT")
+    offers = segments[0].words[0].suggestions
+    assert [(o["models"], o["count"]) for o in offers] == [(["Whisper", "CTC"], 2), (["RNNT"], 1)]
+    assert [w.text for w in fix.suggestion_words(offers[0])] == ["Tools", "Calling,"]
+    fix.drop_suggestion(segments, (0, 0), 0)
+    fix.drop_suggestion(segments, (0, 0), 0)
+    assert segments[0].words[0].suggestions is None
+
+
+def test_replace_words_drops_offers_that_reach_into_the_change():
+    segments = [sure_line(("a", 0, 1, 0.5), ("b", 1, 2, 0.5), ("c", 2, 3, 0.99)),
+                sure_line(("d", 4, 5, 0.99), ("e", 5, 6, 0.99))]
+    fix.add_suggestion(segments, (0, 0), 1, words(("A", 0, 1)), "CTC")      # covers a only
+    fix.add_suggestion(segments, (0, 1), 3, words(("B", 1, 5)), "Whisper")  # covers b c d
+    fix.replace_words(segments, (1, 0), (1, 0), words(("D", 4, 5)))
+    assert segments[0].words[0].suggestions is not None
+    assert segments[0].words[1].suggestions is None

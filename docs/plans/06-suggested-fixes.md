@@ -22,10 +22,10 @@ Owner's decisions (2026-11-08, AskUserQuestion):
 
 ### Stage A: Suggestions in the backend
 
-- [ ] **A1** fix.py: group the doubtful words of a transcript into ranges (one line each, neighbours joined, at most MAX_SECONDS); turn a reading of the piece into suggestions (the differing runs that touch the group, as words with times)
-- [ ] **A2** Word.suggestions kept in the transcript and the history (not in the outputs); replace_words drops a suggestion whose words were changed
-- [ ] **A3** Worker job "suggest": one range at a time, each other installed model (not the transcript's own), Whisper with the terms; controller queues it after a finished file and on the button, a newly added file goes first; progress and results go to the page
-- [ ] **A4** Controller: take a suggestion (words keep their times, files written again, like apply_fix), leave it (the suggestion is dropped); Settings.suggest switch
+- [x] **A1** fix.py: group the doubtful words of a transcript into ranges (one line each, neighbours joined, at most MAX_SECONDS); turn a reading of the piece into suggestions (the differing runs that touch the group, as words with times)
+- [x] **A2** Word.suggestions kept in the transcript and the history (not in the outputs); replace_words drops a suggestion whose words were changed
+- [x] **A3** Worker job "suggest": one range at a time, each other installed model (not the transcript's own), Whisper with the terms; controller queues it after a finished file and on the button, a newly added file goes first; progress and results go to the page
+- [x] **A4** Controller: take a suggestion (words keep their times, files written again, like apply_fix), leave it (the suggestion is dropped); Settings.suggest switch
 - [ ] **A5** Measure on the 455 s lecture: how many suggestions, how many right, how long; decide whether a suggestion needs two models to agree
 
 ### Stage B: Window

@@ -215,6 +215,15 @@ class Api:
     def apply_fix(self, file_id, first, last, text, model):
         return self._controller.apply_fix(file_id, first, last, text, model)
 
+    def find_suggestions(self, file_id):
+        return self._controller.find_suggestions(file_id)
+
+    def take_suggestion(self, file_id, position, index):
+        return self._controller.take_suggestion(file_id, position, index)
+
+    def leave_suggestion(self, file_id, position, index):
+        return self._controller.leave_suggestion(file_id, position, index)
+
     def set_settings(self, change):
         return self._controller.set_settings(change)
 

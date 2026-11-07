@@ -56,6 +56,9 @@ class Transcript:
     segments: list = field(default_factory=list)
     cancelled: bool = False
     elapsed_seconds: float = 0.0
+    # The window looked for other readings of the doubtful words (plan 06); they are kept
+    # in Word.suggestions. Not written to the transcript files.
+    suggestions_searched: bool = False
 
     @property
     def text(self):

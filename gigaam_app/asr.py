@@ -30,6 +30,11 @@ class Word:
     # (letter_groups explains how it is counted). None when unknown: text typed by hand,
     # a word of punctuation only, a transcript saved before word confidence existed.
     confidence: float = None
+    # Other readings offered for this word and the words after it (plan 06, fix.py): a list
+    # of {"models": [model keys], "count": current words replaced, starting with this one,
+    # "words": [[start, end, text, confidence], ...]}. None when there are none. Kept in the
+    # history, not written to the transcript files.
+    suggestions: list = None
 
 
 def letter_key(piece):

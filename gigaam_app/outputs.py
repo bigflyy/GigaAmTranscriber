@@ -83,10 +83,12 @@ def json_text(transcript):
     """The whole transcript as JSON: segments with word times and, where known, each
     word's confidence (0..1, how sure the model was; left out when unknown)."""
     data = asdict(transcript)
+    data.pop("suggestions_searched", None)  # the window's state (plan 06), not part of the text
     for segment in data["segments"]:
         for word in segment["words"]:
             if word.get("confidence") is None:
                 word.pop("confidence", None)
+            word.pop("suggestions", None)  # the window's offers (plan 06), not part of the text
     data["text"] = transcript.text
     return json.dumps(data, ensure_ascii=False, indent=1) + "\n"
 

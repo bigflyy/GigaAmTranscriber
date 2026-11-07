@@ -339,7 +339,7 @@ def test_live_segments_and_copy(app, media):
     pushed = [m["data"] for m in app.sent if m["kind"] == "segment"]
     assert [(p["index"], p["text"]) for p in pushed] == [(0, "Первая."), (1, "Вторая.")]
     assert app.segments(item.id)[1] == {"index": 1, "start": 3.0, "end": 4.0, "text": "Вторая.",
-                                         "words": [[3.0, 4.0, "Вторая.", None]]}
+                                         "words": [[3.0, 4.0, "Вторая.", None, None]]}
     assert app.copy_text(item.id, False) == "Первая.\nВторая.\n"
     assert app.copy_text(item.id, True).startswith("[00:01.000 - 00:02.500] Первая.\n")
     for_llm = app.copy_text(item.id, False, True)
@@ -379,7 +379,8 @@ def test_settings_apply_to_the_next_file_and_reload_the_model(app, media):
     assert last(app.sent, "settings") == {"model": "RNNT", "language": "auto", "device": "CPU", "cpu_threads": 4,
                                           "outputs": ["txt", "srt"], "include_timestamps": False, "terms": "",
                                           "doubt_marks": True, "doubt_style": "underline",
-                                          "doubt_light": 0.97, "doubt_strong": 0.80, "player_volume": 1.0}
+                                          "doubt_light": 0.97, "doubt_strong": 0.80, "player_volume": 1.0,
+                                          "suggest": True}
     assert app.fake_worker.take() == [("load", ("RNNT", "cpu", 4))]
     app.add_files([str(media[0])])
     job = app.fake_worker.take()[0]
@@ -758,3 +759,143 @@ def test_convert_asks_for_a_copy_even_of_a_playable_format(app, media, monkeypat
     assert last(app.sent, "audio_ready")["url"] is None  # both codecs failed
     assert wait_for(lambda: any("звук" in str(m["data"]) for m in app.sent if m["kind"] in ("notice", "error")))
     app.close()
+
+
+# ---------------------------------------------------------------------- suggested fixes (plan 06)
+
+def doubtful_line(*items):
+    """A segment from (text, start, end, confidence) words."""
+    words = [Word(text=text, start=start, end=end, confidence=conf) for text, start, end, conf in items]
+    return Segment(start=words[0].start, end=words[-1].end, text=" ".join(w.text for w in words), words=words)
+
+
+def doubtful_lines():
+    # "Tullz" and "мозаика." are doubtful (below 0.97): two groups.
+    return [doubtful_line(("наш", 1.0, 1.3, 0.99), ("любимый", 1.4, 1.9, 0.99), ("механизм", 2.0, 2.6, 0.99),
+                          ("Tullz", 2.7, 3.0, 0.5), ("Colling,", 3.0, 3.5, 0.99), ("и", 3.6, 3.7, 0.99)),
+            doubtful_line(("вся", 5.0, 5.3, 0.99), ("мозаика.", 5.4, 6.0, 0.9))]
+
+
+def heard_words(*texts_and_times):
+    return [Word(text=text, start=start, end=end) for text, start, end in texts_and_times]
+
+
+TOOLS_READING = heard_words(("любимый", 1.4, 1.9), ("механизм", 2.0, 2.6), ("Tools", 2.72, 3.0),
+                            ("Calling,", 3.02, 3.5), ("и", 3.6, 3.7))
+
+
+@pytest.fixture
+def searching(app, media, monkeypatch):
+    """A finished RNNT file with doubtful words; Whisper counts as downloaded."""
+    monkeypatch.setattr(app, "_model_installed", lambda key: key in ("RNNT", "CTC", "Whisper"))
+    app.add_files([str(media[0])])
+    item = app.files[0]
+    finish(app, media[0], doubtful_lines())
+    return item
+
+
+def suggest_jobs(app):
+    return [job for job in app.fake_worker.take() if job[0] == "suggest"]
+
+
+def test_doubtful_words_are_read_again_by_the_other_models(app, searching):
+    [job] = suggest_jobs(app)
+    kind, request, path, windows, models, device, threads, language, terms = job
+    assert (path, models) == (searching.path, ["CTC", "Whisper"])  # not RNNT, which made the text
+    assert app._file_view(searching)["suggest"]["text"] == "Ищу варианты для сомнительных слов: 0 из 2"
+    app.handle(("suggest_loading", request, "Whisper"))
+    assert "загрузка Whisper" in app._file_view(searching)["suggest"]["text"]
+    app.handle(("suggest_result", request, "CTC", heard_words(("любимый", 1.4, 1.9), ("механизм", 2.0, 2.6),
+                                                               ("Tullz", 2.7, 3.0), ("Colling", 3.0, 3.5),
+                                                               ("и", 3.6, 3.7)), None))
+    app.handle(("suggest_result", request, "Whisper", TOOLS_READING, None))
+    word = searching.segments[0].words[3]
+    assert word.suggestions == [{"models": ["Whisper"], "count": 2,
+                                 "words": [[2.72, 3.0, "Tools", None], [3.02, 3.5, "Calling,", None]]}]
+    line_message = last(app.sent, "line")
+    assert line_message["index"] == 0 and line_message["words"][3][4] == word.suggestions
+    app.handle(("suggest_done", request))
+    [second] = suggest_jobs(app)  # the next group: "мозаика."
+    app.handle(("suggest_result", second[1], "Whisper", heard_words(("вся", 5.0, 5.3), ("мозаика", 5.4, 6.0)), None))
+    app.handle(("suggest_done", second[1]))
+    assert suggest_jobs(app) == [] and app.suggesting is None
+    assert searching.result.suggestions_searched
+    view = app._file_view(searching)["suggest"]
+    assert view == {"text": "Другие модели предлагают варианты: 1 место", "can_find": True, "busy": False,
+                    "searched": True}
+
+
+def test_take_an_offer_keeps_its_times_and_writes_the_files(app, searching):
+    [job] = suggest_jobs(app)
+    app.handle(("suggest_result", job[1], "Whisper", TOOLS_READING, None))
+    assert app.take_suggestion(searching.id, [0, 3], 0)
+    line = searching.segments[0]
+    assert line.text == "наш любимый механизм Tools Calling, и"
+    assert [(w.text, w.start, w.suggestions) for w in line.words[3:5]] == [("Tools", 2.72, None), ("Calling,", 3.02, None)]
+    assert "Tools Calling, и" in searching.written["txt"].read_text(encoding="utf-8")
+    assert "lines_changed" in kinds(app.sent)
+    with pytest.raises(ValueError):
+        app.take_suggestion(searching.id, [0, 3], 0)  # taken: no offer left there
+
+
+def test_leave_an_offer(app, searching):
+    [job] = suggest_jobs(app)
+    app.handle(("suggest_result", job[1], "Whisper", TOOLS_READING, None))
+    assert app.leave_suggestion(searching.id, [0, 3], 0)
+    assert searching.segments[0].words[3].suggestions is None
+    assert searching.segments[0].text.startswith("наш любимый механизм Tullz")
+    assert last(app.sent, "line")["words"][3][4] is None
+    assert not app.leave_suggestion(searching.id, [0, 3], 0)
+
+
+def test_a_new_file_goes_before_the_next_group(app, media, searching):
+    [job] = suggest_jobs(app)
+    app.add_files([str(media[1])])
+    assert [j[0] for j in app.fake_worker.take()] == ["transcribe"]
+    app.handle(("suggest_done", job[1]))  # the group on the worker ends; the file runs first
+    assert suggest_jobs(app) == []
+    finish(app, media[1], [doubtful_line(("да", 1.0, 1.2, 0.5))])
+    second = suggest_jobs(app)
+    assert len(second) == 1 and second[0][2] == searching.path  # the first file's search goes on
+    assert app._file_view(app.files[1])["suggest"]["text"].endswith("в очереди")
+
+
+def test_an_edit_during_the_search_drops_the_offer_for_changed_words(app, searching):
+    [job] = suggest_jobs(app)
+    app.apply_fix(searching.id, [0, 3], [0, 4], "Tools Calling,", None)
+    app.handle(("suggest_result", job[1], "Whisper", TOOLS_READING, None))
+    assert all(w.suggestions is None for w in searching.segments[0].words)
+
+
+def test_recognising_again_ends_the_search(app, searching):
+    [job] = suggest_jobs(app)
+    assert app.retry(searching.id)
+    app.fake_worker.take()
+    app.handle(("suggest_done", job[1]))
+    assert app.suggesting is None
+    fresh = app.files[0]
+    finish(app, fresh.path, doubtful_lines())  # the new text is searched again
+    [again] = suggest_jobs(app)
+    assert app.suggesting["transcript"] is fresh.result
+
+
+def test_search_off_in_settings_and_the_button(app, media, monkeypatch):
+    monkeypatch.setattr(app, "_model_installed", lambda key: key in ("RNNT", "CTC"))
+    app.set_settings({"suggest": False})
+    app.add_files([str(media[0])])
+    item = app.files[0]
+    finish(app, media[0], doubtful_lines())
+    assert suggest_jobs(app) == []
+    assert app._file_view(item)["suggest"] == {"text": "", "can_find": True, "busy": False, "searched": False}
+    assert app.find_suggestions(item.id)
+    [job] = suggest_jobs(app)
+    assert job[4] == ["CTC"]  # Whisper is not downloaded
+
+
+def test_a_failed_search_says_so_and_ends(app, searching):
+    [job] = suggest_jobs(app)
+    app.handle(("suggest_failed", job[1], "no such file"))
+    app.handle(("suggest_done", job[1]))
+    assert app.suggesting is None and not searching.result.suggestions_searched
+    assert "no such file" in last(app.sent, "notice")["text"]
+    assert suggest_jobs(app) == []

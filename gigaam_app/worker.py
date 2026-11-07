@@ -8,7 +8,12 @@ Jobs come in through `jobs`, events go out through the queue given to it:
 
 Recognising a selected part again (plan 03, fix.py) sends ("reread_range", request, start, end),
 ("reread_loading", request, model), ("reread_result", request, model, words or None, error text)
-for each model, and ("reread_done", request).
+for each model, and ("reread_done", request); when the audio cannot be read,
+("reread_failed", request, error text) comes before "reread_done".
+
+Looking for suggested fixes (plan 06) recognises one group of doubtful words the same way:
+the job "suggest" sends the same events named suggest_range, suggest_loading, suggest_result
+suggest_failed and suggest_done.
 """
 
 import queue
@@ -50,6 +55,8 @@ class Worker(threading.Thread):
                     self._download(job[1])
                 elif job[0] == "reread":
                     self._reread(*job[1:])
+                elif job[0] == "suggest":
+                    self._reread(*job[1:], prefix="suggest")
             except Exception as error:  # every failure is shown in the window
                 self.events.put(("error", str(error) or type(error).__name__))
 
@@ -140,28 +147,35 @@ class Worker(threading.Thread):
             self.spare[key] = Transcriber(model, device=device, cpu_threads=threads or None)
         return self.spare[key]
 
-    def _reread(self, request, path, windows, models, device, threads, language=None, prompt=None):
+    def _reread(self, request, path, windows, models, device, threads, language=None, prompt=None,
+                prefix="reread"):
         """Recognise a selected part again with each model in turn (plan 03 A3).
 
         windows: ((left_lo, left_hi), (right_lo, right_hi)) from fix.search_windows; the
         cuts go to the quietest point of each. A model that fails reports its error and
-        the others still run.
+        the others still run. prefix names the events: "reread" for a selection,
+        "suggest" for a group of doubtful words (plan 06).
         """
         (left, right) = windows
-        offset = max(0.0, left[0] - REREAD_MARGIN)
-        samples = decode_range(path, offset, right[1] + REREAD_MARGIN - offset)
+        try:
+            offset = max(0.0, left[0] - REREAD_MARGIN)
+            samples = decode_range(path, offset, right[1] + REREAD_MARGIN - offset)
+        except Exception as error:  # the file is gone or unreadable: no model can run
+            self.events.put((prefix + "_failed", request, str(error) or type(error).__name__))
+            self.events.put((prefix + "_done", request))
+            return
         start = fix.quietest_point(samples, offset, *left)
         end = fix.quietest_point(samples, offset, *right)
         piece = samples[int(round((start - offset) * SAMPLE_RATE)):int(round((end - offset) * SAMPLE_RATE))]
-        self.events.put(("reread_range", request, start, end))
+        self.events.put((prefix + "_range", request, start, end))
         for model in models:
             try:
                 engine = self._engine_for((model, device, threads),
-                                          on_load=lambda: self.events.put(("reread_loading", request, model)))
+                                          on_load=lambda: self.events.put((prefix + "_loading", request, model)))
                 if engine.uses_language:
                     engine.set_language(language)
                 words = fix.reread_piece(engine.asr, piece, start, prompt=prompt if engine.uses_language else None)
-                self.events.put(("reread_result", request, model, words, None))
+                self.events.put((prefix + "_result", request, model, words, None))
             except Exception as error:  # one model failing must not hide the others' readings
-                self.events.put(("reread_result", request, model, None, str(error) or type(error).__name__))
-        self.events.put(("reread_done", request))
+                self.events.put((prefix + "_result", request, model, None, str(error) or type(error).__name__))
+        self.events.put((prefix + "_done", request))

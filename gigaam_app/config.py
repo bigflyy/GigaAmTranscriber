@@ -43,6 +43,7 @@ class Settings:
     doubt_light: float = 0.97         # underline style: below this a word is doubtful (dotted)
     doubt_strong: float = 0.80        # and below this likely wrong (wavy); 0 < strong < light <= 1
     player_volume: float = 1.0        # the window's player, 0..1
+    suggest: bool = True              # look for other readings of doubtful words after each file (plan 06)
     outputs: list = field(default_factory=lambda: list(DEFAULT_FORMATS))
     vad: VadOptions = field(default_factory=VadOptions)
 
@@ -104,6 +105,10 @@ def parse(data):
             if type(value) is not bool:
                 raise ValueError("doubt_marks: expected true or false")
             settings.doubt_marks = value
+        elif key == "suggest":
+            if type(value) is not bool:
+                raise ValueError("suggest: expected true or false")
+            settings.suggest = value
         elif key == "doubt_style":
             if value not in DOUBT_STYLES:
                 raise ValueError(f"doubt_style: expected one of {', '.join(DOUBT_STYLES)}")

@@ -117,3 +117,16 @@ def test_without_history_nothing_is_written(tmp_path, monkeypatch, media):
     control.add_files([str(media[0])])
     finish(control, media[0], [segment(0.0, 2.0, "Текст.")])
     assert not (tmp_path / "history").exists()
+
+
+def test_offers_and_the_search_mark_are_remembered(tmp_path):
+    """Suggested fixes (plan 06) come back after a restart."""
+    history = History(tmp_path / "history")
+    kept = transcript(tmp_path / "one.mp3")
+    offer = {"models": ["Whisper", "CTC"], "count": 1, "words": [[1.0, 2.5, "Пока.", None]]}
+    kept.segments[0].words[0].suggestions = [offer]
+    kept.suggestions_searched = True
+    history.save(Entry("a", tmp_path / "one.mp3", "done", kept, saved_at=1.0))
+    [loaded] = history.load()
+    assert loaded.transcript.suggestions_searched
+    assert loaded.transcript.segments[0].words[0].suggestions == [offer]

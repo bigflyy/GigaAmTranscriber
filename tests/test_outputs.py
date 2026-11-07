@@ -87,6 +87,15 @@ def test_json_keeps_a_known_confidence_and_leaves_out_an_unknown_one():
     assert "confidence" not in words[0]
 
 
+def test_json_leaves_out_the_windows_offers():
+    transcript = make_transcript()
+    transcript.suggestions_searched = True
+    transcript.segments[0].words[0].suggestions = [{"models": ["CTC"], "count": 1, "words": [[0.5, 0.9, "Пока.", None]]}]
+    data = json.loads(json_text(transcript))
+    assert "suggestions_searched" not in data
+    assert "suggestions" not in data["segments"][0]["words"][0]
+
+
 def test_llm_text_marks_doubtful_words_before_their_punctuation():
     transcript = make_transcript()
     transcript.segments[0].words[0].confidence = 0.66   # "Привет." -> "Привет[?66%]."
