@@ -1,6 +1,7 @@
 {
   "version": 2,
   "model": "RNNT",
+  "language": "auto",
   "device": "Auto",
   "cpu_threads": 0,
   "include_timestamps": false,

@@ -3,6 +3,8 @@
 Offline transcription of Russian speech from audio and video files, with the
 [GigaAM v3](https://github.com/salute-developers/GigaAM) models. An app for
 Windows and Linux (window and command line) and Linux Docker images.
+[Whisper](https://github.com/openai/whisper) large-v3-turbo can be downloaded as a
+second model for other languages and for English terms inside Russian speech.
 
 Since v0.2.0 the app runs on [ONNX Runtime](https://onnxruntime.ai/) instead of
 PyTorch: the download is a quarter of the old CUDA build, it starts in a few
@@ -51,8 +53,10 @@ Results are saved beside the source file:
 
 TXT and timestamped TXT are on by default; a finished file also offers the
 other formats, made from the text already recognised. **Настройки** (bottom left)
-chooses the formats, the model (RNNT by default, or CTC), the device (Авто,
+chooses the formats, the model (RNNT by default, CTC, or Whisper), the device (Авто,
 Видеокарта, Процессор) and CPU threads; changes count from the next file.
+Choosing Whisper the first time asks to download it (547 MB); with Whisper the
+settings also show **Язык речи**: automatic detection or a chosen language.
 Changes are saved at once to `gigaam-config.json` beside the app (the command
 line reads the same file); **Сбросить настройки** goes back to the defaults. The window follows the system's light or dark theme.
 
@@ -66,6 +70,8 @@ The command line uses the same models and settings file:
 gigaam-cli.exe recording.mp3
 gigaam-cli.exe *.mp4 --formats txt,srt --out-dir C:\Transcripts
 gigaam-cli.exe lecture.m4a --model CTC --device cpu --threads 8
+gigaam-cli.exe --download Whisper
+gigaam-cli.exe interview.mp3 --model Whisper --language en
 gigaam-cli.exe --help
 ```
 
@@ -73,7 +79,8 @@ gigaam-cli.exe --help
 
 `gigaam-config.json` beside the app holds the defaults for both the window and
 the command line. [`gigaam-config.example.json`](gigaam-config.example.json)
-lists every key. Files saved by v0.1 still load (`"CUDA"` now means GPU; the v0.1 multilingual
+lists every key; `language` (`"auto"` or a code such as `"en"`) is used only by
+Whisper. Files saved by v0.1 still load (`"CUDA"` now means GPU; the v0.1 multilingual
 models are gone, and settings that chose one get RNNT).
 Speech search and chunking settings are only in this file and in command-line
 flags such as `--vad-threshold`:
@@ -106,6 +113,14 @@ Tokens keep their 40 ms frame positions, which gives word timestamps.
 The text is identical to v0.1 (PyTorch): on a 7.5-minute test file all 932
 words and all 26 chunk boundaries match, on DirectML and on the CPU.
 
+**Whisper** runs on [whisper.cpp](https://github.com/ggml-org/whisper.cpp) 1.9.5
+through ctypes, on any Vulkan GPU (NVIDIA, AMD, Intel) or the CPU. It gets the same
+Silero speech chunks, each recognised on its own with greedy decoding; whole-file
+decoding and beam search invented text and repeated phrases on a long call. Word
+times come from whisper.cpp's token times. The 7.5-minute lecture takes about 12 s
+on a laptop RTX 4070 (GigaAM: about 6 s). On Russian GigaAM is usually more accurate;
+Whisper writes English terms as written ("fine tuning", "prompt") and knows 99 languages.
+
 ## Building from source
 
 Python 3.12 on Windows. The app needs only numpy and ONNX Runtime:
@@ -118,6 +133,8 @@ python -m venv .venv
 ```
 
 FFmpeg must be on PATH (or `ffmpeg.exe` in the repository root) when running from source.
+Whisper needs the whisper.cpp libraries, built once by `python tools/build_whisper_cpp.py`
+into `third_party/whisper.cpp/` (the script lists what the build machine needs).
 
 **Models.** `models/` is not in git. The export tools turn the upstream PyTorch
 checkpoints into ONNX; they need a separate environment with PyTorch
@@ -140,7 +157,10 @@ limited to 2 GB.
 file checked against the size and SHA-256 in
 [`gigaam_app/catalog.py`](gigaam_app/catalog.py), with resume after an
 interruption (`gigaam-cli --list-models`, `--download MODEL`; the window asks
-first). No model uses this yet. To publish one, export it, run
+first). Whisper large-v3-turbo (q5_0) is the first: its file comes from the
+`models-1` release of this repository, and from the whisper.cpp project's
+Hugging Face files when the release cannot deliver it; the app writes its
+`model.json` itself. To publish a GigaAM-type model, export it, run
 `python tools/stage_model_assets.py assets export/<folder>`, upload `assets/*`
 to the `models-1` release and paste the printed lines into the catalog.
 
@@ -150,7 +170,11 @@ settings, CLI, the threaded pipeline with fakes, model downloads against a local
 HTTP server) and, when `models/` exists,
 tests on the real models. A full-file comparison with a v0.1 reference runs when
 `GIGAAM_PARITY_AUDIO` and `GIGAAM_PARITY_REFERENCE` are set; see
-[tests/test_models.py](tests/test_models.py).
+[tests/test_models.py](tests/test_models.py). Whisper's tests use the built
+whisper.cpp libraries; `GIGAAM_WHISPER_MODEL_ROOT` (a folder holding the model folder
+and `silero_vad_scan.onnx`) with `GIGAAM_PARITY_AUDIO` adds a run on the real model.
+`python tools/window_check.py LONG SHORT --out FOLDER` drives the real window off
+screen (`--whisper FOLDER` adds a file transcribed with a downloaded Whisper model).
 
 **Windows release.** In the build environment (no PyTorch in it):
 

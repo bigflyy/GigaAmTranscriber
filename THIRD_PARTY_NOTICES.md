@@ -8,6 +8,12 @@ download (one folder per app, `windows/` and `linux/`), and at the sources below
 - **GigaAM v3 models (RNNT, CTC):** [upstream repository](https://github.com/salute-developers/GigaAM), MIT.
   The app ships them converted to ONNX by `tools/export_models.py`; the weights are unchanged
   (stored as float16, which is lossless for these checkpoints).
+- **Whisper large-v3-turbo model (downloaded on request, not bundled):**
+  [OpenAI Whisper](https://github.com/openai/whisper), MIT (`licenses/whisper-model/LICENSE.txt`).
+  The app downloads the q5_0 ggml conversion published by the whisper.cpp project
+  ([ggerganov/whisper.cpp](https://huggingface.co/ggerganov/whisper.cpp), file
+  `ggml-large-v3-turbo-q5_0.bin`), unchanged, from this repository's `models-1` release or from
+  Hugging Face.
 - **Silero VAD 6.2.1:** [upstream repository](https://github.com/snakers4/silero-vad), MIT.
   The unchanged model runs inside an ONNX loop made by `tools/make_silero_scan.py`.
   The speech-region logic in `gigaam_app/vad.py` is ported from silero-vad.

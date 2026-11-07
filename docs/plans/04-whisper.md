@@ -38,7 +38,7 @@ pinned commit) as the backup download; push the commits when Whisper is released
 
 - [x] **B3** Model switch in Settings and `--model` in the CLI; the download prompt as for any extra model; language choice in Settings and `--language`
 - [x] **B4** Tests (decoder with a fake model, real model on a short file) and window_check.py steps
-- [ ] **B5** Docs and licences (Whisper weights MIT; whisper.cpp MIT if chosen)
+- [x] **B5** Docs and licences (Whisper weights MIT; whisper.cpp MIT if chosen)
 
 ### Stage C: Build and release
 
