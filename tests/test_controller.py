@@ -119,7 +119,7 @@ def test_texts():
 def test_ready_loads_the_model_and_returns_a_snapshot(app):
     assert app.snapshot["files"] == []
     assert app.snapshot["settings"]["model"] == "RNNT"
-    assert [m["key"] for m in app.snapshot["options"]["models"]] == ["RNNT", "CTC"]
+    assert [m["key"] for m in app.snapshot["options"]["models"]] == ["RNNT", "CTC", "Whisper"]
     assert app.fake_worker.take() == [("load", ("RNNT", "auto", 0))]
 
 

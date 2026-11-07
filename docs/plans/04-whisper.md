@@ -30,7 +30,12 @@ Findings behind it: HANDOFF.md, session 10.
 
 - [x] **B0** whisper.cpp build for shipping: GGML_NATIVE off with CPU variants loaded at run time, Vulkan backend, Windows (MSVC) and Linux (WSL); a tool script like build_windows.py; check the DLLs load from the frozen app
 - [x] **B1** Engine: whisper.dll through ctypes (no Python binding package), the app's VAD chunks fed to whisper_full one by one, greedy, token times to words; Whisper model behind the same Transcriber interface (VAD chunks in, segments with word times out); language: automatic or chosen
-- [ ] **B2** Catalog entry and download (files, sizes, SHA-256 in code; a release asset or the model's own hosting, owner decides)
+- [x] **B2** Catalog entry and download (files, sizes, SHA-256 in code; a release asset or the model's own hosting, owner decides)
+
+Owner's decision (2026-11-07): our own GitHub release asset first (models-1, asset
+whisper_large_v3_turbo_q5_0.ggml-large-v3-turbo-q5_0.bin), Hugging Face (ggerganov/whisper.cpp,
+pinned commit) as the backup download; push the commits when Whisper is released.
+
 - [ ] **B3** Model switch in Settings and `--model` in the CLI; the download prompt as for any extra model; language choice in Settings and `--language`
 - [ ] **B4** Tests (decoder with a fake model, real model on a short file) and window_check.py steps
 - [ ] **B5** Docs and licences (Whisper weights MIT; whisper.cpp MIT if chosen)
@@ -38,4 +43,5 @@ Findings behind it: HANDOFF.md, session 10.
 ### Stage C: Build and release
 
 - [ ] **C1** Windows and Linux builds with Whisper; smoke tests transcribe a short file with it
-- [ ] **C2** Release notes, the owner tries the build, release
+- [ ] **C2** Release notes, the owner tries the build, release; before it, create the models-1 release and
+  upload the q5_0 file as its asset (until then the app downloads from Hugging Face), then push

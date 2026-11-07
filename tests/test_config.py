@@ -61,7 +61,7 @@ def test_vad_ints_stay_ints():
 @pytest.mark.parametrize("data, message", [
     ([], "JSON object"),
     ({"version": 3}, "version"),
-    ({"model": "Whisper"}, "model"),
+    ({"model": "Parakeet"}, "model"),
     ({"device": "TPU"}, "device"),
     ({"cpu_threads": -1}, "cpu_threads"),
     ({"cpu_threads": 2.5}, "cpu_threads"),

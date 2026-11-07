@@ -7,10 +7,16 @@ folder renamed to its final name, so the app never sees a half-installed model.
 An interrupted download (network error, cancel, closed window) keeps what it
 has; the next attempt asks the server only for the missing bytes (HTTP Range)
 after re-hashing the part already on disk.
+
+A file is fetched from the release first; when that fails (missing asset, network
+trouble, wrong bytes), its mirrors are tried in order. The bytes already on disk
+are kept between them: every address serves the same file, and the SHA-256 at the
+end decides. A model with a model_type gets its model.json written from the catalog.
 """
 
 import hashlib
 import http.client
+import json
 import os
 from pathlib import Path
 import shutil
@@ -18,7 +24,7 @@ import socket
 import urllib.error
 import urllib.request
 
-from . import __version__
+from . import __version__, catalog
 from .paths import downloads_dir
 
 BLOCK = 1024 * 1024
@@ -61,18 +67,36 @@ def install(info, root=None, on_progress=None, should_cancel=None, opener=None):
                             f"{(total - on_disk) / 1024 ** 3:.1f} GB more, {free / 1024 ** 3:.1f} GB is free")
     done = 0
     for file in info.files:
-        for attempt in range(1, ATTEMPTS + 1):
-            try:
-                _fetch(info.url(file), staging / file.name, file, done, total, on_progress, should_cancel, opener)
-                break
-            except _NetworkError:
-                if attempt == ATTEMPTS:
-                    raise
+        _fetch_from_any(info.urls(file), staging / file.name, file, done, total, on_progress, should_cancel, opener)
         done += file.size
+    if info.model_type:
+        (staging / "model.json").write_text(json.dumps(catalog.manifest(info), indent=2) + "\n", encoding="utf-8")
     if final.exists():
         shutil.rmtree(final)  # an older copy of the same model in our own folder
     os.replace(staging, final)
     return final
+
+
+def _fetch_from_any(urls, path, file, done_before, total, on_progress, should_cancel, opener):
+    """Try each address in turn, each with ATTEMPTS tries for network errors.
+    A cancel stops at once; when every address fails, the error names each of them."""
+    errors = []
+    for url in urls:
+        for attempt in range(1, ATTEMPTS + 1):
+            try:
+                _fetch(url, path, file, done_before, total, on_progress, should_cancel, opener)
+                return
+            except DownloadCancelled:
+                raise
+            except _NetworkError as error:
+                if attempt == ATTEMPTS:
+                    errors.append(error)
+            except DownloadError as error:
+                errors.append(error)
+                break
+    if len(errors) == 1:
+        raise errors[0]
+    raise DownloadError("; ".join(str(error) for error in errors)) from errors[-1]
 
 
 def _hash_existing(path, digest):

@@ -2,6 +2,7 @@
 
 import hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import json
 import os
 import threading
 
@@ -200,6 +201,80 @@ def test_old_copy_is_replaced(server, tmp_path):
     assert not (folder / "stale.txt").exists()
 
 
+def make_mirrored(server, mirror, size=2_000_000, model_type=""):
+    """One file held by the mirror server under its own name; the release (server)
+    may or may not hold it as an asset."""
+    data = os.urandom(size)
+    mirror.files["upstream.bin"] = data
+    file = RemoteFile("weights.bin", size, hashlib.sha256(data).hexdigest(), mirrors=(f"{mirror.url}/upstream.bin",))
+    info = ModelInfo("Fake", "fake_model", "test", files=(file,), base_url=server.url, model_type=model_type)
+    return info, data
+
+
+@pytest.fixture
+def mirror():
+    running = Server()
+    yield running
+    running.close()
+
+
+def test_mirror_is_used_when_the_release_lacks_the_file(server, mirror, tmp_path):
+    info, data = make_mirrored(server, mirror)
+    folder = download.install(info, tmp_path)
+    assert (folder / "weights.bin").read_bytes() == data
+    assert [name for name, _ in server.requests] == ["fake_model.weights.bin"]
+    assert [name for name, _ in mirror.requests] == ["upstream.bin"]
+
+
+def test_release_is_preferred_and_mirror_not_asked(server, mirror, tmp_path):
+    info, data = make_mirrored(server, mirror)
+    server.files["fake_model.weights.bin"] = data
+    download.install(info, tmp_path)
+    assert mirror.requests == []
+
+
+def test_mirror_resumes_what_the_release_started(server, mirror, tmp_path):
+    info, data = make_mirrored(server, mirror)
+    server.files["fake_model.weights.bin"] = data
+    server.cut_after = 500_000  # every try at the release breaks off
+    folder = download.install(info, tmp_path)
+    assert (folder / "weights.bin").read_bytes() == data
+    assert mirror.requests == [("upstream.bin", "bytes=1500000-")]
+
+
+def test_wrong_bytes_from_the_release_fall_back_to_the_mirror(server, mirror, tmp_path):
+    info, data = make_mirrored(server, mirror)
+    server.files["fake_model.weights.bin"] = data
+    server.corrupt = True
+    folder = download.install(info, tmp_path)
+    assert (folder / "weights.bin").read_bytes() == data
+
+
+def test_every_address_failing_names_each_error(server, mirror, tmp_path):
+    info, _ = make_mirrored(server, mirror)
+    mirror.files.clear()
+    with pytest.raises(download.DownloadError) as caught:
+        download.install(info, tmp_path)
+    assert str(caught.value).count("HTTP 404") == 2
+
+
+def test_cancel_does_not_try_the_mirror(server, mirror, tmp_path):
+    info, data = make_mirrored(server, mirror)
+    server.files["fake_model.weights.bin"] = data
+    with pytest.raises(download.DownloadCancelled):
+        download.install(info, tmp_path, should_cancel=lambda: True)
+    assert mirror.requests == []
+
+
+def test_model_json_is_written_for_a_model_type(server, mirror, tmp_path):
+    info, data = make_mirrored(server, mirror, model_type="whisper")
+    folder = download.install(info, tmp_path)
+    meta = json.loads((folder / "model.json").read_text(encoding="utf-8"))
+    assert meta == {"format": 1, "name": "fake_model", "type": "whisper", "sample_rate": 16000,
+                    "files": {"model": {"name": "weights.bin", "size": len(data),
+                                        "sha256": hashlib.sha256(data).hexdigest()}}}
+
+
 def test_bundled_models_cannot_be_downloaded(tmp_path):
     with pytest.raises(ValueError):
         download.install(catalog.find("RNNT"), tmp_path)
@@ -215,16 +290,30 @@ def test_catalog_entries_are_well_formed():
         for file in info.files:
             assert file.size > 0 and len(file.sha256) == 64 and int(file.sha256, 16) >= 0
             assert info.url(file).startswith("https://github.com/")
+            assert all(url.startswith("https://") for url in info.urls(file))
         if not info.bundled:
-            assert "model.json" in names and "encoder.onnx" in names
+            # model.json comes with the files or is written from the catalog.
+            assert ("model.json" in names) != bool(info.model_type)
             # GitHub release assets are limited to 2 GiB each.
             assert max(file.size for file in info.files) < 2 * 1024 ** 3
+
+
+def test_whisper_entry():
+    info = catalog.find("Whisper")
+    assert not info.bundled and info.model_type == "whisper"
+    (file,) = info.files
+    assert info.urls(file) == (
+        "https://github.com/bigflyy/GigaAmTranscriber/releases/download/models-1/"
+        "whisper_large_v3_turbo_q5_0.ggml-large-v3-turbo-q5_0.bin",
+        "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/"
+        "ggml-large-v3-turbo-q5_0.bin")
+    assert catalog.manifest(info)["files"]["model"]["size"] == 574_041_195
 
 
 def test_old_names_and_unknown_names():
     assert catalog.find("Multilingual CTC (220M)").key == "RNNT"
     with pytest.raises(ValueError):
-        catalog.find("Whisper")
+        catalog.find("Parakeet")
 
 
 def test_installed_folder_looks_in_both_places(tmp_path, monkeypatch):
