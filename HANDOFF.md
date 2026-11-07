@@ -1,8 +1,35 @@
 # Handoff: state and findings
 
-Last updated 2026-11-07 (session 12). Current plan: [docs/plans/04-whisper.md](docs/plans/04-whisper.md)
-(Whisper; Stages A and B done; next C1 Windows and Linux builds with Whisper, then C2 release). Plan 02 (window) has D for later; plan 01 still
+Last updated 2026-11-07 (session 13). Current plan: [docs/plans/04-whisper.md](docs/plans/04-whisper.md)
+(Whisper; Stages A, B and C1 done; models-1 uploaded; next C2: owner tries the build, then release v0.4.0). Plan 02 (window) has D for later; plan 01 still
 holds B9, F (Parakeet, Qwen3-ASR) and E. Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
+
+## Session 13 (2026-11-07): builds with Whisper (C1), models-1 release, notes draft (C2 prep)
+
+- C1 (05f67ae): build_windows.py and build_linux.py transcribe a short Russian file with
+  Whisper through the built CLI: a downloaded model folder is linked (hard link, else symlink,
+  else copy) into a temporary GIGAAM_DOWNLOADS; --whisper-model / --whisper-audio default to
+  build/whisper-test (app-models/whisper_large_v3_turbo_q5_0, clips/lecture-4.mp3);
+  --no-whisper-test skips. window_check.py reuses the helper (WSL: symlink, no 574 MB copy).
+- Windows build `C:\MyProjects\GigaAmTranscriber\build\whisper-frozen\app\GigaAmTranscriber`
+  (--no-zip, 1234 MiB): Whisper Vulkan 23 words in 31.4 s (first run, shaders), CPU 26.7 s,
+  "Требуется ли нам fine tuning ..."; GUI smoke test passed. Linux ~/gigaam-build-whisper
+  (1026 MiB, --no-tar): Whisper CPU 19.8 s, same text; window under Xvfb wrote the file.
+  window_check.py --whisper under Xvfb in WSL (gigaam-spike venv, from source): 36/36.
+- Owner's decisions: version v0.4.0; create models-1 now so the owner's test download comes
+  from our release. Created https://github.com/bigflyy/GigaAmTranscriber/releases/tag/models-1
+  (target main = 77323f7 on GitHub, not latest; v0.3.0 stays Latest) and uploaded the asset
+  (GitHub's digest = our SHA-256). Download test with the HF mirror removed (download.install,
+  dev venv): installed from models-1, model.json identical, but 781 s: the first ~10 min
+  trickled at about 30 KB/s (under the 30 s read timeout, so no retry), then 2-4 MB/s. HF took
+  3.5 min in session 12. Watch the speed when the owner tries it; if GitHub stays slow, an
+  idea is to switch address when a download runs far below the other's speed.
+- RELEASE_NOTES.md now holds the v0.4.0 draft (960c53b); SIZE-WINDOWS and SIZE-LINUX are
+  placeholders until the release build. README Downloads still names v0.3.0: update at release.
+- Next (C2): owner tries the build; then bump __version__ to 0.4.0, release builds with zips
+  (Windows first, then Linux with --release build/<out>/release), fill sizes, README downloads,
+  push main (owner: push at the Whisper release), tag v0.4.0, GitHub release from RELEASE_NOTES.md.
+  Disk: 23.9 GB free before this session's builds; release zips add about 2 GB.
 
 ## Session 12 (2026-11-07): Whisper download, Settings, CLI, checks, docs (B2-B5)
 
