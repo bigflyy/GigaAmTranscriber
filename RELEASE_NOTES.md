@@ -1,42 +1,59 @@
-# GigaAM Transcriber v0.3.0
+# GigaAM Transcriber v0.4.0
 
-A new window, and the app now runs on Linux too. Recognition and the text are the
-same as in v0.2.0.
+Whisper as a second model, Markdown transcripts and an app icon. GigaAM recognition
+and its text are the same as in v0.3.0.
 
-## New window
+## Whisper
 
-- Files in a list on the left (done, running, waiting); the selected file's
-  progress and its text as it is recognised on the right. Several files can be
-  added at once, by **+ Добавить** or by dragging files or a folder onto the window;
-  they start at once and run one at a time. Files without sound (a text file, a
-  document, a photo, a silent video) are not added; a short note names them.
-  Whether a file has sound is asked of FFmpeg, so unusual video types work too.
-- **The list is kept between sessions.** Finished files come back with their text
-  when the window opens again; SRT or JSON can still be made from them later.
-  **Убрать из списка** forgets a file but keeps its saved transcripts.
-- Saved files are shown as buttons that open them; **Показать в папке** opens the
-  folder. A format that was not chosen can be written from the text already recognised.
-- Closing the window while a file is recognised or a model downloads asks first.
-  The text recognised so far is saved.
-- Settings (model, device, CPU threads, formats) apply to the next file at once
-  and are saved by themselves; **Сбросить настройки** goes back to the defaults.
-- Light and dark theme, following the system.
-- The window is drawn by Microsoft Edge WebView2 on Windows (part of Windows 10
-  and 11; if it is missing, the app links to Microsoft's installer) and by the
-  system's WebKitGTK on Linux. It opens in about 2 s.
+- **Whisper large-v3-turbo** (OpenAI) can be chosen in **Настройки** beside RNNT and
+  CTC. It is not inside the app: choosing it the first time asks to download it
+  (547 MB, once; an interrupted download resumes). The file comes from this
+  repository's `models-1` release, with the whisper.cpp project's copy on Hugging Face
+  as the backup address; its SHA-256 is checked. Downloaded models live outside the
+  app folder (`%LOCALAPPDATA%\GigaAmTranscriber\models` on Windows,
+  `~/.local/share/gigaam-transcriber/models` on Linux), so a newer version finds them.
+- With Whisper the settings show **Язык речи**: detect it automatically, or choose one
+  of 20 languages (Russian, English, Ukrainian, German, Chinese and others).
+- What it is for: speech in other languages, and Russian speech full of English
+  terms, which Whisper writes as written ("fine tuning", "LLM", "Prompt Engineering").
+  On plain Russian GigaAM is usually more accurate, so RNNT stays the default.
+- Whisper runs on [whisper.cpp](https://github.com/ggml-org/whisper.cpp) 1.9.5 with
+  Vulkan: on any Vulkan GPU (NVIDIA, AMD, Intel; a separate GPU before a built-in
+  one), else on the CPU. A 7.5-minute lecture takes about 12 s on a laptop RTX 4070
+  (GigaAM: about 6 s) and a few minutes on the CPU. The first Whisper run on a GPU
+  (and the first after a driver update) spends about half a minute preparing it.
+- Whisper gets the same speech fragments as GigaAM and reads each one on its own.
+  Fed a whole 45-minute call at once, Whisper invented text and repeated one phrase
+  many times; fragment by fragment it did not.
+- Command line: `gigaam-cli --download Whisper`, then
+  `gigaam-cli talk.mp3 --model Whisper --language en`. `gigaam-cli --devices` lists
+  the GPUs and the CPU each engine can use.
+
+## Markdown transcripts
+
+- New format `md` (`name-transcript.md`): the file name as the title, a line with the
+  date, length and model, then the text in sections of about a minute under their
+  start times. Off by default: tick it in **Настройки**, make it from a finished file
+  with the **MD** button, or pass `--formats md`.
+
+## App icon
+
+- Both programs and the window now have an icon: a sound wave turning into lines of text.
 
 ## Windows
 
-`GigaAmTranscriber-v0.3.0-windows-x64.zip` (about 920 MB): unzip it anywhere and run
-`GigaAmTranscriber.exe`; `gigaam-cli.exe` beside it is the command line. Both models
-and FFmpeg are inside; any DirectX 12 GPU is used through DirectML, with the CPU as
-fallback. The EXEs are not code-signed, so Windows SmartScreen may ask once.
+`GigaAmTranscriber-v0.4.0-windows-x64.zip` (about SIZE-WINDOWS MB): unzip it anywhere and
+run `GigaAmTranscriber.exe`; `gigaam-cli.exe` beside it is the command line. Both
+GigaAM models and FFmpeg are inside; GigaAM uses any DirectX 12 GPU through DirectML,
+Whisper any Vulkan GPU, both with the CPU as fallback. The EXEs are not code-signed,
+so Windows SmartScreen may ask once.
 
 ## Linux
 
-`GigaAmTranscriber-v0.3.0-linux-x64.tar.gz` (about 830 MB): the window and
-`gigaam-cli`, both models inside, recognition on the CPU (a 7.5-minute lecture
-in about 35 s). Unpack it and run `./GigaAmTranscriber/GigaAmTranscriber`.
+`GigaAmTranscriber-v0.4.0-linux-x64.tar.gz` (about SIZE-LINUX MB): the window and
+`gigaam-cli`, both GigaAM models inside. GigaAM runs on the CPU. Whisper runs on the
+CPU too; the Linux app also carries whisper.cpp's Vulkan backend, but it has not been
+tried on a Linux GPU yet. Unpack it and run `./GigaAmTranscriber/GigaAmTranscriber`.
 
 The system must have glibc 2.39 or newer (Ubuntu 24.04, Debian 13, Fedora 40 and
 later), FFmpeg and, for the window, WebKitGTK 4.1:
@@ -44,19 +61,17 @@ later), FFmpeg and, for the window, WebKitGTK 4.1:
     sudo apt install ffmpeg gir1.2-webkit2-4.1
     sudo dnf install ffmpeg-free webkit2gtk4.1 gobject-introspection   # Fedora
 
-NVIDIA GPUs on Linux: use the CUDA Docker image for now.
-
-## Fixes
-
-- Settings files from v0.1 that chose a multilingual model load again (with RNNT).
-
 ## Downloads
 
-- `GigaAmTranscriber-v0.3.0-windows-x64.zip` - Windows app.
-- `GigaAmTranscriber-v0.3.0-linux-x64.tar.gz` - Linux app.
+- `GigaAmTranscriber-v0.4.0-windows-x64.zip` - Windows app.
+- `GigaAmTranscriber-v0.4.0-linux-x64.tar.gz` - Linux app.
 - `THIRD_PARTY_LICENSES.zip` - licences of the bundled components, one folder per app
-  (`windows/`, `linux/`; also inside the app folders).
+  (`windows/`, `linux/`; also inside the app folders). Whisper's weights and whisper.cpp
+  are MIT.
 - `FFmpeg-8.0.1-source.zip` - source of the FFmpeg build in the Windows app (GPLv3).
 - `SHA256SUMS.txt` - checksums of the files above.
+
+The Whisper model file itself is an asset of the separate `models-1` release; the app
+downloads it when Whisper is first chosen.
 
 Notes of earlier versions: https://github.com/bigflyy/GigaAmTranscriber/releases
