@@ -10,6 +10,9 @@ import numpy as np
 from .paths import ffmpeg_executable
 
 SAMPLE_RATE = 16000
+# Formats the window's page plays as they are (WebView2; WebKitGTK with the usual GStreamer
+# plugins), told by the file name. Others get a playable copy first (start_playable_copy).
+PLAYABLE_SUFFIXES = {".mp3", ".m4a", ".aac", ".wav", ".ogg", ".oga", ".opus", ".flac", ".webm", ".mp4"}
 
 
 def _run_ffmpeg(path, arguments):
@@ -45,6 +48,22 @@ def decode_range(path, start, duration) -> np.ndarray:
     data = _run_ffmpeg(path, [*_range_arguments(path, start, duration), "-vn", "-ac", "1",
                               "-ar", str(SAMPLE_RATE), "-f", "s16le", "-acodec", "pcm_s16le", "-"])
     return np.frombuffer(data, dtype=np.int16).astype(np.float32) / 32768.0
+
+
+def start_playable_copy(path, target, codec="libopus"):
+    """Start ffmpeg writing a copy of the file's sound that the window can play; returns the
+    process (the caller waits for it, or stops it when the window closes).
+
+    codec "libopus" writes Ogg Opus, 32 kbps mono: small and clear for speech (a 45 min
+    call: 10 MB in about 36 s). "libmp3lame" writes MP3 64 kbps mono, the fallback for an
+    ffmpeg without Opus.
+    """
+    rate = "32k" if codec == "libopus" else "64k"
+    command = [ffmpeg_executable(), "-nostdin", "-hide_banner", "-v", "error", "-y", "-i", str(path),
+               "-vn", "-ac", "1", "-c:a", codec, "-b:a", rate, str(target)]
+    flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+    return subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                            stderr=subprocess.PIPE, creationflags=flags)
 
 
 def wav_clip(path, start, duration) -> bytes:

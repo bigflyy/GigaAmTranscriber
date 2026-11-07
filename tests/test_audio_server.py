@@ -68,3 +68,24 @@ def test_wrong_token_unknown_file_and_forgotten_file_are_refused(served):
 def test_types_the_player_needs():
     assert content_type("a.opus") == "audio/ogg" and content_type("a.M4A") == "audio/mp4"
     assert content_type("a.wav") == "audio/wav"
+
+
+def test_playable_copy_with_the_real_ffmpeg(tmp_path):
+    import wave
+
+    import numpy as np
+
+    from gigaam_app.audio import start_playable_copy
+
+    source = tmp_path / "tone.wav"
+    tone = (np.sin(np.arange(16000) * 2 * np.pi * 440 / 16000) * 8000).astype(np.int16)
+    with wave.open(str(source), "wb") as out:
+        out.setnchannels(1)
+        out.setsampwidth(2)
+        out.setframerate(16000)
+        out.writeframes(tone.tobytes())
+    target = tmp_path / "tone.opus"
+    process = start_playable_copy(source, target)
+    _, stderr = process.communicate(timeout=60)
+    assert process.returncode == 0, stderr
+    assert target.read_bytes()[:4] == b"OggS"

@@ -18,13 +18,16 @@ import os
 from pathlib import Path
 import queue
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 
-from . import catalog, config, fix
+from . import audio as audio_module, catalog, config, fix
 from .audio import wav_clip
+from .audio_server import AudioServer
 from .engine import MODELS, Transcript
 from .history import Entry, new_key
 from .outputs import FORMATS, llm_text, plain_text, timestamped_text, write_outputs
@@ -219,6 +222,12 @@ class Controller:
         self.reread_ids = itertools.count(1)
         self.rereading = None        # the selected part being recognised again (dict), if any
         self.engine = {"state": "idle", "text": "Запуск...", "detail": ""}
+        # The player (plan 05): files reach the page through a local server; formats the
+        # page cannot play get a temporary copy, made once per file.
+        self.audio_server = AudioServer()
+        self.audio_dir = None        # folder of the temporary copies, made on first need
+        self.audio_copies = {}       # source Path -> playable copy Path
+        self.audio_jobs = {}         # source Path -> running ffmpeg process
         self.probe_jobs = queue.Queue()
         self.startup_error = ""
         try:
@@ -553,6 +562,74 @@ class Controller:
             fix.check_selection(item.segments, tuple(first), tuple(last))
         return item
 
+    def audio(self, file_id, convert=False):
+        """Where the page's player gets a file's sound (plan 05 A2):
+        {"id", "url", "preparing"}. The original file when its format plays in the window,
+        else (or with convert, after the original failed to play) a temporary copy; while
+        that copy is being made, url is None and an "audio_ready" message follows."""
+        with self.lock:
+            item = self._find(file_id)
+            if item is None or not Path(item.path).is_file():
+                return None
+            path = Path(item.path)
+            if not convert and path.suffix.lower() in audio_module.PLAYABLE_SUFFIXES:
+                return {"id": item.id, "url": self.audio_server.register(path), "preparing": False}
+            if path in self.audio_copies:
+                return {"id": item.id, "url": self.audio_server.register(self.audio_copies[path]),
+                        "preparing": False}
+            if path not in self.audio_jobs:
+                if self.audio_dir is None:
+                    self.audio_dir = Path(tempfile.mkdtemp(prefix="gigaam-audio-"))
+                self.audio_jobs[path] = None  # taken; the process starts on the thread
+                threading.Thread(target=self._make_playable, args=(item.id, path), daemon=True,
+                                 name="gigaam-audio-copy").start()
+            return {"id": item.id, "url": None, "preparing": True}
+
+    def _make_playable(self, file_id, path):
+        """Make the playable copy (Opus, or MP3 when this ffmpeg has no Opus) and tell the page."""
+        error = "ffmpeg"
+        for codec, suffix in (("libopus", ".opus"), ("libmp3lame", ".mp3")):
+            target = self.audio_dir / f"{os.urandom(6).hex()}{suffix}"
+            try:
+                process = audio_module.start_playable_copy(path, target, codec)
+            except (OSError, RuntimeError) as problem:
+                error = str(problem)
+                break
+            with self.lock:
+                if path not in self.audio_jobs:  # the window closed meanwhile
+                    process.kill()
+                    return
+                self.audio_jobs[path] = process
+            _, stderr = process.communicate()
+            if process.returncode == 0 and target.is_file():
+                with self.lock:
+                    self.audio_jobs.pop(path, None)
+                    self.audio_copies[path] = target
+                    self._emit("audio_ready", {"id": file_id, "url": self.audio_server.register(target)})
+                return
+            lines = stderr.decode("utf-8", "replace").strip().splitlines()
+            error = lines[-1] if lines else f"exit code {process.returncode}"
+            with self.lock:
+                if path not in self.audio_jobs:
+                    return
+        with self.lock:
+            self.audio_jobs.pop(path, None)
+            self._emit("audio_ready", {"id": file_id, "url": None})
+            self._notice(f"Не удалось подготовить звук для проигрывания: {error}")
+
+    def _close_audio(self):
+        """The window is closing: stop copies being made, the server, delete the copies."""
+        with self.lock:
+            jobs = [process for process in self.audio_jobs.values() if process is not None]
+            self.audio_jobs.clear()
+            folder, self.audio_dir = self.audio_dir, None
+        for process in jobs:
+            process.kill()
+            process.wait()
+        self.audio_server.stop()
+        if folder is not None:
+            shutil.rmtree(folder, ignore_errors=True)
+
     def clip(self, file_id, first, last):
         """The selected words as a WAV to play: {"start", "end", "url"} (a data: URL)."""
         with self.lock:
@@ -791,6 +868,7 @@ class Controller:
     def close(self):
         """The window is closing: stop whatever runs; partial text of a running file is saved."""
         self.worker.cancel.set()
+        self._close_audio()
 
     # ------------------------------------------------------------------ history
 

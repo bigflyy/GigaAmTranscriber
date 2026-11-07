@@ -206,6 +206,9 @@ class Api:
     def clip(self, file_id, first, last):
         return self._controller.clip(file_id, first, last)
 
+    def audio(self, file_id, convert=False):
+        return self._controller.audio(file_id, convert)
+
     def reread(self, file_id, first, last, terms):
         return self._controller.reread(file_id, first, last, terms)
 

@@ -3,6 +3,8 @@
 from pathlib import Path
 import queue
 import threading
+import time
+from urllib.request import urlopen
 
 import pytest
 
@@ -680,3 +682,79 @@ def test_fixing_is_refused_while_running_and_for_long_parts(app, media, finished
     assert running.state == "running"
     with pytest.raises(ValueError):
         app.reread(running.id, [0, 0], [0, 0])
+
+
+# ---------------------------------------------------------------------- audio player (plan 05)
+
+
+class FakeCopy:
+    """Stands in for the ffmpeg process that makes a playable copy."""
+
+    def __init__(self, target, works):
+        self.target, self.works, self.killed = target, works, False
+        self.returncode = None
+
+    def communicate(self):
+        if self.works:
+            Path(self.target).write_bytes(b"ogg")
+        self.returncode = 0 if self.works else 1
+        return b"", b"" if self.works else b"Unknown encoder 'libopus'"
+
+    def kill(self):
+        self.killed = True
+
+    def wait(self):
+        return self.returncode
+
+
+def wait_for(condition, timeout=5.0):
+    deadline = time.monotonic() + timeout
+    while not condition() and time.monotonic() < deadline:
+        time.sleep(0.01)
+    return condition()
+
+
+def test_audio_serves_a_playable_file_as_it_is(app, media):
+    app.add_files([str(media[0])])
+    answer = app.audio(app.files[0].id)
+    assert answer["preparing"] is False and answer["url"].endswith("/a.mp3")
+    with urlopen(answer["url"], timeout=5) as reply:
+        assert reply.read() == b"fake"
+    assert app.audio("nope") is None
+    app.close()
+    assert not app.audio_server.running  # closing the window stops the server
+
+
+def test_other_formats_get_a_copy_made_once_and_deleted_at_close(app, tmp_path, monkeypatch):
+    source = tmp_path / "call.wma"
+    source.write_bytes(b"fake")
+    started = []
+
+    def start(path, target, codec="libopus"):
+        started.append(codec)
+        return FakeCopy(target, works=codec == "libmp3lame")  # this ffmpeg "has no Opus"
+
+    monkeypatch.setattr(controller_module.audio_module, "start_playable_copy", start)
+    app.add_files([str(source)])
+    item = app.files[0]
+    assert app.audio(item.id) == {"id": item.id, "url": None, "preparing": True}
+    assert wait_for(lambda: "audio_ready" in kinds(app.sent))
+    ready = last(app.sent, "audio_ready")
+    assert ready["id"] == item.id and ready["url"].endswith(".mp3") and started == ["libopus", "libmp3lame"]
+    again = app.audio(item.id)
+    assert again["url"] == ready["url"] and len(started) == 2  # made once
+    folder = app.audio_dir
+    assert any(folder.iterdir())
+    app.close()
+    assert not folder.exists()
+
+
+def test_convert_asks_for_a_copy_even_of_a_playable_format(app, media, monkeypatch):
+    monkeypatch.setattr(controller_module.audio_module, "start_playable_copy",
+                        lambda path, target, codec="libopus": FakeCopy(target, works=False))
+    app.add_files([str(media[2])])
+    assert app.audio(app.files[0].id, convert=True)["preparing"] is True
+    assert wait_for(lambda: "audio_ready" in kinds(app.sent))
+    assert last(app.sent, "audio_ready")["url"] is None  # both codecs failed
+    assert wait_for(lambda: any("звук" in str(m["data"]) for m in app.sent if m["kind"] in ("notice", "error")))
+    app.close()
