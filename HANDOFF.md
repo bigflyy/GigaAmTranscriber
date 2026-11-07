@@ -1,8 +1,38 @@
 # Handoff: state and findings
 
-Last updated 2026-11-06 (session 9). Current plan: [docs/plans/02-webview-window.md](docs/plans/02-webview-window.md)
-(new window; Stages A-C done, D is later); the rewrite plan [docs/plans/01-onnx-runtime-rewrite.md](docs/plans/01-onnx-runtime-rewrite.md)
-still holds B9, F and E. Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
+Last updated 2026-11-07 (session 10). Current plan: [docs/plans/04-whisper.md](docs/plans/04-whisper.md)
+(Whisper; A1-A4 done, A5 = owner's choice). Plan 02 (window) has D for later; plan 01 still holds B9, F
+(Parakeet, Qwen3-ASR) and E. Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
+
+## Session 10 (2026-11-07): plan 04 written, Whisper runtimes tested
+
+- Plan docs/plans/04-whisper.md takes over plan 01 F for Whisper; plan 03 C1 now waits on plan 04
+  Stage B. Scripts: experiments/whisper/ (README there). Test area (gitignored, about 3.6 GB):
+  `C:\MyProjects\GigaAmTranscriber\build\whisper-test\` (audio copies, chunk WAVs, ort-model/,
+  ggml-model/, whisper.cpp 1.9.5 source and Vulkan build in src/whisper.cpp-1.9.5/b/bin, results/).
+  Results page for the owner (local, has call audio clips, not published):
+  `C:\MyProjects\GigaAmTranscriber\build\whisper-test\results\whisper-test.html`.
+- RTX 4070, seconds for lecture 455 s / call 45 min: GigaAM DML 5.8 / 19.2; whisper.cpp Vulkan q5_0
+  on the app's VAD chunks, greedy 10.6 / 38.4; whisper.cpp whole file 12.2 / 60.7 (call: invented
+  text) and beam 5 21.9 / 119 (call: a phrase repeated 184 times); ORT DML fp16 on chunks, batch 4,
+  32.4 / 92.5 (q4f16 no faster). whisper.cpp on the Radeon 780M: 37 s lecture; ORT fp16 on the 780M
+  crashed ("GPU device instance has been suspended", a TDR). whisper.cpp CPU 8 threads: 228 s lecture.
+- Words differing from GigaAM (digits apart): lecture 3.2-4.1% (Whisper writes English terms right:
+  LLM, Tools Calling, Prompt Engineering, fine tuning); call 27% (chunks) to 54% (whole file), with
+  invented phrases. So: VAD chunks always, GigaAM stays the Russian default.
+- ORT findings: the onnx-community fp16 graphs fail with ORT_ENABLE_ALL on the CPU provider
+  (SimplifiedLayerNormFusion bug; fall back to EXTENDED). Decoder steps on DirectML cost about
+  17 ms per chunk; the merged decoder's If node costs more, decoder_with_past is a bit better;
+  KV cache kept on the GPU with IOBinding ("dml" OrtValues). Mel filters match whisper.cpp's to 4e-9.
+- whisper.cpp findings: no Windows Vulkan binary is published; built with conda-forge glslc and
+  Vulkan headers (README). The first run after a build or driver change spent about 35 s compiling
+  shaders (later runs 12 s); ggml-vulkan.dll is 45 MB. Auto language: 128 of 129 call chunks ru,
+  one "is". whisper.cpp 1.9.5 also ships Parakeet support (plan 01 F).
+- Recommendation given to the owner: whisper.cpp + Vulkan, q5_0, app's chunks, greedy, language
+  once per file or chosen. Waiting for the owner's choice (A5) and model size.
+- Incident: the first queued build ran `cmd.exe /c` from Git Bash without MSYS_NO_PATHCONV, so /c
+  became C:/ and an idle cmd.exe held a queue slot; stopped (own process).
+- The owner's app was open from build/try during this session: do not build there either while it runs.
 
 ## Session 9 (2026-11-06): app icon and Markdown export done; Whisper is next
 
