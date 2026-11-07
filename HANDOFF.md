@@ -1,8 +1,37 @@
 # Handoff: state and findings
 
-Last updated 2026-11-07 (session 11). Current plan: [docs/plans/04-whisper.md](docs/plans/04-whisper.md)
-(Whisper; Stage A, B0 and B1 done; next B2 download, B3 switch in Settings and CLI). Plan 02 (window) has D for later; plan 01 still
+Last updated 2026-11-07 (session 12). Current plan: [docs/plans/04-whisper.md](docs/plans/04-whisper.md)
+(Whisper; Stages A and B done; next C1 Windows and Linux builds with Whisper, then C2 release). Plan 02 (window) has D for later; plan 01 still
 holds B9, F (Parakeet, Qwen3-ASR) and E. Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
+
+## Session 12 (2026-11-07): Whisper download, Settings, CLI, checks, docs (B2-B5)
+
+- Owner's decisions: the model file is hosted on our own models-1 release first, with Hugging Face
+  as the backup download ("let it be ours first, but maybe an option for backup download from
+  hf"); push the commits when Whisper is released ("push when we release the whisper").
+- B2 (e09536b): catalog entry "Whisper" (folder whisper_large_v3_turbo_q5_0, title "Whisper
+  large-v3-turbo (q5_0)"). RemoteFile got mirrors (full URLs tried after the release) and role;
+  ModelInfo got model_type: download.py writes model.json from catalog.manifest() for it. HF URL
+  pinned to commit 5359861c739e955e79d9a303bcbc70fb988958b1 (its X-Linked-ETag is our SHA-256).
+  Each address gets 3 tries for network errors; wrong bytes or HTTP errors move to the next one,
+  keeping the partial file (resume across addresses); a cancel never tries the mirror.
+- Real download (models-1 does not exist yet, so GitHub 404 then HF): 547 MB in 3.5 min,
+  model.json identical to the hand-made one in build/whisper-test/app-models.
+- B3 (58fa986): Settings.language ("auto" or a 2-3 letter code), passed with each transcribe job
+  (Transcriber.set_language, no reload). Settings page: "Язык речи" select only for Whisper
+  (21 languages in controller.LANGUAGES; a code from the file outside the list is still shown).
+  CLI --language; unknown code exits 2; a note when given with a GigaAM model.
+  DEVICE_NAMES got "GPU (Vulkan)". CLI lecture 455 s with Whisper on the 4070: 11.5 s.
+- B4 (c017f42): window_check.py --whisper FOLDER (hard-links the model into its temp downloads,
+  transcribes a copy of SHORT with language ru): 36/36 on Windows. Not run under Xvfb in WSL yet.
+  test_whisper.py real-model test passes with GIGAAM_WHISPER_MODEL_ROOT=build/whisper-test/app-models
+  and GIGAAM_PARITY_AUDIO=build/whisper-test/clips/lecture-4.mp3. Full suite: 380 passed, 2 skipped.
+- B5 (7567b50): README (intro, settings, CLI, how it works, build, tests), THIRD_PARTY_NOTICES
+  (Whisper weights MIT, OpenAI), packaging/licenses/whisper-LICENSE.txt copied by both builds to
+  licenses/whisper-model.
+- Before release (plan C2): create the models-1 release and upload the q5_0 file as asset
+  whisper_large_v3_turbo_q5_0.ggml-large-v3-turbo-q5_0.bin; until then every download falls back
+  to HF after one 404. Commits since 77323f7 are not pushed (owner: push at the Whisper release).
 
 ## Session 11 (2026-11-07): whisper.cpp shipping build (B0) and the Whisper engine (B1)
 
