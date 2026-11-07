@@ -1,10 +1,10 @@
 # Handoff: state and findings
 
-Last updated 2026-11-07 (session 14). Current plan: [docs/plans/04-whisper.md](docs/plans/04-whisper.md)
-(Whisper; done: v0.4.0 published 2026-11-07). Owner's order after Whisper: plan 03 Stage A (docs/plans/03-fix-a-part.md). Plan 02 (window) has D for later; plan 01 still
+Last updated 2026-11-08 (session 14). Current plan: [docs/plans/03-fix-a-part.md](docs/plans/03-fix-a-part.md)
+(Stage A done 2026-11-08, waits for the owner to try it; Stage B next). Plan 04 (Whisper) done: v0.4.0. Plan 02 (window) has D for later; plan 01 still
 holds B9, F (Parakeet, Qwen3-ASR) and E. Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
 
-## Session 14 (2026-11-07): Whisper beam 5 and a term list as prompt, measured
+## Session 14 (2026-11-07/08): Whisper beam 5 and terms measured; plan 03 Stage A built
 
 - Owner: "beam search we can try. a list of terms i dk, you may test it a bit. maybe it will
   even transfer to 03 stage A". experiments/whisper/variants.py runs the app's Transcriber
@@ -40,7 +40,30 @@ holds B9, F (Parakeet, Qwen3-ASR) and E. Owner's ideas: [docs/IDEAS.md](docs/IDE
   spellings too ("LIN", "EA-агента"). No time cost.
 - For plan 03: GigaAM (RNNT, CTC) takes no text hint, so a term list only helps when Whisper
   gives one of the readings (now possible: Whisper ships since v0.4.0, plan 03 C1).
-- Next: plan 03 Stage A after the owner's answers.
+- Owner's answers (2026-11-08, AskUserQuestion; in plan 03): readings RNNT, CTC and Whisper
+  (when downloaded); a "Термины" field in the fix dialog only (Whisper's prompt for that part,
+  saved as Settings.terms); actions in a small bar above the selection.
+- Plan 03 Stage A built (2e4371e backend, fa45c59 window; A1-A5 ticked):
+  gigaam_app/fix.py (context, cuts, trim_reading, replace_words, spread_words); worker job
+  "reread" (decodes only the range with ffmpeg -ss/-t, keeps other models loaded in
+  Worker.spare; _ensure reuses a spare); controller clip / reread / apply_fix, "reading" and
+  "lines_changed" messages; segments now carry words; options say which models are installed.
+  Page: words are spans (p[data-seg], span.w[data-w]); bar above the selection (below it on the
+  first line); the timecode plays its line; the fix dialog shows "Сейчас" and each model's reading
+  with changed words marked, "Взять" saves at once, the text field + "Сохранить" for hand edits.
+- First version cut tightly at the selection: models heard the ends of neighbouring words
+  ("Маш" for "наш", "Пай-плайн на") and wrote the part as a sentence (capital, final period).
+  Now the piece holds up to 1.5 s / 6 words of context per side and each reading is lined up
+  with the current text (difflib) to keep only the selected words; times decide only where that
+  fails. experiments/whisper/reread_check.py on the lecture: Whisper with terms gives "DeepSeek",
+  "Lean 4. Lean", "boilerplate", "Tools Calling" (but "тактики LIN"); RNNT/CTC readings differ
+  little. About 1.3 s for three readings once loaded; the first time loads CTC and Whisper (~8 s).
+- Limit: 25 s selection (Whisper's 30 s window with context). Tests 400 passed, 2 skipped;
+  window_check.py with --whisper: 47/47 (Windows, off screen; the clip is played muted).
+  Screens in this session's scratchpad wcheck/shots (04a-04c).
+- Not tried by the owner yet. Not built into a frozen app yet (no release asked).
+- Next: owner tries it from source or a build; then plan 03 Stage B (RNNT beam N-best, doubtful
+  words marked) or other work the owner picks.
 
 ## Session 13 (2026-11-07): builds with Whisper (C1), release v0.4.0 (C2), plan 04 done
 

@@ -28,11 +28,11 @@ Owner's decisions (2026-11-08, after the Whisper measurements of HANDOFF session
 
 ### Stage A: Select, listen, re-recognise
 
-- [ ] **A1** Select words in the text (mouse drag over the live text of a finished file); the selection maps to a time range from the word times; the action bar appears above the selection
-- [ ] **A2** Play the selection (and a click-to-play on any line, plan 02 D3): audio cut by ffmpeg to a temporary WAV, played by the page's audio element
-- [ ] **A3** "Распознать заново" on the selection: decode the time range again, with 1-2 s of context on each side and the cut at the VAD's quietest point, with RNNT, with CTC and with Whisper (when downloaded; the box's "Термины" go to Whisper as its prompt); show the readings that differ from the current text side by side
-- [ ] **A4** Pick a reading or edit the text by hand; the change goes into the transcript (words keep times), the saved files are written again, the history entry is updated
-- [ ] **A5** Tests (controller with a fake model; real models on a known hard sample) and window_check.py steps
+- [x] **A1** Select words in the text (mouse drag over the live text of a finished file); the selection maps to a time range from the word times; the action bar appears above the selection
+- [x] **A2** Play the selection (and a click-to-play on any line, plan 02 D3): audio cut by ffmpeg to a temporary WAV, played by the page's audio element
+- [x] **A3** "Распознать заново" on the selection: decode the time range again, with 1-2 s of context on each side and the cut at the VAD's quietest point, with RNNT, with CTC and with Whisper (when downloaded; the box's "Термины" go to Whisper as its prompt); show the readings that differ from the current text side by side
+- [x] **A4** Pick a reading or edit the text by hand; the change goes into the transcript (words keep times), the saved files are written again, the history entry is updated
+- [x] **A5** Tests (controller with a fake model; real models on a known hard sample) and window_check.py steps
 
 ### Stage B: More readings
 
