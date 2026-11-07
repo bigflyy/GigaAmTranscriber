@@ -271,6 +271,25 @@ function drawLines(id) {
   renderMain();
 }
 
+// Word confidence (plan 03 B2): how sure the model was of a word, 0..1 (null when not known:
+// text typed by hand, older files). Below DOUBT_LIGHT a word is doubtful (dotted underline),
+// below DOUBT_STRONG it is likely wrong (wavy underline). The colour style paints every word
+// with one of the steps c0 (sure, green) .. c4 (red); COLOR_STEPS are their lower bounds.
+const DOUBT_LIGHT = 0.97;
+const DOUBT_STRONG = 0.80;
+const COLOR_STEPS = [0.97, 0.90, 0.80, 0.65];
+
+function confidenceClasses(confidence) {
+  if (confidence === null || confidence === undefined) return [];
+  const classes = [];
+  if (confidence < DOUBT_STRONG) classes.push('d2');
+  else if (confidence < DOUBT_LIGHT) classes.push('d1');
+  let step = COLOR_STEPS.findIndex((bound) => confidence >= bound);
+  if (step < 0) step = COLOR_STEPS.length;
+  classes.push(`c${step}`);
+  return classes;
+}
+
 function lineNode(line) {
   // Each word is its own span (data-w = its index in the line, the line's data-seg = its index
   // in the file), so a selection maps back to word times (plan 03).
@@ -289,6 +308,11 @@ function lineNode(line) {
     if (index) p.appendChild(document.createTextNode(' '));
     const span = el('span', 'w', word[2]);
     span.dataset.w = index;
+    const confidence = word[3];
+    if (confidence !== null && confidence !== undefined) {
+      span.dataset.c = confidence;
+      span.classList.add(...confidenceClasses(confidence));
+    }
     p.appendChild(span);
   });
   return p;
@@ -329,6 +353,24 @@ function onSegment(data) {
 function applyTimes(on) {
   $('times').checked = on;
   $('text').classList.toggle('with-times', on);
+}
+
+function applyDoubts(on, style) {
+  // The "Сомнения" switch shows or hides the marks; Settings picks underline or colours.
+  $('doubts').checked = on;
+  const text = $('text');
+  text.classList.toggle('doubts-underline', on && style !== 'colors');
+  text.classList.toggle('doubts-colors', on && style === 'colors');
+}
+
+function showConfidence(event) {
+  // The number appears on hover: on marked words, or on every word in the colour style.
+  const word = event.target.closest && event.target.closest('.w');
+  if (!word || word.dataset.c === undefined) return;
+  const text = $('text');
+  const shown = text.classList.contains('doubts-colors') ||
+    (text.classList.contains('doubts-underline') && (word.classList.contains('d1') || word.classList.contains('d2')));
+  word.title = shown ? `Уверенность модели: ${Math.round(Number(word.dataset.c) * 100)} %` : '';
 }
 
 async function copyText() {
@@ -682,6 +724,9 @@ function renderSettings() {
   }
   $('config-note').textContent = options.config_note || '';
   applyTimes(!!settings.include_timestamps);
+  const style = settings.doubt_style || 'underline';
+  for (const input of document.querySelectorAll('input[name="doubt-style"]')) input.checked = input.value === style;
+  applyDoubts(settings.doubt_marks !== false, style);
 }
 
 async function changeSetting(change) {
@@ -799,6 +844,14 @@ $('times').addEventListener('change', () => {
   applyTimes($('times').checked);
   call('set_settings', { include_timestamps: $('times').checked });
 });
+$('doubts').addEventListener('change', () => {
+  applyDoubts($('doubts').checked, state.settings.doubt_style || 'underline');
+  call('set_settings', { doubt_marks: $('doubts').checked });
+});
+for (const input of document.querySelectorAll('input[name="doubt-style"]')) {
+  input.addEventListener('change', () => changeSetting({ doubt_style: input.value }));
+}
+$('text').addEventListener('mouseover', showConfidence);
 $('language').addEventListener('change', () => changeSetting({ language: $('language').value }));
 $('threads').addEventListener('change', () => {
   const value = Math.max(0, Math.floor(Number($('threads').value) || 0));

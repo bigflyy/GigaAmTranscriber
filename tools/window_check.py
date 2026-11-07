@@ -1,4 +1,4 @@
-"""Drive the real window off screen and check what the page shows (plan 02, B3-B7).
+"""Drive the real window off screen and check what the page shows (plan 02 B3-B7, plan 03).
 
 On Windows the window opens at (-6000, -6000) without focus; on Linux it must
 run under Xvfb (WAYLAND_DISPLAY unset, GDK_BACKEND=x11). So nothing appears on
@@ -219,6 +219,45 @@ def fix_steps(js, control, item, short_audio, shoot):
     shoot("04c-fixed")
 
 
+def doubt_steps(js, control, item, shoot):
+    """Plan 03 B2 on the finished short file: words carry the model's confidence, doubtful
+    ones are underlined, the switch hides the marks, Settings switches to colouring all words."""
+    js("document.querySelectorAll('#files li')[1].click()")
+    wait(lambda: js("$('text').querySelectorAll('.w').length") > 4, 10, "words of the short file")
+    words = [word for segment in item.segments for word in segment.words]
+    known = [word for word in words if word.confidence is not None]
+    check("words have a confidence", len(known) >= len(words) - 3 and known, f"{len(known)} of {len(words)}")
+    check("page words carry it", js("$('text').querySelectorAll('.w[data-c]').length") == len(known))
+    doubtful = sum(1 for word in known if word.confidence < 0.97)
+    check("doubtful words are marked", js("$('text').querySelectorAll('.w.d1, .w.d2').length") == doubtful,
+          f"{doubtful} below 0.97: " + ", ".join(f"{w.text} {w.confidence}" for w in known if w.confidence < 0.97))
+    check("marks on by default", js("$('doubts').checked && $('text').classList.contains('doubts-underline')"))
+    # The look of each mark, on the first word given each class for a moment.
+    looks = js("(() => { const w = $('text').querySelector('.w'); const had = w.className; const out = [];"
+               " for (const c of ['d1', 'd2']) { w.className = 'w ' + c; const s = getComputedStyle(w);"
+               " out.push(s.textDecorationLine + ' ' + s.textDecorationStyle); }"
+               " w.className = had; return out; })()")
+    check("dotted and wavy underlines", looks == ["underline dotted", "underline wavy"], looks)
+    title = js("(() => { const w = $('text').querySelector('.w.d1, .w.d2'); if (!w) return 'none';"
+               " w.dispatchEvent(new MouseEvent('mouseover', {bubbles: true})); return w.title; })()")
+    check("hover names the confidence", title == "none" or (title.startswith("Уверенность модели:") and title.endswith("%")),
+          title)
+    shoot("04d-doubts")
+    js("$('doubts').click()")
+    check("switch hides the marks", not js("$('text').classList.contains('doubts-underline')"))
+    wait(lambda: '"doubt_marks": false' in Path(os.environ["GIGAAM_CONFIG"]).read_text("utf-8"), 5, "switch saved")
+    js("$('doubts').click()")
+    js("document.querySelector('input[name=doubt-style][value=colors]').click()")
+    wait(lambda: js("$('text').classList.contains('doubts-colors')"), 5, "colour style")
+    colours = js("(() => { const w = $('text').querySelector('.w.c0'); return w ? [getComputedStyle(w).color,"
+                 " getComputedStyle($('text')).color] : null; })()")
+    check("colour style paints the words", colours is not None and colours[0] != colours[1], colours)
+    check("colour style saved", '"doubt_style": "colors"' in Path(os.environ["GIGAAM_CONFIG"]).read_text("utf-8"))
+    shoot("04e-doubt-colours")
+    js("document.querySelector('input[name=doubt-style][value=underline]').click()")
+    wait(lambda: js("$('text').classList.contains('doubts-underline')"), 5, "underline style again")
+
+
 def scenario(window, control, long_audio, short_audio, shoot, whisper=False):
     js = window.evaluate_js
     try:
@@ -294,6 +333,7 @@ def scenario(window, control, long_audio, short_audio, shoot, whisper=False):
         check("Markdown created from the page",
               markdown.is_file() and markdown.read_text(encoding="utf-8").startswith("# " + Path(short_audio).name))
         shoot("04-done")
+        doubt_steps(js, control, control.files[1], shoot)
         fix_steps(js, control, control.files[1], short_audio, shoot)
 
         # Retry the short file, remove the cancelled one.

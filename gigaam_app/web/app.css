@@ -25,6 +25,14 @@
   --danger-soft: #fdecea;
   --overlay: rgba(23, 24, 28, 0.35);
   --shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+  /* Word confidence (plan 03 B2): underline marks, and the green-to-red scale c0..c4. */
+  --doubt: #c27a00;
+  --doubt-strong: #d0470f;
+  --conf-0: #1d7a3e;
+  --conf-1: #6b6d00;
+  --conf-2: #a86100;
+  --conf-3: #c8410e;
+  --conf-4: #c01818;
   color-scheme: light;
 }
 
@@ -52,6 +60,13 @@
     --danger-soft: #2a1d20;
     --overlay: rgba(0, 0, 0, 0.5);
     --shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+    --doubt: #e0a23c;
+    --doubt-strong: #ff7f50;
+    --conf-0: #5fcf86;
+    --conf-1: #cfc54a;
+    --conf-2: #f0a040;
+    --conf-3: #ff7a45;
+    --conf-4: #ff6161;
     color-scheme: dark;
   }
 }
@@ -79,6 +94,13 @@
   --danger-soft: #2a1d20;
   --overlay: rgba(0, 0, 0, 0.5);
   --shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  --doubt: #e0a23c;
+  --doubt-strong: #ff7f50;
+  --conf-0: #5fcf86;
+  --conf-1: #cfc54a;
+  --conf-2: #f0a040;
+  --conf-3: #ff7a45;
+  --conf-4: #ff6161;
   color-scheme: dark;
 }
 
@@ -243,6 +265,16 @@ button.icon:hover { color: var(--text); background: var(--card); }
 .text time.playable { cursor: pointer; }
 .text time.playable:hover { color: var(--link); text-decoration: underline; }
 .text .w.changed { background: var(--accent-soft); border-radius: 3px; }
+
+/* Word confidence (plan 03 B2). The page gives each word d1 (0.80-0.97) or d2 (below 0.80)
+   and a colour step c0..c4; #text says which style shows: doubts-underline or doubts-colors. */
+.text.doubts-underline .w.d1 { text-decoration: underline dotted var(--doubt); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+.text.doubts-underline .w.d2 { text-decoration: underline wavy var(--doubt-strong); text-decoration-thickness: 1.5px; text-underline-offset: 3px; }
+.text.doubts-colors .w.c0 { color: var(--conf-0); }
+.text.doubts-colors .w.c1 { color: var(--conf-1); }
+.text.doubts-colors .w.c2 { color: var(--conf-2); }
+.text.doubts-colors .w.c3 { color: var(--conf-3); }
+.text.doubts-colors .w.c4 { color: var(--conf-4); font-weight: 600; }
 
 /* The bar above selected words (plan 03): listen, recognise again, edit. */
 .file-view { position: relative; }

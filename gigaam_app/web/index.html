@@ -72,6 +72,11 @@
           <span class="track" aria-hidden="true"><span class="knob"></span></span>
           Таймкоды
         </label>
+        <label class="switch" title="Отмечать слова, в которых модель не уверена">
+          <input id="doubts" type="checkbox">
+          <span class="track" aria-hidden="true"><span class="knob"></span></span>
+          Сомнения
+        </label>
         <button id="copy" type="button">Копировать</button>
       </div>
       <div id="text" class="text" tabindex="0" aria-live="off"></div>
@@ -108,6 +113,17 @@
         <fieldset>
           <legend>Потоки процессора</legend>
           <label class="inline"><input id="threads" type="number" min="0" step="1"> 0 = выбрать автоматически</label>
+        </fieldset>
+        <fieldset>
+          <legend>Сомнительные слова</legend>
+          <div id="doubt-styles" class="segmented">
+            <label><input type="radio" name="doubt-style" value="underline">Подчёркивать</label>
+            <label><input type="radio" name="doubt-style" value="colors">Цвет всех слов</label>
+          </div>
+          <p class="hint">Насколько модель уверена в каждом слове. «Подчёркивать»: пунктиром слова,
+            в которых она сомневается, волной те, где она скорее ошиблась. «Цвет всех слов»: от
+            зелёного (уверена) через оранжевый к красному. Включается переключателем «Сомнения»
+            над текстом; число видно при наведении на слово.</p>
         </fieldset>
         <fieldset>
           <legend>Сохранять рядом с файлом</legend>

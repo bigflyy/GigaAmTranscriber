@@ -60,6 +60,13 @@ def test_whisper_and_its_language_load():
     assert json.loads(settings.to_json())["language"] == "en"
 
 
+def test_doubt_marks_default_on_and_round_trip():
+    assert (config.Settings().doubt_marks, config.Settings().doubt_style) == (True, "underline")
+    settings = config.parse({"doubt_marks": False, "doubt_style": "colors"})
+    again = config.parse(json.loads(settings.to_json()))
+    assert (again.doubt_marks, again.doubt_style) == (False, "colors")
+
+
 def test_vad_ints_stay_ints():
     settings = config.parse({"vad_min_speech_ms": 300.0, "max_duration": 20})
     assert type(settings.vad.vad_min_speech_ms) is int and type(settings.vad.max_duration) is float
@@ -77,6 +84,8 @@ def test_vad_ints_stay_ints():
     ({"cpu_threads": 2.5}, "cpu_threads"),
     ({"cpu_threads": True}, "cpu_threads"),
     ({"include_timestamps": "yes"}, "include_timestamps"),
+    ({"doubt_marks": 1}, "doubt_marks"),
+    ({"doubt_style": "bold"}, "doubt_style"),
     ({"outputs": []}, "outputs"),
     ({"outputs": ["txt", "docx"]}, "outputs"),
     ({"vad_threshold": 0}, "vad_threshold"),

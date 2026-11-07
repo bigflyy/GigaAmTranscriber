@@ -52,7 +52,7 @@ Results are saved beside the source file:
 | `timestamps` | `name-transcript-timestamps.txt` | the same lines with `[start - end]` times |
 | `md` | `name-transcript.md` | Markdown: file name, date, length and model, then the text in sections of about a minute under their start times |
 | `srt` | `name-transcript.srt` | subtitles, short cues built from word times |
-| `json` | `name-transcript.json` | segments and every word with its start and end time |
+| `json` | `name-transcript.json` | segments and every word with its start and end time and the model's confidence (0 to 1) |
 
 TXT and timestamped TXT are on by default; a finished file also offers the
 other formats, made from the text already recognised. **Настройки** (bottom left)
@@ -60,6 +60,10 @@ chooses the formats, the model (RNNT by default, CTC, or Whisper), the device (�
 Видеокарта, Процессор) and CPU threads; changes count from the next file.
 Choosing Whisper the first time asks to download it (547 MB); with Whisper the
 settings also show **Язык речи**: automatic detection or a chosen language.
+Words the model was unsure of are underlined in the text (dotted: maybe wrong,
+wavy: likely wrong; hover a word for the number); the **Сомнения** switch above
+the text hides the marks, and **Настройки** can colour every word from green to
+red by confidence instead.
 Changes are saved at once to `gigaam-config.json` beside the app (the command
 line reads the same file); **Сбросить настройки** goes back to the defaults. The window follows the system's light or dark theme.
 

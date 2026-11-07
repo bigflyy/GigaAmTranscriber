@@ -369,7 +369,7 @@ class Controller:
         s = self.settings
         return {"model": s.model, "language": s.language, "device": s.device, "cpu_threads": s.cpu_threads,
                 "outputs": list(s.outputs), "include_timestamps": s.include_timestamps,
-                "terms": s.terms}
+                "terms": s.terms, "doubt_marks": s.doubt_marks, "doubt_style": s.doubt_style}
 
     # ------------------------------------------------------------------ page calls
 
@@ -488,9 +488,10 @@ class Controller:
 
     @staticmethod
     def _segment_view(index, segment):
-        """One line of text for the page, with its words, so a selection maps to word times."""
+        """One line of text for the page, with its words, so a selection maps to word times.
+        A word is [start, end, text, confidence]; confidence is None when not known."""
         return {"index": index, "start": segment.start, "end": segment.end, "text": segment.text,
-                "words": [[word.start, word.end, word.text] for word in segment.words]}
+                "words": [[word.start, word.end, word.text, word.confidence] for word in segment.words]}
 
     def copy_text(self, file_id, with_times):
         """The text as in the saved files: plain, or with [start - end] timecodes."""
@@ -682,6 +683,12 @@ class Controller:
                 s.outputs = chosen or ["txt"]
             if "include_timestamps" in change:
                 s.include_timestamps = bool(change["include_timestamps"])
+            if "doubt_marks" in change:
+                s.doubt_marks = bool(change["doubt_marks"])
+            if "doubt_style" in change:
+                if change["doubt_style"] not in config.DOUBT_STYLES:
+                    raise ValueError(f"Unknown doubt style {change['doubt_style']!r}")
+                s.doubt_style = change["doubt_style"]
             self._save_settings()
             self._emit("settings", self._settings_view())
             if self._engine_key() != before:
@@ -693,12 +700,13 @@ class Controller:
             return True
 
     def reset_settings(self):
-        """Back to the default model, device, threads and formats. The speech search
+        """Back to the default model, device, threads, formats and text view. The speech search
         settings, which only the settings file holds, stay as they are."""
         defaults = config.Settings()
         return self.set_settings({"model": defaults.model, "device": defaults.device,
                                   "cpu_threads": defaults.cpu_threads, "outputs": list(defaults.outputs),
-                                  "include_timestamps": defaults.include_timestamps})
+                                  "include_timestamps": defaults.include_timestamps,
+                                  "doubt_marks": defaults.doubt_marks, "doubt_style": defaults.doubt_style})
 
     def _save_settings(self):
         """Every change is kept for the next start (gigaam-config.json, also read by the CLI)."""

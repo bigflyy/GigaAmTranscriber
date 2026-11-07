@@ -25,6 +25,9 @@ RETIRED_KEYS = {"min_duration", "vad_window_samples"}
 LANGUAGE_PATTERN = re.compile(r"auto|[a-z]{2,3}")
 # Whisper reads at most about 220 prompt tokens; a longer list is cut from the front.
 MAX_TERMS_LENGTH = 500
+# How the window shows the model's confidence (plan 03 B2): "underline" marks only the
+# doubtful words, "colors" colours every word from green (sure) to red.
+DOUBT_STYLES = ("underline", "colors")
 
 
 @dataclass
@@ -35,6 +38,8 @@ class Settings:
     language: str = "auto"            # Whisper only: a code such as "en", or "auto" to detect it
     terms: str = ""                   # the last terms typed when a part is recognised again (Whisper's prompt)
     include_timestamps: bool = False  # preview only; files are written as listed in outputs
+    doubt_marks: bool = True          # the window marks words by the model's confidence
+    doubt_style: str = "underline"    # one of DOUBT_STYLES
     outputs: list = field(default_factory=lambda: list(DEFAULT_FORMATS))
     vad: VadOptions = field(default_factory=VadOptions)
 
@@ -92,6 +97,14 @@ def parse(data):
             if type(value) is not bool:
                 raise ValueError("include_timestamps: expected true or false")
             settings.include_timestamps = value
+        elif key == "doubt_marks":
+            if type(value) is not bool:
+                raise ValueError("doubt_marks: expected true or false")
+            settings.doubt_marks = value
+        elif key == "doubt_style":
+            if value not in DOUBT_STYLES:
+                raise ValueError(f"doubt_style: expected one of {', '.join(DOUBT_STYLES)}")
+            settings.doubt_style = value
         elif key == "outputs":
             if not isinstance(value, list) or not value or any(item not in FORMATS for item in value):
                 raise ValueError(f"outputs: expected a list from {', '.join(FORMATS)}")

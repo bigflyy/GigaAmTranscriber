@@ -337,7 +337,7 @@ def test_live_segments_and_copy(app, media):
     pushed = [m["data"] for m in app.sent if m["kind"] == "segment"]
     assert [(p["index"], p["text"]) for p in pushed] == [(0, "Первая."), (1, "Вторая.")]
     assert app.segments(item.id)[1] == {"index": 1, "start": 3.0, "end": 4.0, "text": "Вторая.",
-                                         "words": [[3.0, 4.0, "Вторая."]]}
+                                         "words": [[3.0, 4.0, "Вторая.", None]]}
     assert app.copy_text(item.id, False) == "Первая.\nВторая.\n"
     assert app.copy_text(item.id, True).startswith("[00:01.000 - 00:02.500] Первая.\n")
 
@@ -373,7 +373,8 @@ def test_settings_apply_to_the_next_file_and_reload_the_model(app, media):
     app.fake_worker.take()
     app.set_settings({"device": "CPU", "cpu_threads": 4, "outputs": ["srt", "txt"]})
     assert last(app.sent, "settings") == {"model": "RNNT", "language": "auto", "device": "CPU", "cpu_threads": 4,
-                                          "outputs": ["txt", "srt"], "include_timestamps": False, "terms": ""}
+                                          "outputs": ["txt", "srt"], "include_timestamps": False, "terms": "",
+                                          "doubt_marks": True, "doubt_style": "underline"}
     assert app.fake_worker.take() == [("load", ("RNNT", "cpu", 4))]
     app.add_files([str(media[0])])
     job = app.fake_worker.take()[0]
@@ -381,6 +382,20 @@ def test_settings_apply_to_the_next_file_and_reload_the_model(app, media):
     # While a file runs, a change does not load at once; the next file loads it.
     app.set_settings({"model": "CTC"})
     assert app.fake_worker.take() == []
+
+
+def test_doubt_marks_are_a_view_setting_without_a_reload(app):
+    app.fake_worker.take()
+    app.set_settings({"doubt_marks": False, "doubt_style": "colors"})
+    assert app.fake_worker.take() == []
+    view = last(app.sent, "settings")
+    assert (view["doubt_marks"], view["doubt_style"]) == (False, "colors")
+    assert (config.load(app.settings_path).doubt_marks, config.load(app.settings_path).doubt_style) == (False, "colors")
+    with pytest.raises(ValueError):
+        app.set_settings({"doubt_style": "bold"})
+    app.reset_settings()
+    view = last(app.sent, "settings")
+    assert (view["doubt_marks"], view["doubt_style"]) == (True, "underline")
 
 
 def test_language_goes_with_each_file_without_a_reload(app, media):
@@ -618,12 +633,14 @@ def test_readings_keep_only_the_selected_words(app, finished):
 
 def test_take_a_reading_keeps_its_times_and_writes_the_files(app, finished):
     answer = app.reread(finished.id, [0, 3], [0, 4])
-    heard = [Word(text="Tools", start=2.72, end=3.0), Word(text="Calling,", start=3.02, end=3.5)]
+    heard = [Word(text="Tools", start=2.72, end=3.0, confidence=0.9), Word(text="Calling,", start=3.02, end=3.5)]
     app.handle(("reread_result", answer["request"], "RNNT", heard, None))
     assert app.apply_fix(finished.id, [0, 3], [0, 4], "Tools Calling,", "RNNT")
     line = finished.segments[0]
     assert line.text == "наш любимый механизм Tools Calling, и"
-    assert [(w.text, w.start) for w in line.words[3:5]] == [("Tools", 2.72), ("Calling,", 3.02)]
+    # A reading taken as it is keeps its times and its confidence (plan 03 B2).
+    assert [(w.text, w.start, w.confidence) for w in line.words[3:5]] == [("Tools", 2.72, 0.9), ("Calling,", 3.02, None)]
+    assert app.segments(finished.id)[0]["words"][3][3] == 0.9
     assert finished.result.segments[0] is line
     assert "Tools Calling, и" in finished.written["txt"].read_text(encoding="utf-8")
     assert "lines_changed" in kinds(app.sent)
@@ -637,6 +654,7 @@ def test_text_typed_by_hand_gets_times_spread_over_the_part(app, finished):
     assert second.text == "мозаика."
     starts = [w.start for w in first.words[5:]]
     assert starts == sorted(starts) and 3.5 <= starts[0] < 3.7
+    assert all(w.confidence is None for w in first.words[5:])  # typed by hand: no confidence
 
 
 def test_fixing_is_refused_while_running_and_for_long_parts(app, media, finished):
