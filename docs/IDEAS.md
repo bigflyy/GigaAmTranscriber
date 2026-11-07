@@ -19,6 +19,7 @@ models, Stage E speaker diarization) and plan 02 (D1-D3).
 
 - 2026-11-07: send a video by link (YouTube for example) and get it transcribed, then summarised automatically: "an addon to firefox / chrome / just some kind of service, maybe even in our app idk". Summary with Claude / Codex / an API; a local model as experimental, for the future ("i dont have a good one").
   2026-11-08 (repeated): paste a YouTube link, "or possible in the future other types of link", and get a transcript; summarise it later with a local Codex or Claude Code, or a local model ("i dont have good ones, so i barely think last one is usable").
+- 2026-11-08: fix the doubtful words automatically through an LLM (a local Codex or Claude Code): "summarize and maybe fix it (the unsure words) auto via llm (codex / claude code)". Builds on the "Для ИИ" text, which marks doubtful words as слово[?66%], and on the suggested fixes of plan 06 (the LLM could pick between the models' readings).
 
 ## Started
 
