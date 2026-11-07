@@ -168,6 +168,50 @@ def whisper_steps(js, control, short_audio, shoot, real):
     wait(lambda: js("$('language-box').hidden"), 10, "language choice hidden again")
 
 
+def fix_steps(js, control, item, short_audio, shoot):
+    """Plan 03 Stage A on the finished short file: select words, the bar shows; listen
+    (muted); recognise again (a reading per installed model); save text typed by hand,
+    which reaches the page, the saved txt and the history."""
+    js("document.querySelectorAll('#files li')[1].click()")
+    wait(lambda: js("$('text').querySelectorAll('.w').length") > 4, 10, "words of the short file")
+    # Select words 1..3 of the first line the way a mouse drag would, then release.
+    js("(() => { const p = $('text').querySelector('p[data-seg=\"0\"]'); const r = document.createRange();"
+       " r.setStart(p.querySelector('[data-w=\"1\"]').firstChild, 0);"
+       " r.setEnd(p.querySelector('[data-w=\"3\"]').firstChild, 1);"
+       " const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);"
+       " document.dispatchEvent(new PointerEvent('pointerup')); })()")
+    wait(lambda: not js("$('sel-bar').hidden"), 5, "selection bar")
+    check("selection bar shows", not js("$('sel-bar').hidden"))
+    check("selection maps to words", js("selection && selection.first.join() + '-' + selection.last.join()") == "0,1-0,3",
+          js("selection && selection.first.join() + '-' + selection.last.join()"))
+    shoot("04a-selection-bar")
+    js("player.muted = true; $('sel-play').click()")  # never sound during a test
+    wait(lambda: js("player.src.startsWith('data:audio/wav')"), 10, "clip")
+    check("listen gets a WAV clip", js("player.src.startsWith('data:audio/wav') && player.src.length > 1000"))
+    js("stopPlaying()")
+    current = js("wordsBetween(selection.fileId, selection.first, selection.last).join(' ')")
+    js("$('sel-reread').click()")
+    wait(lambda: js("$('fix').open"), 5, "fix dialog")
+    models = [key for key in controller_module.REREAD_MODELS if control._model_installed(key)]
+    wait(lambda: js("$('fix-readings').querySelectorAll('.reading').length") == len(models) + 1
+         and not js("$('fix-reread').disabled"), 120, "readings")
+    readings = js("[...$('fix-readings').querySelectorAll('.reading')].map(li => li.textContent)")
+    check("a reading per installed model", len(readings) == len(models) + 1
+          and all("Распознаю" not in text and "Загрузка" not in text for text in readings), readings)
+    check("dialog shows the selected text", js("$('fix-text').value") == current, js("$('fix-text').value"))
+    shoot("04b-fix-dialog")
+    js("$('fix-text').value = 'check fix words'; $('fix-save').click()")
+    wait(lambda: not js("$('fix').open"), 10, "dialog closes")
+    wait(lambda: "check fix words" in js("$('text').textContent"), 10, "fixed text on the page")
+    check("fixed text on the page", "check fix words" in js("$('text').textContent"))
+    check("fixed text in the transcript", "check fix words" in item.segments[0].text, item.segments[0].text)
+    txt = Path(short_audio).with_name(Path(short_audio).stem + "-transcript.txt")
+    check("saved txt written again", "check fix words" in txt.read_text(encoding="utf-8"))
+    remembered = Path(os.environ["GIGAAM_HISTORY"]) / f"{item.saved_as}.json"
+    check("history updated", "check fix words" in remembered.read_text(encoding="utf-8"))
+    shoot("04c-fixed")
+
+
 def scenario(window, control, long_audio, short_audio, shoot, whisper=False):
     js = window.evaluate_js
     try:
@@ -243,6 +287,7 @@ def scenario(window, control, long_audio, short_audio, shoot, whisper=False):
         check("Markdown created from the page",
               markdown.is_file() and markdown.read_text(encoding="utf-8").startswith("# " + Path(short_audio).name))
         shoot("04-done")
+        fix_steps(js, control, control.files[1], short_audio, shoot)
 
         # Retry the short file, remove the cancelled one.
         js("$('file-retry').click()")

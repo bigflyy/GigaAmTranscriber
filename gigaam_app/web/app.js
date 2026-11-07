@@ -169,7 +169,7 @@ function select(id, byUser) {
     node.classList.toggle('selected', on);
     node.setAttribute('aria-current', on ? 'true' : 'false');
   }
-  if (changed) showLines(id);
+  if (changed) { hideBar(); showLines(id); }
   if (byUser && state.view === 'settings') setView('file');
   renderMain();
 }
@@ -184,6 +184,7 @@ async function removeFile(id) {
 
 function setView(view) {
   state.view = view;
+  if (view !== 'file') hideBar();
   renderMain();
 }
 
@@ -271,12 +272,38 @@ function drawLines(id) {
 }
 
 function lineNode(line) {
+  // Each word is its own span (data-w = its index in the line, the line's data-seg = its index
+  // in the file), so a selection maps back to word times (plan 03).
   const p = el('p');
-  const time = el('time', '', clock(line.start));
+  p.dataset.seg = line.index;
+  const time = el('time', 'playable', clock(line.start));
   time.dateTime = `PT${line.start.toFixed(1)}S`;
+  time.title = 'Прослушать эту строку';
   p.appendChild(time);
-  p.appendChild(document.createTextNode(line.text));
+  const words = line.words || [];
+  if (!words.length) {
+    p.appendChild(document.createTextNode(line.text));
+    return p;
+  }
+  words.forEach((word, index) => {
+    if (index) p.appendChild(document.createTextNode(' '));
+    const span = el('span', 'w', word[2]);
+    span.dataset.w = index;
+    p.appendChild(span);
+  });
   return p;
+}
+
+async function refreshLines(id) {
+  // The text of a file changed (a part was fixed): draw it again where the reader was.
+  state.lines.delete(id);
+  if (state.selected !== id) return;
+  const top = $('text').scrollTop;
+  const answer = await call('segments', id);
+  if (!answer || state.selected !== id) return;
+  state.lines.set(id, answer);
+  drawLines(id);
+  $('text').scrollTop = top;
 }
 
 function onSegment(data) {
@@ -323,6 +350,264 @@ async function copyText() {
     area.remove();
   }
   toast('Текст скопирован');
+}
+
+// ------------------------------------------------------------------ fixing a selected part (plan 03)
+//
+// Selecting words in a finished file's text shows a small bar above them: listen, recognise
+// again (RNNT, CTC and Whisper side by side), or edit by hand. Python does the work
+// (controller.clip, reread, apply_fix); the page maps the selection to word positions.
+
+const MAX_REREAD_SECONDS = 25;  // gigaam_app/fix.py MAX_SECONDS
+let selection = null;   // {fileId, first: [line, word], last: [line, word]} under the bar
+let pointerDown = false;
+const fix = { fileId: null, first: null, last: null, request: null, current: '' };
+
+function fixableFile() {
+  const file = fileById(state.selected);
+  return file && (file.state === 'done' || file.state === 'cancelled') && file.segments ? file : null;
+}
+
+function wordOf(fileId, position) {
+  const lines = state.lines.get(fileId) || [];
+  const line = lines[position[0]];
+  return line && line.words ? line.words[position[1]] : null;
+}
+
+function wordsBetween(fileId, first, last) {
+  const lines = state.lines.get(fileId) || [];
+  const found = [];
+  for (let index = first[0]; index <= last[0]; index += 1) {
+    const words = (lines[index] && lines[index].words) || [];
+    const from = index === first[0] ? first[1] : 0;
+    const to = index === last[0] ? last[1] : words.length - 1;
+    for (let w = from; w <= to; w += 1) found.push(words[w][2]);
+  }
+  return found;
+}
+
+function selectedWords() {
+  // The first and last word the browser selection touches with at least one character.
+  const chosen = window.getSelection();
+  if (!chosen || chosen.isCollapsed || !chosen.rangeCount) return null;
+  const range = chosen.getRangeAt(0);
+  const text = $('text');
+  if (!text.contains(range.startContainer) || !text.contains(range.endContainer)) return null;
+  let first = null;
+  let last = null;
+  for (const span of text.querySelectorAll('.w')) {
+    const node = span.firstChild;
+    if (!node) continue;
+    const size = node.length;
+    const endsBefore = range.comparePoint(node, size) < 0
+      || (range.startContainer === node && range.startOffset === size);
+    if (endsBefore) continue;
+    const startsAfter = range.comparePoint(node, 0) > 0
+      || (range.endContainer === node && range.endOffset === 0);
+    if (startsAfter) break;
+    const position = [Number(span.parentNode.dataset.seg), Number(span.dataset.w)];
+    if (!first) first = position;
+    last = position;
+  }
+  return first ? { first, last, range } : null;
+}
+
+function hideBar() {
+  $('sel-bar').hidden = true;
+  selection = null;
+}
+
+function updateBar() {
+  const file = state.view === 'file' ? fixableFile() : null;
+  const found = file ? selectedWords() : null;
+  if (!found) { hideBar(); return; }
+  selection = { fileId: file.id, first: found.first, last: found.last };
+  $('sel-bar').hidden = false;
+  placeBar(found.range);
+}
+
+function placeBar(range) {
+  // Above the selection (below it when there is no room), inside the text area.
+  const bar = $('sel-bar');
+  const host = $('view-file').getBoundingClientRect();
+  const area = $('text').getBoundingClientRect();
+  const box = range.getBoundingClientRect();
+  const firstLine = range.getClientRects()[0] || box;
+  bar.style.visibility = box.bottom < area.top || box.top > area.bottom ? 'hidden' : '';
+  let top = box.top - bar.offsetHeight - 8;
+  if (top < area.top) top = box.bottom + 8;
+  const left = Math.max(8, Math.min(firstLine.left - host.left, host.width - bar.offsetWidth - 8));
+  bar.style.top = `${top - host.top}px`;
+  bar.style.left = `${left}px`;
+}
+
+// ---- playing a part
+
+const player = new Audio();
+let playingButton = null;
+
+function setPlayLabel(button, on) {
+  if (button && button.tagName === 'BUTTON') button.innerHTML = on ? '&#9632; Стоп' : '&#9654; Слушать';
+}
+
+function stopPlaying() {
+  player.pause();
+  setPlayLabel(playingButton, false);
+  playingButton = null;
+}
+
+async function playPart(fileId, first, last, button) {
+  const again = playingButton === button && !player.paused;
+  stopPlaying();
+  if (again) return;  // the same button stops it
+  const clip = await call('clip', fileId, first, last);
+  if (!clip) return;
+  player.src = clip.url;
+  playingButton = button;
+  setPlayLabel(button, true);
+  try {
+    await player.play();
+  } catch (error) {
+    stopPlaying();
+    toast('Не удалось воспроизвести звук');
+  }
+}
+
+player.addEventListener('ended', stopPlaying);
+
+function playLine(index) {
+  const file = fixableFile();
+  const lines = file ? state.lines.get(file.id) || [] : [];
+  const line = lines[index];
+  if (!line || !line.words || !line.words.length) return;
+  const node = $('text').querySelector(`p[data-seg="${index}"] time`);
+  playPart(file.id, [index, 0], [index, line.words.length - 1], node);
+}
+
+// ---- the fix dialog
+
+function keyOf(word) {
+  return word.toLowerCase().replace(/ё/g, 'е').replace(/[^\p{L}\p{N}]/gu, '');
+}
+
+function markedText(text, current) {
+  // The reading with the words that differ from the current text marked (longest common subsequence).
+  const words = text.split(/\s+/).filter(Boolean);
+  const a = words.map(keyOf);
+  const b = current.split(/\s+/).filter(Boolean).map(keyOf);
+  const table = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0));
+  for (let i = a.length - 1; i >= 0; i -= 1) {
+    for (let j = b.length - 1; j >= 0; j -= 1) {
+      table[i][j] = a[i] === b[j] ? table[i + 1][j + 1] + 1 : Math.max(table[i + 1][j], table[i][j + 1]);
+    }
+  }
+  // Walk the table: a reading word is unchanged when it is part of the common subsequence.
+  const same = new Array(a.length).fill(false);
+  let i = 0;
+  let j = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) { same[i] = true; i += 1; j += 1; } else if (table[i + 1][j] >= table[i][j + 1]) i += 1; else j += 1;
+  }
+  const node = el('div', 'reading-text');
+  words.forEach((word, index) => {
+    if (index) node.appendChild(document.createTextNode(' '));
+    node.appendChild(same[index] ? document.createTextNode(word) : el('mark', '', word));
+  });
+  return node;
+}
+
+function readingItem(key, title, status) {
+  const item = el('li', 'reading quiet');
+  item.dataset.model = key;
+  const body = el('div', 'reading-body');
+  body.appendChild(el('div', 'reading-model', title));
+  body.appendChild(el('div', 'reading-text', status));
+  item.appendChild(body);
+  return item;
+}
+
+function whisperInstalled() {
+  const whisper = (state.options.models || []).find((model) => model.key === 'Whisper');
+  return !!(whisper && whisper.installed);
+}
+
+function openFix(reread) {
+  if (!selection) return;
+  const { fileId, first, last } = selection;
+  const start = wordOf(fileId, first)[0];
+  const end = wordOf(fileId, last)[1];
+  Object.assign(fix, { fileId, first, last, request: null, current: wordsBetween(fileId, first, last).join(' ') });
+  window.getSelection().removeAllRanges();
+  hideBar();
+  $('fix-range').textContent = `${clock(start)} - ${clock(end)}, ${(end - start).toFixed(1)} с`;
+  $('fix-text').value = fix.current;
+  $('fix-terms').value = state.settings.terms || '';
+  $('fix-terms').hidden = !whisperInstalled();
+  $('fix-readings').textContent = '';
+  $('fix-note').textContent = whisperInstalled() ? ''
+    : 'Whisper не скачана: её можно скачать в настройках. Она лучше пишет английские термины.';
+  $('fix-reread').disabled = false;
+  $('fix').showModal();
+  if (reread) startReread();
+  else $('fix-text').focus();
+}
+
+async function startReread() {
+  const start = wordOf(fix.fileId, fix.first)[0];
+  const end = wordOf(fix.fileId, fix.last)[1];
+  if (end - start > MAX_REREAD_SECONDS) {
+    $('fix-note').textContent = `Распознать заново можно не больше ${MAX_REREAD_SECONDS} секунд речи: выделите часть поменьше.`;
+    return;
+  }
+  $('fix-reread').disabled = true;
+  const answer = await call('reread', fix.fileId, fix.first, fix.last, $('fix-terms').value);
+  if (!answer) { $('fix-reread').disabled = false; return; }
+  fix.request = answer.request;
+  const list = $('fix-readings');
+  list.textContent = '';
+  const now = readingItem('', 'Сейчас', fix.current);
+  now.className = 'reading current';
+  list.appendChild(now);
+  const status = answer.waiting ? 'Ждёт: сначала закончится распознавание файла...' : 'Распознаю...';
+  for (const model of answer.models) list.appendChild(readingItem(model.key, model.title, status));
+}
+
+function onReading(data) {
+  if (!$('fix').open || data.request !== fix.request) return;
+  const item = data.model ? $('fix-readings').querySelector(`[data-model="${CSS.escape(data.model)}"]`) : null;
+  if (data.phase === 'loading' && item) {
+    item.querySelector('.reading-text').textContent = 'Загрузка модели...';
+  } else if (data.phase === 'result' && item) {
+    const body = item.querySelector('.reading-body');
+    body.querySelector('.reading-text').remove();
+    if (data.error) {
+      body.appendChild(el('div', 'reading-text', `Ошибка: ${data.error}`));
+    } else if (!data.text) {
+      body.appendChild(el('div', 'reading-text', 'Ничего не распознано'));
+    } else if (data.same) {
+      body.appendChild(el('div', 'reading-text', 'Так же, как сейчас'));
+    } else {
+      item.className = 'reading';
+      body.appendChild(markedText(data.text, fix.current));
+      const take = el('button', '', 'Взять');
+      take.type = 'button';
+      take.title = 'Поставить этот вариант вместо выделенного текста';
+      take.addEventListener('click', () => saveFix(data.text, data.model));
+      item.appendChild(take);
+    }
+  } else if (data.phase === 'done') {
+    $('fix-reread').disabled = false;
+  }
+}
+
+async function saveFix(text, model) {
+  if (!text.trim()) { toast('Пустой текст: оставьте хотя бы одно слово'); return; }
+  if (!model && text.trim().split(/\s+/).join(' ') === fix.current) { $('fix').close(); return; }
+  const done = await call('apply_fix', fix.fileId, fix.first, fix.last, text, model || null);
+  if (done) {
+    $('fix').close();
+    toast('Текст исправлен, сохранённые файлы обновлены');
+  }
 }
 
 // ------------------------------------------------------------------ engine and settings
@@ -456,6 +741,8 @@ function apply(message) {
     case 'notice': toast(data.text); break;
     case 'confirm_close': askClose(data.text); break;
     case 'lines_reset': state.lines.set(data.id, []); if (state.selected === data.id) drawLines(data.id); break;
+    case 'lines_changed': refreshLines(data.id); break;
+    case 'reading': onReading(data); break;
     default: break;
   }
 }
@@ -529,6 +816,38 @@ $('download').addEventListener('cancel', (event) => {
   event.preventDefault();
   if (!$('download-yes').hidden) { $('download').close(); call('decline_download'); }
 });
+
+// Selecting words: the bar appears when the mouse is released (not while dragging) or after
+// a keyboard selection, and follows the text when it scrolls.
+document.addEventListener('pointerdown', (event) => {
+  if (!event.target.closest('#sel-bar')) pointerDown = true;
+});
+document.addEventListener('pointerup', () => { pointerDown = false; setTimeout(updateBar, 0); });
+let selectionTimer = 0;
+document.addEventListener('selectionchange', () => {
+  clearTimeout(selectionTimer);
+  selectionTimer = setTimeout(() => { if (!pointerDown) updateBar(); }, 120);
+});
+$('text').addEventListener('scroll', () => {
+  const chosen = window.getSelection();
+  if (selection && chosen && chosen.rangeCount) placeBar(chosen.getRangeAt(0));
+});
+window.addEventListener('resize', () => { if (selection) updateBar(); });
+$('text').addEventListener('click', (event) => {
+  const time = event.target.closest('time.playable');
+  if (time && fixableFile()) playLine(Number(time.parentNode.dataset.seg));
+});
+// Clicking the bar must not clear the selection it is about.
+$('sel-bar').addEventListener('mousedown', (event) => event.preventDefault());
+$('sel-play').addEventListener('click', () => selection && playPart(selection.fileId, selection.first, selection.last, $('sel-play')));
+$('sel-reread').addEventListener('click', () => openFix(true));
+$('sel-edit').addEventListener('click', () => openFix(false));
+$('fix-play').addEventListener('click', () => playPart(fix.fileId, fix.first, fix.last, $('fix-play')));
+$('fix-reread').addEventListener('click', startReread);
+$('fix-terms').addEventListener('keydown', (event) => { if (event.key === 'Enter') startReread(); });
+$('fix-cancel').addEventListener('click', () => $('fix').close());
+$('fix-save').addEventListener('click', () => saveFix($('fix-text').value, null));
+$('fix').addEventListener('close', () => { stopPlaying(); fix.request = null; });
 
 $('confirm-close-no').addEventListener('click', () => $('confirm-close').close());
 $('confirm-close-yes').addEventListener('click', () => call('close_anyway'));

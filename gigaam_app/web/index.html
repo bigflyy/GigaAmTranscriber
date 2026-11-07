@@ -75,6 +75,12 @@
         <button id="copy" type="button">Копировать</button>
       </div>
       <div id="text" class="text" tabindex="0" aria-live="off"></div>
+      <!-- Shown right above selected words of a finished file (plan 03): listen, recognise again, edit. -->
+      <div id="sel-bar" class="sel-bar" role="toolbar" aria-label="Выделенный фрагмент" hidden>
+        <button id="sel-play" type="button" title="Прослушать выделенный фрагмент">&#9654; Слушать</button>
+        <button id="sel-reread" type="button" title="Распознать фрагмент заново разными моделями">Распознать заново</button>
+        <button id="sel-edit" type="button" title="Исправить текст вручную" aria-label="Исправить вручную">&#9998;</button>
+      </div>
     </section>
 
     <!-- Settings replace the file view until "Готово". -->
@@ -144,6 +150,30 @@
   <div class="dialog-actions">
     <button id="confirm-close-no" class="primary" type="button">Не закрывать</button>
     <button id="confirm-close-yes" class="danger" type="button">Закрыть</button>
+  </div>
+</dialog>
+
+<!-- Fixing a selected part: readings of other models side by side, or the text by hand. -->
+<dialog id="fix" class="dialog fix" aria-labelledby="fix-title">
+  <div class="fix-head">
+    <h2 id="fix-title">Исправить фрагмент</h2>
+    <button id="fix-play" type="button">&#9654; Слушать</button>
+  </div>
+  <p id="fix-range" class="hint"></p>
+  <div id="fix-reread-box" class="fix-reread">
+    <div id="fix-terms-box" class="fix-terms">
+      <input id="fix-terms" type="text" maxlength="500" spellcheck="false"
+        placeholder="Термины для Whisper через запятую, например: LLM, fine tuning">
+      <button id="fix-reread" type="button">Распознать заново</button>
+    </div>
+    <p id="fix-note" class="hint"></p>
+    <ul id="fix-readings" class="readings"></ul>
+  </div>
+  <label class="caps" for="fix-text">Текст фрагмента</label>
+  <textarea id="fix-text" rows="3" spellcheck="true"></textarea>
+  <div class="dialog-actions">
+    <button id="fix-cancel" type="button">Отмена</button>
+    <button id="fix-save" class="primary" type="button">Сохранить</button>
   </div>
 </dialog>
 

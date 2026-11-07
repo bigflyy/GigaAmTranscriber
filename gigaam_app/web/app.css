@@ -240,6 +240,45 @@ button.icon:hover { color: var(--text); background: var(--card); }
 .text:not(.with-times) time { display: none; }
 .text .placeholder { color: var(--muted); }
 
+.text time.playable { cursor: pointer; }
+.text time.playable:hover { color: var(--link); text-decoration: underline; }
+.text .w.changed { background: var(--accent-soft); border-radius: 3px; }
+
+/* The bar above selected words (plan 03): listen, recognise again, edit. */
+.file-view { position: relative; }
+.sel-bar {
+  position: absolute; z-index: 5; display: flex; gap: 2px; padding: 3px;
+  background: var(--card); border: 1px solid var(--card-line); border-radius: 10px; box-shadow: var(--shadow);
+}
+.sel-bar button { height: 28px; border: none; background: transparent; border-radius: 7px; padding: 0 10px; }
+.sel-bar button:hover { background: var(--accent-soft); }
+
+/* The fix dialog: readings side by side, then the text by hand. */
+.dialog.fix { width: min(680px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: 8px; }
+.dialog.fix:not([open]) { display: none; }
+.fix-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.fix-head h2 { margin-bottom: 0; }
+.dialog.fix p { margin-bottom: 0; }
+.fix-terms { display: flex; gap: 8px; }
+.fix-terms input {
+  flex: 1; min-width: 0; height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--card-line);
+  background: var(--card); color: var(--text); font: inherit; font-size: 13px;
+}
+.readings { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 40vh; overflow-y: auto; }
+.reading { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--card-line); border-radius: 10px; background: var(--card); }
+.reading .reading-body { flex: 1; min-width: 0; }
+.reading .reading-model { font-size: 12px; font-weight: 600; color: var(--muted); }
+.reading .reading-text { overflow-wrap: anywhere; }
+.reading .reading-text mark { background: var(--accent-soft); color: inherit; border-radius: 3px; padding: 0 1px; }
+.reading.current { background: transparent; border-style: dashed; }
+.reading.quiet .reading-text { color: var(--muted); font-size: 13px; }
+.reading button { flex-shrink: 0; }
+.dialog.fix textarea {
+  width: 100%; resize: vertical; min-height: 64px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--card-line);
+  background: var(--card); color: var(--text); font: inherit; line-height: 1.5;
+}
+.dialog.fix textarea:focus-visible, .fix-terms input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
 /* ------------------------------------------------------------------ settings */
 
 .settings { overflow-y: auto; }
