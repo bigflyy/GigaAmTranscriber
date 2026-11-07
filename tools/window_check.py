@@ -13,11 +13,16 @@ pass copies. A downloadable test model is served from a local HTTP server to
 show the download dialog; its download folder is a temporary folder.
 On Windows each step also saves a PNG of the window (PrintWindow).
 Set GIGAAM_THEME=light or dark to fix the theme.
+
+--whisper FOLDER names a downloaded Whisper model folder (whisper_large_v3_turbo_q5_0);
+it is linked into the temporary download folder, and SHORT_AUDIO is transcribed with
+Whisper and a chosen language too. Without it only the language choice is checked.
 """
 
 import argparse
 import functools
 import hashlib
+import shutil
 import http.server
 import os
 from pathlib import Path
@@ -68,6 +73,18 @@ class SlowFile(http.server.BaseHTTPRequestHandler):
 
     def log_message(self, *args):
         pass
+
+
+def add_whisper(source, downloads):
+    """Put a downloaded Whisper model folder into the temporary download folder: the
+    ggml file as a hard link (no copy of 574 MB) when the drive allows it."""
+    target = Path(downloads) / source.name
+    target.mkdir()
+    for item in source.iterdir():
+        try:
+            os.link(item, target / item.name)
+        except OSError:
+            shutil.copy2(item, target / item.name)
 
 
 def add_test_model(folder):
@@ -121,7 +138,46 @@ def screenshot_function(out):
     return shoot
 
 
-def scenario(window, control, long_audio, short_audio, shoot):
+def whisper_steps(js, control, short_audio, shoot, real):
+    """Settings: the language choice shows only for Whisper and is saved; with the real
+    model, SHORT_AUDIO is transcribed by Whisper with the language chosen."""
+    check("no language choice for GigaAM", js("$('language-box').hidden"))
+    check("Whisper is offered", js("!!document.querySelector('#models input[value=Whisper]')"))
+    if not real:
+        return
+    js("document.querySelector('#models input[value=Whisper]').click()")
+    wait(lambda: not js("$('language-box').hidden"), 10, "language choice")
+    check("language choice for Whisper", not js("$('language-box').hidden")
+          and js("$('language').value") == "auto")
+    js("$('language').value = 'ru'; $('language').dispatchEvent(new Event('change'))")
+    saved = lambda: '"language": "ru"' in Path(os.environ["GIGAAM_CONFIG"]).read_text("utf-8")  # noqa: E731
+    wait(saved, 10, "language saved")
+    check("language saved at once", saved())
+    wait(lambda: "Whisper" in js("$('engine-text').textContent") and control.engine["state"] == "ready",
+         120, "Whisper loaded")
+    engine_text = js("$('engine-text').textContent")
+    check("Whisper loaded", "Whisper" in engine_text, engine_text)
+    shoot("08a-settings-whisper")
+    js("$('close-settings').click()")
+    # A copy under another name: the list refuses a file it already holds.
+    copy = Path(os.environ["GIGAAM_DOWNLOADS"]) / ("whisper-" + Path(short_audio).name)
+    shutil.copy2(short_audio, copy)
+    before = len(control.files)
+    control.add_files([str(copy)])
+    wait(lambda: len(control.files) > before and control.files[-1].state in ("done", "failed"), 300,
+         "Whisper transcription")
+    item = control.files[-1]
+    check("Whisper transcribed the file", item.state == "done" and item.segments
+          and item.result.model == "Whisper", item.state)
+    js("[...document.querySelectorAll('#files li')].find(li => li.textContent.includes('whisper-')).click()")
+    time.sleep(0.3)
+    shoot("08b-whisper-file")
+    js("$('open-settings').click()")
+    js("document.querySelector('#models input[value=RNNT]').click()")
+    wait(lambda: js("$('language-box').hidden"), 10, "language choice hidden again")
+
+
+def scenario(window, control, long_audio, short_audio, shoot, whisper=False):
     js = window.evaluate_js
     try:
         wait(lambda: js("typeof state !== 'undefined' && state.booted"), 30, "page ready")
@@ -251,6 +307,13 @@ def scenario(window, control, long_audio, short_audio, shoot):
         check("banner closes once a model loads", js("$('banner').hidden"))
         shoot("08-end")
 
+        # Whisper (plan 04 B4): language choice, and a file transcribed with the real model.
+        js("$('open-settings').click()")
+        whisper_steps(js, control, short_audio, shoot, whisper)
+        js("$('close-settings').click()")
+        wait(lambda: control.engine["state"] == "ready" and "RNNT" in js("$('engine-text').textContent"),
+             60, "RNNT after Whisper")
+
         # Closing while a file runs, then "Zakryt": the window closes and the file stops.
         for written in Path(long_audio).parent.glob(Path(long_audio).stem + "-transcript*"):
             written.unlink()  # from the cancelled run above; closing must write it again
@@ -275,6 +338,8 @@ def second_session(window, control, short_audio, long_audio):
     try:
         wait(lambda: js("typeof state !== 'undefined' && state.booted"), 30, "page ready again")
         files = js("state.files.map(f => [f.name, f.state])")
+        # The Whisper steps add a third file; it does not change these two.
+        files = [entry for entry in files if not entry[0].startswith("whisper-")]
         check("files come back in the next session",
               files[:2] == [[Path(short_audio).name, "done"], [Path(long_audio).name, "cancelled"]], files)
         check("the newest is selected with its text",
@@ -299,6 +364,7 @@ def main():
     parser.add_argument("long_audio", type=Path)
     parser.add_argument("short_audio", type=Path)
     parser.add_argument("--out", type=Path, default=Path("."), help="folder for the PNGs")
+    parser.add_argument("--whisper", type=Path, help="a downloaded Whisper model folder to transcribe with")
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
     if sys.platform == "win32":
@@ -311,9 +377,12 @@ def main():
         os.environ["GIGAAM_HISTORY"] = history  # never the user's own list
         os.environ["GIGAAM_CONFIG"] = str(Path(history) / "settings.json")  # nor the user's settings
         add_test_model(downloads)
+        if args.whisper:
+            add_whisper(args.whisper.resolve(), downloads)
         shoot_again = screenshot_function(args.out)
         run = functools.partial(scenario, long_audio=args.long_audio.resolve(),
-                                short_audio=args.short_audio.resolve(), shoot=shoot_again)
+                                short_audio=args.short_audio.resolve(), shoot=shoot_again,
+                                whisper=args.whisper is not None)
         window_module.main([], scenario=run)
         if confirmed_close:
             window_module.main([], scenario=functools.partial(second_session, short_audio=args.short_audio.resolve(),
