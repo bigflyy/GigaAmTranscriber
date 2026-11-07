@@ -1,7 +1,7 @@
 # Handoff: state and findings
 
 Last updated 2026-11-08 (session 15). Current plan: [docs/plans/03-fix-a-part.md](docs/plans/03-fix-a-part.md)
-(Stage A done and tried by the owner; B2 doubtful words built, waits for the owner to try it; B1 and C left).
+(A and B2 done and tried; B1 and C left). Also [docs/plans/05-audio-player.md](docs/plans/05-audio-player.md) (player; only C3 Linux left).
 Plan 04 (Whisper) done: v0.4.0. Plan 02 (window) has D for later; plan 01 still
 holds B9, F (Parakeet, Qwen3-ASR) and E. Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
 
@@ -44,7 +44,26 @@ holds B9, F (Parakeet, Qwen3-ASR) and E. Owner's ideas: [docs/IDEAS.md](docs/IDE
   reads settings.json with retries (hit the replace race once): 61/61. Tests 419 passed.
 - Owner asked whether confidence is exported, "to feed to llm maybe": only in the JSON output
   (per word). Kept as an idea in docs/IDEAS.md (Exports).
-- Next: owner tries it from source; then B1 (RNNT beam N-best) or other work.
+- Owner tried the gradient and thresholds: "yes works". Asked for confidence for an LLM, "both"
+  (cb570ae): format "llm" (name-transcript-llm.txt, chip "Для ИИ") and "Копировать для ИИ": a
+  note on the marks, then the text with words below the dotted threshold as слово[?66%].
+- Owner: "maybe there should be a play/pause button. and how much time passed" -> chose a
+  whole-file player (AskUserQuestion). Plan [docs/plans/05-audio-player.md](docs/plans/05-audio-player.md),
+  A and B and C1-C2 done: gigaam_app/audio_server.py (127.0.0.1, random token, Range;
+  spike: WAV, MP3, 45 min Ogg Opus play and seek in WebView2 from a page loaded with html=);
+  controller.audio(file_id, convert) serves the file as it is (PLAYABLE_SUFFIXES) or makes a
+  temporary Ogg Opus / MP3 copy ("audio_ready"; 45 min WAV -> Opus took 36 s), deleted at
+  close. Page: bar under the text (play/pause, time / total, seek, speed, Space), the spoken
+  word highlighted (.w.now) and followed unless the reader scrolled in the last 4 s; timecode
+  plays from its line and keeps going, Alt+click from a word; selection "Слушать" stops at its
+  end; the fix dialog keeps its WAV clip. Commits 83d3b76, ba928eb, b0859eb, bcaf815.
+  Tests 434 passed, 2 skipped; window_check.py --whisper 72/72. Left: C3 (Linux WebKitGTK).
+- Owner asked whether beam search / temperature / other re-recognition is planned or tried:
+  answered (Whisper beam 5 tried on whole files in session 14, no gain; terms and the
+  three-model re-read built; RNNT N-best is plan 03 B1, not tried; Whisper temperature
+  sampling on a part not tried; other models plan 03 C1 / plan 01 F).
+- Next: owner tries the player and the LLM copy from source; then plan 03 B1 (RNNT N-best,
+  maybe Whisper beam / temperature on the selected part only) or other work.
 
 ## Session 14 (2026-11-07/08): Whisper beam 5 and terms measured; plan 03 Stage A built
 
