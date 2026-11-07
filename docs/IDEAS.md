@@ -10,10 +10,6 @@ models, Stage E speaker diarization) and plan 02 (D1-D3).
 - 2026-11-07: merge the two models' strengths: "gigaam does bad with english namings and whisper is good with english namings. idk if we can merge these capabilities, but if we could it d be nice. somehow. in the future." (On the lecture GigaAM wrote "tullz colling", "deps", "umail" where Whisper wrote "tools calling", "deepsync", "uml".) For now only Whisper as a model you can choose and run (plan 04).
 - 2026-11-07: a user's list of terms (for example "LLM, fine tuning") given to Whisper as a hint (initial prompt), and beam search on our fragments. Owner: "beam search we can try. a list of terms i dk, you may test it a bit. maybe it will even transfer to 03 stage A" (the hint when a selected part is recognised again). Measured in session 14 (experiments/whisper/variants.py; results in HANDOFF.md). Owner 2026-11-08: terms in the re-recognise box of plan 03 A3 (Whisper reading of that part only), not a Settings field for whole files yet. Beam 5 gave little at 1.4-1.8x the time, so it is not proposed for now.
 
-## Window
-
-- 2026-11-08: an audio player: "maybe there should be a play/pause button. and how much time passed (the player of audio interface?)".
-
 ## Languages and speakers
 
 - 2026-11-06: detect the language (there, in the selected part or the file).
@@ -25,6 +21,7 @@ models, Stage E speaker diarization) and plan 02 (D1-D3).
 
 ## Started
 
+- 2026-11-08: an audio player: "maybe there should be a play/pause button. and how much time passed (the player of audio interface?)". Owner chose a whole-file player. Plan: docs/plans/05-audio-player.md.
 - 2026-11-06: select a part of the text and try to fix it somehow: decode again with
   another temperature or other heuristics, something smart, auto fixing; maybe run another
   model on that part (Whisper or similar). Plan: docs/plans/03-fix-a-part.md (owner chose it
