@@ -297,7 +297,7 @@ button.icon:hover { color: var(--text); background: var(--card); }
 .audio-play:disabled { opacity: 0.6; }
 .audio-time { font-size: 13px; color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; min-width: 104px; }
 .audio-bar input[type=range] { flex: 1; min-width: 0; accent-color: var(--accent); }
-.audio-bar select { height: 30px; width: auto; flex: none; font: inherit; font-size: 13px; }
+.audio-bar select { height: 30px; width: auto; min-width: 0; flex: none; align-self: center; font: inherit; font-size: 13px; }
 .text .w.now { background: var(--accent-track); border-radius: 3px; box-shadow: 0 0 0 2px var(--accent-track); }
 .sel-bar {
   position: absolute; z-index: 5; display: flex; gap: 2px; padding: 3px;
