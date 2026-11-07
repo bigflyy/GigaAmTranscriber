@@ -32,7 +32,9 @@ Add files with **+ Добавить** or drag them (or a folder) onto the window
 are transcribed one at a time, in the order added: the list on the left shows
 which are done, running and waiting, and the right side shows the selected
 file's progress and its text as it is recognised. **Отмена** stops the running
-file and keeps the finished part. The model loads in the background as soon as
+file and keeps the finished part. Each file names the model that recognised it
+("Модель: GigaAM v3 RNNT"; the list line says RNNT, CTC or Whisper), also after the
+settings choose another. The model loads in the background as soon as
 the window opens and stays loaded between files. Closing the window while a file
 runs asks first; the part recognised so far is saved.
 

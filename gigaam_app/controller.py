@@ -178,6 +178,7 @@ class QueuedFile:
     formats: list = field(default_factory=list)  # formats asked for when it started
     saved_as: str = None         # its entry in the history, once remembered
     saved_at: float = 0.0        # when it was first remembered (keeps its place in the list)
+    model: str = ""              # model key ("RNNT", "Whisper") that recognises or recognised it
 
 
 class Controller:
@@ -268,21 +269,29 @@ class Controller:
                        for fmt, short, label in OUTPUT_CHIPS]
         return {
             "id": item.id, "name": item.path.name, "path": str(item.path), "state": item.state,
-            "detail": self._detail(item), "status": self._status(item),
+            "detail": self._detail(item), "status": self._status(item), "model": self._model_name(item),
             "progress": item.progress, "segments": len(item.segments), "outputs": outputs,
             "cancelling": item.cancelling, "can_cancel": item.state == RUNNING and not item.cancelling,
             "can_retry": item.state in (DONE, CANCELLED, FAILED), "can_remove": item.state != RUNNING,
         }
 
+    def _model_name(self, item):
+        """Full name of the model that recognises or recognised the file ("GigaAM v3 RNNT",
+        "Whisper large-v3-turbo (q5_0)"); empty while it waits or when it is unknown."""
+        if item.state not in (RUNNING, DONE, CANCELLED) or not item.model:
+            return ""
+        return catalog.model_title(item.model)
+
     def _detail(self, item):
-        """The short line under the name in the list."""
+        """The short line under the name in the list; a finished file also names its model."""
         length = duration_text(item.duration) + " - " if item.duration else ""
+        model = f", {item.model}" if item.model else ""
         if item.state == WAITING:
             return length + "в очереди"
         if item.state == DONE:
-            return length + ("готово" if item.segments else "речь не найдена")
+            return length + ("готово" if item.segments else "речь не найдена") + model
         if item.state == CANCELLED:
-            return length + "отменено"
+            return length + "отменено" + model
         if item.state == FAILED:
             return "ошибка"
         return length + f"{item.progress * 100:.0f}%"
@@ -637,7 +646,8 @@ class Controller:
                 id=str(next(self.ids)), path=entry.path, state=entry.state, duration=entry.duration,
                 progress=1.0 if entry.state == DONE else 0.0, segments=list(entry.transcript.segments),
                 speech_seconds=entry.speech_seconds, result=entry.transcript, written=dict(entry.written),
-                elapsed=entry.elapsed, formats=list(entry.written), saved_as=entry.key, saved_at=entry.saved_at))
+                elapsed=entry.elapsed, formats=list(entry.written), saved_as=entry.key, saved_at=entry.saved_at,
+                model=entry.transcript.model))
 
     def _remember(self, item):
         """Save a finished file for the next sessions; a file that ended with nothing to show
@@ -727,6 +737,7 @@ class Controller:
             return
         formats = list(self.settings.outputs) or ["txt"]
         item.state = RUNNING
+        item.model = model
         item.started = self.clock()
         item.phase = "Подготовка..."
         item.formats = formats
@@ -793,6 +804,8 @@ class Controller:
         item.elapsed = self.clock() - item.started
         item.cancelling = False
         item.result = result
+        if result is not None and result.model:
+            item.model = result.model  # the model that really ran (the same key as at the start)
         if result is None or result.cancelled:
             item.state = CANCELLED
         else:

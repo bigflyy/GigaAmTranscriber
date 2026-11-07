@@ -235,6 +235,7 @@ def test_cancel_keeps_the_text_found_so_far(app, media):
     view = app._file_view(item)
     assert view["state"] == "cancelled"
     assert view["status"] == "Отменено на 0:10 из 1:01, готовые фрагменты сохранены."
+    assert view["detail"] == "1:01 - отменено, RNNT" and view["model"] == "GigaAM v3 RNNT"
     assert [o["path"] for o in view["outputs"] if o["path"]] == [str(p) for p in written]
     # The next file starts after a cancel.
     assert app.files[1].state == "running"
@@ -295,7 +296,27 @@ def test_done_status_and_speed(app, media):
     finish(app, media[0], [segment(0.0, 3.0, "Текст.")])
     view = app._file_view(app.files[0])
     assert view["status"] == "1:01 - речь 0:50 - готово за 4 с, в 15 раз быстрее записи"
-    assert view["detail"] == "1:01 - готово"
+    assert view["detail"] == "1:01 - готово, RNNT"
+    assert view["model"] == "GigaAM v3 RNNT"
+
+
+def test_the_model_is_shown_while_running_and_after(app, media):
+    """The page names the model that recognises a file, and keeps naming the one that made
+    a finished file after the settings choose another."""
+    app.add_files([str(media[0]), str(media[1])])
+    first, second = app.files
+    assert app._file_view(first)["model"] == "GigaAM v3 RNNT"
+    assert app._file_view(second)["model"] == ""          # waiting: not decided yet
+    finish(app, media[0], [segment(0.0, 3.0, "Текст.")])
+    app.settings.model = "CTC"                             # a later choice does not rename it
+    assert app._file_view(first)["model"] == "GigaAM v3 RNNT"
+    # A Whisper result is named by its full title, and its list line by the short key.
+    hello = segment(0.0, 2.0, "Hello.")
+    app.handle(("segment", hello))
+    app.handle(("finished", Transcript(source=str(media[1]), model="Whisper", device="CPU",
+                                       audio_seconds=61.0, segments=[hello]), []))
+    view = app._file_view(second)
+    assert view["model"] == "Whisper large-v3-turbo (q5_0)" and view["detail"] == "1:01 - готово, Whisper"
 
 
 def test_no_speech(app, media):

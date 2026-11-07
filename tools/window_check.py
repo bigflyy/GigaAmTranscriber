@@ -160,6 +160,8 @@ def whisper_steps(js, control, short_audio, shoot, real):
           and item.result.model == "Whisper", item.state)
     js("[...document.querySelectorAll('#files li')].find(li => li.textContent.includes('whisper-')).click()")
     time.sleep(0.3)
+    model_line = js("$('file-model').hidden ? '' : $('file-model').textContent")
+    check("Whisper file names its model", "Whisper large-v3-turbo" in model_line, model_line)
     shoot("08b-whisper-file")
     js("$('open-settings').click()")
     js("document.querySelector('#models input[value=RNNT]').click()")
@@ -184,6 +186,8 @@ def scenario(window, control, long_audio, short_audio, shoot, whisper=False):
         check("list shows running and waiting", items == ["file running selected", "file waiting"], items)
         check("running status", js("$('file-status').textContent").startswith(("Распознаю", "Поиск")),
               js("$('file-status').textContent"))
+        model_line = js("$('file-model').hidden ? '' : $('file-model').textContent")
+        check("running file names its model", model_line.endswith("GigaAM v3 RNNT"), model_line)
         shoot("02-running")
 
         # E1: a file without sound (a txt) is not added; a toast names it.

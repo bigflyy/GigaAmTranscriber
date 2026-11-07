@@ -198,6 +198,9 @@ function renderMain() {
   $('file-name').textContent = file.name;
   $('file-name').title = file.path;
   $('file-status').textContent = file.status;
+  // Which model made (or is making) this text: files of earlier sessions may differ from the settings.
+  $('file-model').textContent = file.model ? `Модель: ${file.model}` : '';
+  $('file-model').hidden = !file.model;
   $('file-cancel').hidden = !file.can_cancel;
   $('file-cancel').disabled = !!file.cancelling;
   $('file-retry').hidden = !file.can_retry;

@@ -25,6 +25,9 @@ and its text are the same as in v0.3.0.
 - Whisper gets the same speech fragments as GigaAM and reads each one on its own.
   Fed a whole 45-minute call at once, Whisper invented text and repeated one phrase
   many times; fragment by fragment it did not.
+- Each file in the window names the model that made its text ("Модель: Whisper
+  large-v3-turbo (q5_0)" under the status; RNNT, CTC or Whisper in the list), also
+  for files from earlier sessions and after the settings choose another model.
 - Command line: `gigaam-cli --download Whisper`, then
   `gigaam-cli talk.mp3 --model Whisper --language en`. `gigaam-cli --devices` lists
   the GPUs and the CPU each engine can use.
