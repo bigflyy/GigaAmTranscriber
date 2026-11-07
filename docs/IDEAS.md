@@ -7,11 +7,16 @@ models, Stage E speaker diarization) and plan 02 (D1-D3).
 ## Models
 
 - 2026-11-07: Whisper model size: q5_0 is the default, but make it "configurable (to download) in the future" (q8_0 874 MB, f16 1.6 GB).
+- 2026-11-07: merge the two models' strengths: "gigaam does bad with english namings and whisper is good with english namings. idk if we can merge these capabilities, but if we could it d be nice. somehow. in the future." (On the lecture GigaAM wrote "tullz colling", "deps", "umail" where Whisper wrote "tools calling", "deepsync", "uml".) For now only Whisper as a model you can choose and run (plan 04).
 
 ## Languages and speakers
 
 - 2026-11-06: detect the language (there, in the selected part or the file).
 - 2026-11-06: speaker segments somehow, somewhere ("idea for now").
+
+## Links and summaries
+
+- 2026-11-07: send a video by link (YouTube for example) and get it transcribed, then summarised automatically: "an addon to firefox / chrome / just some kind of service, maybe even in our app idk". Summary with Claude / Codex / an API; a local model as experimental, for the future ("i dont have a good one").
 
 ## Started
 

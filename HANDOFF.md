@@ -1,8 +1,62 @@
 # Handoff: state and findings
 
-Last updated 2026-11-07 (session 10). Current plan: [docs/plans/04-whisper.md](docs/plans/04-whisper.md)
-(Whisper; Stage A done, B next). Plan 02 (window) has D for later; plan 01 still holds B9, F
-(Parakeet, Qwen3-ASR) and E. Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
+Last updated 2026-11-07 (session 11). Current plan: [docs/plans/04-whisper.md](docs/plans/04-whisper.md)
+(Whisper; Stage A, B0 and B1 done; next B2 download, B3 switch in Settings and CLI). Plan 02 (window) has D for later; plan 01 still
+holds B9, F (Parakeet, Qwen3-ASR) and E. Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
+
+## Session 11 (2026-11-07): whisper.cpp shipping build (B0) and the Whisper engine (B1)
+
+- B1 committed (d349913): gigaam_app/whisper_cpp.py (ctypes, no binding package; ggml functions
+  live in ggml-base.dll or ggml.dll, looked up in either; backends loaded with
+  ggml_backend_load_all_from_path(library folder), since whisper.cpp itself never loads them;
+  check_layout() compares whisper_full_default_params with 1.9.5's source defaults),
+  gigaam_app/whisper_model.py (model.json type "whisper", chunks one by one, greedy, no_context,
+  suppress_nst, token_timestamps; words joined as bytes because tokens split Cyrillic letters;
+  chunks capped at 30 s; cancel through abort_callback; device "auto" picks a discrete Vulkan GPU
+  before an integrated one, falls back to CPU). engine.Transcriber(language=...) dispatches on
+  model.json; AsrModel got joins_chunks and encode(should_cancel=). tests/test_whisper.py.
+- Lecture 455 s through the app pipeline on the RTX 4070: 14.7 s (GigaAM 5.8 s), same text as the
+  whisper-cli test (3.61% words differ). First run after a new ggml-vulkan.dll: 37 s (shader compile).
+- Word times vs GigaAM (experiments/whisper/word_times.py): token times (flash attention on) median
+  0.2 s early, 90% within 0.43 s, 4% over 0.5 s, some zero-length words. DTW (aheads LARGE_V3_TURBO,
+  needs flash attention off) 90% within 0.26 s, none over 0.5 s, but 16.2 s instead of 10.8 s.
+  Kept token times: words only feed the SRT/VTT cues (1 s pause breaks). DTW is the option if
+  word timing ever matters more.
+- B0: tools/build_whisper_cpp.py (pinned v1.9.5 tarball, SHA-256 in the script, copy in
+  third_party/whisper.cpp/; GGML_NATIVE off, BACKEND_DL + CPU_ALL_VARIANTS, Vulkan, OpenMP off,
+  WHISPER_BUILD_IS_DEV off) -> third_party/whisper.cpp/windows-x64 (13 DLLs, 53.6 MB; Vulkan 45 MB,
+  9 CPU variants about 1 MB each; MSVC builds no zen4/AMX variants) with build-info.json.
+  build_windows.py and build_linux.py copy them to _internal/whisper_cpp, check build-info.json,
+  add licenses/whisper.cpp, smoke test `gigaam-cli --devices` (new: lists ONNX providers and
+  whisper.cpp devices).
+- CPU speed: the shipping build is not slower than the OpenMP + native test build (4 lecture chunks,
+  8 threads: 53.9 s vs 61.7 s, both about 0.8x real time on a busy machine). The 699 s full-lecture
+  CPU run (Stage A: 228 s) ran beside an emulator and builds.
+- Linux in WSL without sudo: glslc, libshaderc1 and spirv-headers fetched with `apt download` and
+  unpacked into ~/.local/vulkan-tools/root (libvulkan-dev was installed already); the build needs
+  CMAKE_PREFIX_PATH, PATH and LD_LIBRARY_PATH pointed there (script docstring); work folder
+  ~/whisper-cpp-build/linux-x64. Test model folder: build/whisper-test/app-models (silero copy and
+  whisper_large_v3_turbo_q5_0 with model.json, the .bin a hard link).
+- Linux build: third_party/whisper.cpp/linux-x64, 18 libraries, 53.3 MB (gcc also builds the zen4,
+  cooperlake and sapphirerapids variants). It also needed CPLUS_INCLUDE_PATH to the SPIR-V headers
+  (ggml-vulkan finds the package but adds no include folder). Run it from Git Bash with
+  MSYS_NO_PATHCONV=1 and `wsl.exe -d Ubuntu --exec bash -lc '...'` (`wsl --` expands $ early).
+- Frozen checks passed (B0 done): Windows build/whisper-frozen (1234 MiB folder, program 121 MiB;
+  `gigaam-cli --devices` lists Vulkan, both GPUs, CPU; all old smoke tests pass) and Linux
+  ~/gigaam-build-whisper in WSL (ldd check includes the whisper libs; no Vulkan GPU in WSL, so
+  CPU; CLI and window smoke tests pass). The Windows smoke test has no Whisper transcription yet:
+  no catalog entry until B2.
+- Next: B2 needs the owner's choice of hosting for ggml-large-v3-turbo-q5_0.bin (574,041,195 bytes,
+  SHA-256 394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2): a release asset like
+  the models-1 release, or Hugging Face (ggerganov/whisper.cpp). The download needs model.json in
+  the folder too (WhisperModel and catalog.installed_folder read it). Then B3 (Settings model and
+  language, CLI --model and --language), B4 (window_check steps; most unit tests exist), B5 (Whisper
+  weights MIT in the notices; whisper.cpp is in THIRD_PARTY_NOTICES.md already).
+- Owner's ideas this session (IDEAS.md): merge GigaAM and Whisper for English terms; a link
+  (YouTube) to transcript and an automatic summary (add-on, service or in the app).
+- Owner asked for the app icon in Herdr: set with `~/.agent-aggregator/bin/project-icons.ps1 set
+  -Project GigaAmTranscriber -File gigaam_app/icons/gigaam.png`.
+- A commit got a Claude co-author line and was amended before pushing: no attribution lines here.
 
 ## Session 10 (2026-11-07): plan 04 written, Whisper runtimes tested
 
