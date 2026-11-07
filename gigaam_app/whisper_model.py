@@ -129,15 +129,16 @@ class WhisperModel:
             raise ValueError(f"Whisper does not know the language {language!r}")
         self.language = language
 
-    def encode(self, pieces, should_cancel=None):
+    def encode(self, pieces, should_cancel=None, prompt=None):
         """Recognise each chunk -> [(language, tokens)]. After a cancel the list is
-        shorter than the input: the Transcriber keeps what is finished and stops."""
+        shorter than the input: the Transcriber keeps what is finished and stops.
+        prompt: text put before every chunk (the user's terms when a part is recognised again)."""
         language = None if self.language in (None, "", AUTO_LANGUAGE) else self.language
         results = []
         for piece in pieces:
             try:
                 found, tokens = self.context.transcribe(piece, language=language, n_threads=self.cpu_threads,
-                                                        should_cancel=should_cancel)
+                                                        should_cancel=should_cancel, prompt=prompt)
             except whisper_cpp.Cancelled:
                 break
             self.last_language = found

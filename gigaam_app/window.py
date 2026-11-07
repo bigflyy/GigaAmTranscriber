@@ -203,6 +203,15 @@ class Api:
     def show_folder(self, file_id):
         return self._controller.show_folder(file_id)
 
+    def clip(self, file_id, first, last):
+        return self._controller.clip(file_id, first, last)
+
+    def reread(self, file_id, first, last, terms):
+        return self._controller.reread(file_id, first, last, terms)
+
+    def apply_fix(self, file_id, first, last, text, model):
+        return self._controller.apply_fix(file_id, first, last, text, model)
+
     def set_settings(self, change):
         return self._controller.set_settings(change)
 

@@ -336,7 +336,8 @@ def test_live_segments_and_copy(app, media):
     app.handle(("segment", segment(3.0, 4.0, "Вторая.")))
     pushed = [m["data"] for m in app.sent if m["kind"] == "segment"]
     assert [(p["index"], p["text"]) for p in pushed] == [(0, "Первая."), (1, "Вторая.")]
-    assert app.segments(item.id)[1] == {"index": 1, "start": 3.0, "end": 4.0, "text": "Вторая."}
+    assert app.segments(item.id)[1] == {"index": 1, "start": 3.0, "end": 4.0, "text": "Вторая.",
+                                         "words": [[3.0, 4.0, "Вторая."]]}
     assert app.copy_text(item.id, False) == "Первая.\nВторая.\n"
     assert app.copy_text(item.id, True).startswith("[00:01.000 - 00:02.500] Первая.\n")
 
@@ -372,7 +373,7 @@ def test_settings_apply_to_the_next_file_and_reload_the_model(app, media):
     app.fake_worker.take()
     app.set_settings({"device": "CPU", "cpu_threads": 4, "outputs": ["srt", "txt"]})
     assert last(app.sent, "settings") == {"model": "RNNT", "language": "auto", "device": "CPU", "cpu_threads": 4,
-                                          "outputs": ["txt", "srt"], "include_timestamps": False}
+                                          "outputs": ["txt", "srt"], "include_timestamps": False, "terms": ""}
     assert app.fake_worker.take() == [("load", ("RNNT", "cpu", 4))]
     app.add_files([str(media[0])])
     job = app.fake_worker.take()[0]
@@ -558,3 +559,97 @@ def test_has_sound_with_the_real_ffmpeg(tmp_path):
     subprocess.run([ffmpeg, "-v", "error", "-f", "lavfi", "-i", "sine=d=1", "-f", "wav", str(sound)], check=True)
     assert controller_module.has_sound(notes) is False
     assert controller_module.has_sound(sound) is True
+
+
+# ---------------------------------------------------------------------- fixing a selected part (plan 03 A3-A4)
+
+def line_of(*items):
+    """A segment from (text, start, end) word triples."""
+    words = [Word(text=text, start=start, end=end) for text, start, end in items]
+    return Segment(start=words[0].start, end=words[-1].end, text=" ".join(w.text for w in words), words=words)
+
+
+@pytest.fixture
+def finished(app, media):
+    """A finished file with two lines; the hard words are "Tullz Colling"."""
+    app.add_files([str(media[0])])
+    item = app.files[0]
+    finish(app, media[0], [line_of(("наш", 1.0, 1.3), ("любимый", 1.4, 1.9), ("механизм", 2.0, 2.6),
+                                   ("Tullz", 2.7, 3.0), ("Colling,", 3.0, 3.5), ("и", 3.6, 3.7)),
+                           line_of(("вся", 5.0, 5.3), ("мозаика.", 5.4, 6.0))])
+    app.fake_worker.take()
+    return item
+
+
+def test_reread_sends_the_piece_with_context(app, finished, monkeypatch):
+    monkeypatch.setattr(app, "_model_installed", lambda key: key in ("RNNT", "CTC", "Whisper"))
+    answer = app.reread(finished.id, [0, 3], [0, 4], "  Tools   Calling, LLM ")
+    assert answer["current"] == "Tullz Colling,"
+    assert [model["key"] for model in answer["models"]] == ["RNNT", "CTC", "Whisper"]
+    assert not answer["whisper_missing"] and not answer["waiting"]
+    [job] = app.fake_worker.take()
+    kind, request, path, windows, models, device, threads, language, terms = job
+    assert (kind, request, path, models, terms) == ("reread", answer["request"], finished.path,
+                                                     ["RNNT", "CTC", "Whisper"], "Tools Calling, LLM")
+    # Context: the words within 1.5 s on each side ("любимый" .. "и"), cut in the gaps outside them.
+    (left_lo, left_hi), (right_lo, right_hi) = windows
+    assert left_hi == pytest.approx(1.4) and right_lo == pytest.approx(3.7)
+    # The terms are kept for the next time.
+    assert app.settings.terms == "Tools Calling, LLM"
+    assert last(app.sent, "settings")["terms"] == "Tools Calling, LLM"
+
+
+def test_readings_keep_only_the_selected_words(app, finished):
+    answer = app.reread(finished.id, [0, 3], [0, 4])
+    request = answer["request"]
+    heard = [Word(text=t, start=s, end=e) for t, s, e in (("любимый", 1.4, 1.9), ("механизм", 2.0, 2.6),
+                                                          ("Tools", 2.7, 3.0), ("Calling,", 3.0, 3.5), ("и", 3.6, 3.7))]
+    app.handle(("reread_range", request, 1.35, 3.75))
+    app.handle(("reread_loading", request, "CTC"))
+    app.handle(("reread_result", request, "RNNT", heard, None))
+    app.handle(("reread_result", request, "CTC", None, "broken"))
+    app.handle(("reread_result", request + 1, "RNNT", heard, None))  # an old or other request: ignored
+    app.handle(("reread_done", request))
+    readings = [m["data"] for m in app.sent if m["kind"] == "reading"]
+    assert [r["phase"] for r in readings] == ["range", "loading", "result", "result", "done"]
+    assert readings[2] == {"request": request, "phase": "result", "model": "RNNT", "text": "Tools Calling,", "same": False}
+    assert readings[3]["error"] == "broken"
+
+
+def test_take_a_reading_keeps_its_times_and_writes_the_files(app, finished):
+    answer = app.reread(finished.id, [0, 3], [0, 4])
+    heard = [Word(text="Tools", start=2.72, end=3.0), Word(text="Calling,", start=3.02, end=3.5)]
+    app.handle(("reread_result", answer["request"], "RNNT", heard, None))
+    assert app.apply_fix(finished.id, [0, 3], [0, 4], "Tools Calling,", "RNNT")
+    line = finished.segments[0]
+    assert line.text == "наш любимый механизм Tools Calling, и"
+    assert [(w.text, w.start) for w in line.words[3:5]] == [("Tools", 2.72), ("Calling,", 3.02)]
+    assert finished.result.segments[0] is line
+    assert "Tools Calling, и" in finished.written["txt"].read_text(encoding="utf-8")
+    assert "lines_changed" in kinds(app.sent)
+    assert app.rereading is None
+
+
+def test_text_typed_by_hand_gets_times_spread_over_the_part(app, finished):
+    assert app.apply_fix(finished.id, [0, 5], [1, 0], "и весь", None)
+    first, second = finished.segments
+    assert first.text == "наш любимый механизм Tullz Colling, и весь"
+    assert second.text == "мозаика."
+    starts = [w.start for w in first.words[5:]]
+    assert starts == sorted(starts) and 3.5 <= starts[0] < 3.7
+
+
+def test_fixing_is_refused_while_running_and_for_long_parts(app, media, finished):
+    with pytest.raises(ValueError):
+        app.apply_fix(finished.id, [0, 2], [0, 1], "x")  # ends before it starts
+    with pytest.raises(ValueError):
+        app.apply_fix(finished.id, [0, 1], [0, 1], "   ")
+    long_line = line_of(*[(f"w{i}", i * 1.0, i * 1.0 + 0.5) for i in range(40)])
+    finished.segments.append(long_line)
+    with pytest.raises(ValueError, match="25"):
+        app.reread(finished.id, [2, 0], [2, 39])
+    app.add_files([str(media[1])])
+    running = app.files[1]
+    assert running.state == "running"
+    with pytest.raises(ValueError):
+        app.reread(running.id, [0, 0], [0, 0])

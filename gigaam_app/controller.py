@@ -10,6 +10,7 @@ or threads loads it again before the next file. A model that is not bundled
 is downloaded first, after the user agrees.
 """
 
+import base64
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 import itertools
@@ -22,7 +23,8 @@ import sys
 import threading
 import time
 
-from . import catalog, config
+from . import catalog, config, fix
+from .audio import wav_clip
 from .engine import MODELS, Transcript
 from .history import Entry, new_key
 from .outputs import FORMATS, plain_text, timestamped_text, write_outputs
@@ -58,6 +60,9 @@ LANGUAGES = (("auto", "Определять автоматически"), ("ru",
              ("ja", "Японский"), ("ko", "Корейский"))
 
 WAITING, RUNNING, DONE, CANCELLED, FAILED = "waiting", "running", "done", "cancelled", "failed"
+# Models that give a reading when a selected part is recognised again (plan 03), in this order.
+# Whisper only when it is downloaded.
+REREAD_MODELS = ("RNNT", "CTC", "Whisper")
 
 
 # ---------------------------------------------------------------------- texts
@@ -210,6 +215,8 @@ class Controller:
         self.declined = set()        # models the user said "not now" to
         self.loaded_key = None
         self.failed_load = None      # model whose load failed; its "error" event follows
+        self.reread_ids = itertools.count(1)
+        self.rereading = None        # the selected part being recognised again (dict), if any
         self.engine = {"state": "idle", "text": "Запуск...", "detail": ""}
         self.probe_jobs = queue.Queue()
         self.startup_error = ""
@@ -339,10 +346,12 @@ class Controller:
         for key in MODELS:
             info = catalog.find(key)
             note = MODEL_NOTES.get(key, info.description)
+            installed = True
             if not info.bundled:
                 installed = catalog.installed_folder(info) is not None
                 note += " Скачана." if installed else f" Скачивается отдельно, {size_text(info.download_size)}."
-            models.append({"key": key, "title": key, "note": note, "language": info.model_type == "whisper"})
+            models.append({"key": key, "title": key, "note": note, "language": info.model_type == "whisper",
+                           "installed": installed})
         languages = [{"key": code, "label": name} for code, name in LANGUAGES]
         if self.settings.language not in dict(LANGUAGES):
             languages.append({"key": self.settings.language, "label": self.settings.language})
@@ -359,7 +368,8 @@ class Controller:
     def _settings_view(self):
         s = self.settings
         return {"model": s.model, "language": s.language, "device": s.device, "cpu_threads": s.cpu_threads,
-                "outputs": list(s.outputs), "include_timestamps": s.include_timestamps}
+                "outputs": list(s.outputs), "include_timestamps": s.include_timestamps,
+                "terms": s.terms}
 
     # ------------------------------------------------------------------ page calls
 
@@ -474,8 +484,13 @@ class Controller:
             item = self._find(file_id)
             if item is None:
                 return []
-            return [{"index": index, "start": segment.start, "end": segment.end, "text": segment.text}
-                    for index, segment in enumerate(item.segments)]
+            return [self._segment_view(index, segment) for index, segment in enumerate(item.segments)]
+
+    @staticmethod
+    def _segment_view(index, segment):
+        """One line of text for the page, with its words, so a selection maps to word times."""
+        return {"index": index, "start": segment.start, "end": segment.end, "text": segment.text,
+                "words": [[word.start, word.end, word.text] for word in segment.words]}
 
     def copy_text(self, file_id, with_times):
         """The text as in the saved files: plain, or with [start - end] timecodes."""
@@ -516,6 +531,125 @@ class Controller:
             self._remember(item)
             self._emit_file(item)
         return True
+
+    # ------------------------------------------------------------------ fixing a selected part (plan 03)
+
+    def _fixable(self, file_id, first=None, last=None):
+        """The file whose text may be fixed (finished or cancelled with text, not running),
+        with the selection checked; ValueError otherwise."""
+        item = self._find(file_id)
+        if item is None or item.state not in (DONE, CANCELLED) or item.result is None or not item.segments:
+            raise ValueError("Этот текст сейчас нельзя исправить")
+        if first is not None:
+            fix.check_selection(item.segments, tuple(first), tuple(last))
+        return item
+
+    def clip(self, file_id, first, last):
+        """The selected words as a WAV to play: {"start", "end", "url"} (a data: URL)."""
+        with self.lock:
+            item = self._fixable(file_id, first, last)
+            start, end = fix.play_range(item.segments, tuple(first), tuple(last), item.result.audio_seconds)
+            path = item.path
+        try:
+            data = wav_clip(path, start, end - start)
+        except (OSError, RuntimeError) as error:
+            self._notice_locked(f"Не удалось вырезать звук: {error}")
+            return None
+        return {"start": start, "end": end, "url": "data:audio/wav;base64," + base64.b64encode(data).decode("ascii")}
+
+    def reread(self, file_id, first, last, terms=""):
+        """Recognise the selected words again with each available model (plan 03 A3).
+
+        Returns what the page shows at once: the current text and the models that will
+        answer; their readings follow as "reading" messages."""
+        with self.lock:
+            item = self._fixable(file_id, first, last)
+            first, last = tuple(first), tuple(last)
+            segments = item.segments
+            if fix.word_at(segments, last).end - fix.word_at(segments, first).start > fix.MAX_SECONDS:
+                raise ValueError(f"Выделите не больше {fix.MAX_SECONDS:.0f} секунд речи")
+            # The piece holds a few words of context on each side (fix.py explains why).
+            context_first, context_last = fix.context_bounds(segments, first, last)
+            windows = fix.search_windows(segments, context_first, context_last, item.result.audio_seconds)
+            context = fix.positions_between(segments, context_first, context_last)
+            terms = " ".join(str(terms or "").split())[:config.MAX_TERMS_LENGTH]
+            if terms != self.settings.terms:
+                self.settings.terms = terms
+                self._save_settings()
+                self._emit("settings", self._settings_view())
+            models = [key for key in REREAD_MODELS if self._model_installed(key)]
+            request = next(self.reread_ids)
+            self.rereading = {"request": request, "id": item.id, "transcript": item.result, "first": first,
+                           "last": last, "readings": {},
+                           "context": [fix.word_at(segments, position) for position in context],
+                           "selected": (context.index(first), context.index(last)),
+                           "current": fix.selected_text(segments, first, last)}
+            self.worker.jobs.put(("reread", request, item.path, windows, models, self.settings.engine_device,
+                                  self.settings.cpu_threads, self.settings.language, terms or None))
+            return {"request": request, "current": self.rereading["current"],
+                    "models": [{"key": key, "title": catalog.model_title(key)} for key in models],
+                    "whisper_missing": "Whisper" not in models, "waiting": self.running is not None}
+
+    def apply_fix(self, file_id, first, last, text, model=None):
+        """Put text in place of the selected words; the saved files and the history follow.
+
+        model: the reading the text came from. Unchanged, its words keep their times;
+        text typed or changed by hand gets times spread over the selected range."""
+        with self.lock:
+            item = self._fixable(file_id, first, last)
+            first, last = tuple(first), tuple(last)
+            reread = self.rereading
+            same_selection = (reread is not None and reread["id"] == item.id and reread["transcript"] is item.result
+                              and reread["first"] == first and reread["last"] == last)
+            reading = reread["readings"].get(model) if same_selection and model else None
+            if reading is not None and " ".join(word.text for word in reading) == " ".join(str(text).split()):
+                words = list(reading)
+            else:
+                start, end = fix.play_range(item.segments, first, last, item.result.audio_seconds)
+                words = fix.spread_words(str(text), start, end)
+            if not words:
+                raise ValueError("Пустой текст: чтобы убрать слова, оставьте хотя бы одно")
+            fix.replace_words(item.segments, first, last, words)
+            item.result.segments = item.segments  # restored files keep a copy of the list
+            self.rereading = None
+            formats = list(item.written)
+        error = None
+        try:
+            written = write_outputs(item.result, formats) if formats else []
+        except (OSError, ValueError) as problem:
+            written, error = [], problem
+        with self.lock:
+            if error is None:
+                item.written = dict(zip(formats, written))
+            else:
+                self._error(f"Текст исправлен, но файлы не перезаписаны: {error}")
+            self._remember(item)
+            self._emit("lines_changed", {"id": item.id})
+            self._emit_file(item)
+        return True
+
+    def _reread_event(self, kind, request, *args):
+        """Worker events of a selected part recognised again; old requests are ignored."""
+        if self.rereading is None or self.rereading["request"] != request:
+            return
+        data = {"request": request}
+        if kind == "reread_range":
+            data.update(phase="range", start=args[0], end=args[1])
+        elif kind == "reread_loading":
+            data.update(phase="loading", model=args[0])
+        elif kind == "reread_result":
+            model, words, error = args
+            data.update(phase="result", model=model)
+            if words is None:
+                data["error"] = error
+            else:
+                words = fix.trim_reading(words, self.rereading["context"], *self.rereading["selected"])
+                self.rereading["readings"][model] = words
+                text = " ".join(word.text for word in words)
+                data.update(text=text, same=fix.same_words(text, self.rereading["current"]))
+        elif kind == "reread_done":
+            data["phase"] = "done"
+        self._emit("reading", data)
 
     def show_folder(self, file_id):
         with self.lock:
@@ -789,10 +923,11 @@ class Controller:
         elif kind == "segment" and item:
             segment = args[0]
             item.segments.append(segment)
-            self._emit("segment", {"id": item.id, "index": len(item.segments) - 1,
-                                   "start": segment.start, "end": segment.end, "text": segment.text})
+            self._emit("segment", {"id": item.id, **self._segment_view(len(item.segments) - 1, segment)})
         elif kind == "finished" and item:
             self._finish(item, *args)
+        elif kind.startswith("reread_"):
+            self._reread_event(kind, *args)
         elif kind == "download_progress":
             self._download_progress(*args)
         elif kind == "download_done":

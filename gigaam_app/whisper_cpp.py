@@ -434,12 +434,16 @@ class Context:
     def is_language(self, code):
         return self.lib.whisper.whisper_lang_id(code.encode()) >= 0
 
-    def transcribe(self, samples, language=None, n_threads=4, should_cancel=None):
+    def transcribe(self, samples, language=None, n_threads=4, should_cancel=None, prompt=None):
         """Recognise one piece of 16 kHz mono float32 audio (up to 30 s: Whisper's window).
 
         Greedy decoding with whisper.cpp's usual fallback to higher temperatures for a
         failing window. Nothing is carried over from the previous call (no_context).
         language: a code such as 'ru', or None / 'auto' to detect it.
+        prompt: text Whisper is told came before this piece (initial_prompt), such as
+            the user's list of terms: it then spells those terms the same way. Measured
+            in HANDOFF session 14: it fixes the listed terms, but nearby Russian forms of
+            English words may come out in Latin letters.
         Returns (language code, [Token]) with special tokens left out.
         """
         w = self.lib.whisper
@@ -452,6 +456,9 @@ class Context:
         params.token_timestamps = True
         params.language = (language or "auto").encode()
         params.suppress_nst = True
+        prompt_bytes = prompt.encode("utf-8") if prompt else None
+        if prompt_bytes:
+            params.initial_prompt = prompt_bytes  # kept alive by prompt_bytes until whisper_full returns
         abort = None
         if should_cancel is not None:
             abort = ABORT_CALLBACK(lambda data: bool(should_cancel()))
@@ -473,7 +480,7 @@ class Context:
                     continue
                 text = w.whisper_full_get_token_text(self.handle, segment, index) or b""
                 tokens.append(Token(text, data.t0 * TIME_STEP_SECONDS, data.t1 * TIME_STEP_SECONDS, data.p))
-        del abort  # the call has returned; the callback may go
+        del abort, prompt_bytes  # the call has returned; the callback and the prompt may go
         return (lang.decode() if lang else ""), tokens
 
 

@@ -104,12 +104,14 @@ class FakeContext:
 
     def __init__(self, cancel_on=None):
         self.calls = []
+        self.prompts = []
         self.cancel_on = cancel_on
 
-    def transcribe(self, samples, language=None, n_threads=4, should_cancel=None):
+    def transcribe(self, samples, language=None, n_threads=4, should_cancel=None, prompt=None):
         if self.cancel_on is not None and len(self.calls) == self.cancel_on:
             raise whisper_cpp.Cancelled()
         self.calls.append((len(samples), language))
+        self.prompts.append(prompt)
         return "ru", tokens((f" w{len(self.calls)}", 0.1, 0.3))
 
     def is_language(self, code):
@@ -130,6 +132,16 @@ def test_encode_recognises_every_chunk_and_passes_the_language():
     assert model.context.calls == [(16000, "en"), (8000, "en")]
     words = model.words(model.decode(results[1]), offset_seconds=2.0)
     assert [(w.start, w.end, w.text) for w in words] == [(2.1, 2.3, "w2")]
+
+
+def test_prompt_goes_to_every_chunk_and_reread_piece_uses_it():
+    from gigaam_app import fix
+    model = fake_model(FakeContext())
+    model.encode([np.zeros(100, np.float32)] * 2, prompt="LLM, fine tuning")
+    assert model.context.prompts == ["LLM, fine tuning"] * 2
+    words = fix.reread_piece(model, np.zeros(1600, np.float32), 10.0, prompt="DeepSeek")
+    assert model.context.prompts[-1] == "DeepSeek"
+    assert [(w.start, w.text) for w in words] == [(10.1, "w3")]
 
 
 def test_auto_language_is_sent_as_none():

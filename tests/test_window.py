@@ -73,7 +73,7 @@ def test_api_exposes_only_page_methods():
     public = {name for name in dir(window.Api) if not name.startswith("_")}
     assert public == {"ready", "pick_files", "add_files", "remove", "cancel", "retry", "segments", "copy_text",
                       "open_output", "create_output", "show_folder", "set_settings", "reset_settings",
-                      "download", "decline_download", "cancel_download", "close_anyway"}
+                      "download", "decline_download", "cancel_download", "close_anyway", "clip", "reread", "apply_fix"}
     api = window.Api(controller=object())
     assert all(name.startswith("_") for name in vars(api))
 

@@ -23,6 +23,8 @@ DEVICES = ("Auto", "GPU", "CPU")
 RETIRED_KEYS = {"min_duration", "vad_window_samples"}
 # A Whisper language code ("en", "haw", "yue"); whisper.cpp checks it is one it knows.
 LANGUAGE_PATTERN = re.compile(r"auto|[a-z]{2,3}")
+# Whisper reads at most about 220 prompt tokens; a longer list is cut from the front.
+MAX_TERMS_LENGTH = 500
 
 
 @dataclass
@@ -31,6 +33,7 @@ class Settings:
     device: str = "Auto"
     cpu_threads: int = 0              # 0 = choose automatically
     language: str = "auto"            # Whisper only: a code such as "en", or "auto" to detect it
+    terms: str = ""                   # the last terms typed when a part is recognised again (Whisper's prompt)
     include_timestamps: bool = False  # preview only; files are written as listed in outputs
     outputs: list = field(default_factory=lambda: list(DEFAULT_FORMATS))
     vad: VadOptions = field(default_factory=VadOptions)
@@ -81,6 +84,10 @@ def parse(data):
             if not isinstance(value, str) or not LANGUAGE_PATTERN.fullmatch(value):
                 raise ValueError('language: expected "auto" or a language code such as "en"')
             settings.language = value
+        elif key == "terms":
+            if not isinstance(value, str) or len(value) > MAX_TERMS_LENGTH:
+                raise ValueError(f"terms: expected text of at most {MAX_TERMS_LENGTH} characters")
+            settings.terms = value
         elif key == "include_timestamps":
             if type(value) is not bool:
                 raise ValueError("include_timestamps: expected true or false")
