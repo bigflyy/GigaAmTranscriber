@@ -37,10 +37,11 @@ class FakeAsr:
 
     def __init__(self, on_gpu, fail_on_batch=None):
         self.on_gpu = on_gpu
+        self.joins_chunks = on_gpu
         self.batches = []
         self.fail_on_batch = fail_on_batch
 
-    def encode(self, pieces):
+    def encode(self, pieces, should_cancel=None):
         if self.fail_on_batch is not None and len(self.batches) == self.fail_on_batch:
             raise RuntimeError("encoder failed")
         self.batches.append([len(piece) for piece in pieces])
@@ -103,7 +104,7 @@ def test_gpu_batches_respect_limits(monkeypatch):
     gate = threading.Event()
     original = transcriber.asr.encode
 
-    def slow_encode(pieces):
+    def slow_encode(pieces, should_cancel=None):
         gate.wait(5)
         return original(pieces)
 

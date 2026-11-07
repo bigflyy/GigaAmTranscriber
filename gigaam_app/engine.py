@@ -12,7 +12,7 @@ a few seconds into the file instead of after the whole file has been searched.
 Order is kept, so segments come out in time order.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 import queue
 import threading
@@ -24,6 +24,7 @@ from .audio import SAMPLE_RATE, decode_audio
 from .catalog import ModelNotInstalled
 from .paths import models_dir
 from .vad import WINDOW, ChunkFinder, SileroVad, VadOptions
+from .whisper_model import WhisperModel, is_whisper_folder
 
 # Model key -> exported model folder, for every model in the catalog.
 MODELS = {info.key: info.folder for info in catalog.CATALOG}
@@ -64,9 +65,11 @@ class Transcript:
 class Transcriber:
     """A loaded model plus VAD. One transcription at a time per instance."""
 
-    def __init__(self, model=DEFAULT_MODEL, device="auto", cpu_threads=None, model_root=None):
+    def __init__(self, model=DEFAULT_MODEL, device="auto", cpu_threads=None, model_root=None, language=None):
         """model: a catalog key (or a v0.1 name). model_root: one folder holding the
         model folder and the VAD model, instead of the normal lookup (tests, experiments).
+        language: Whisper only, a code such as "ru", or None / "auto" to detect it per chunk
+        (GigaAM models are Russian and ignore it).
         Raises ModelNotInstalled for a downloadable model that is not downloaded yet."""
         started = time.perf_counter()
         if model_root:
@@ -82,7 +85,10 @@ class Transcriber:
                     raise FileNotFoundError(f"Model not found: {root / info.folder}")
                 raise ModelNotInstalled(info)
         self.model_label = model
-        self.asr = AsrModel(folder, device=device, cpu_threads=cpu_threads)
+        if is_whisper_folder(folder):
+            self.asr = WhisperModel(folder, device=device, cpu_threads=cpu_threads, language=language)
+        else:
+            self.asr = AsrModel(folder, device=device, cpu_threads=cpu_threads)
         # Silero does tiny sequential steps; one CPU thread is fastest.
         vad_session, _ = create_session(root / "silero_vad_scan.onnx", device="cpu", cpu_threads=1)
         self.vad = SileroVad(vad_session)
@@ -104,7 +110,7 @@ class Transcriber:
         should_cancel(): may also be called from worker threads. Segments
             finished before cancelling are kept in the result.
         """
-        options = options or VadOptions()
+        options = self._fit_options(options or VadOptions())
         stop = threading.Event()
 
         def cancelled():
@@ -146,7 +152,7 @@ class Transcriber:
                 for batch in self._batches(chunk_queue):
                     if cancelled():
                         return
-                    encoded_queue.put((batch, self._encode(audio, batch)))
+                    encoded_queue.put((batch, self._encode(audio, batch, cancelled)))
             except BaseException as error:
                 errors.append(error)
             finally:
@@ -208,12 +214,22 @@ class Transcriber:
         result.elapsed_seconds = time.perf_counter() - started
         return result
 
+    def _fit_options(self, options):
+        """Keep chunks inside the model's window: Whisper hears at most 30 s per call,
+        and settings may allow longer chunks (GigaAM has no such limit)."""
+        limit = getattr(self.asr, "max_chunk_seconds", None)
+        if limit is None:
+            return options
+        return replace(options, **{key: min(getattr(options, key), limit)
+                                   for key in ("max_duration", "strict_limit_duration", "vad_max_speech_s")})
+
     def _batches(self, chunk_queue):
         """Yield encoder batches of consecutive chunks as they arrive.
 
         On CPU every chunk runs alone: batching gave nothing there (measured)
         and padding wastes work. On GPU the chunks already waiting are joined
-        into one call, without waiting for more.
+        into one call, without waiting for more. Whisper always takes one chunk
+        per call (whisper.cpp recognises one window at a time).
         """
         carried = None
         while True:
@@ -222,7 +238,7 @@ class Transcriber:
             if chunk is _END:
                 return
             batch, longest = [chunk], chunk[1] - chunk[0]
-            if self.asr.on_gpu:
+            if self.asr.joins_chunks:
                 while len(batch) < GPU_BATCH_CHUNKS:
                     try:
                         following = chunk_queue.get_nowait()
@@ -239,8 +255,10 @@ class Transcriber:
                     longest = grown
             yield batch
 
-    def _encode(self, audio, batch):
-        return self.asr.encode([audio[start:end] for start, end in batch])
+    def _encode(self, audio, batch, should_cancel=None):
+        """Encoder output per chunk. Whisper does the whole recognition here and may
+        return fewer results than chunks after a cancel (zip() below drops the rest)."""
+        return self.asr.encode([audio[start:end] for start, end in batch], should_cancel=should_cancel)
 
     def _segment(self, features, start, end):
         tokens = self.asr.decode(features)

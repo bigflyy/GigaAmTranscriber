@@ -10,6 +10,8 @@ the decision are in HANDOFF.md (session 10). Run from the repository root with t
 | `ort_whisper.py` | Whisper on ONNX Runtime (onnx-community export): numpy mel, encoder, greedy decoding with the KV cache on the GPU, fed the chunks of a GigaAM JSON |
 | `wcpp_chunks.py` | Joins whisper-cli's per-chunk JSON outputs (one WAV per VAD chunk) into one chunk JSON |
 | `compare.py` | Words that differ from GigaAM (case, punctuation and digit differences set apart), loops, samples |
+| `app_engine.py` | The app's own Transcriber (GigaAM or Whisper on whisper.cpp, plan 04 B1) on one file: chunks with word times |
+| `word_times.py` | Word times of two app_engine.py runs compared on the words both agree on |
 
 whisper.cpp 1.9.5 was built with Vulkan from source (no Windows Vulkan binary is published):
 glslc and the Vulkan headers and import library came from a conda-forge env

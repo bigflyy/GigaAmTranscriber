@@ -192,10 +192,16 @@ class AsrModel:
     def device_label(self):
         return PROVIDER_NAMES.get(self.provider, self.provider)
 
-    def encode(self, pieces):
+    @property
+    def joins_chunks(self):
+        """True if the Transcriber should send waiting chunks to encode() together."""
+        return self.on_gpu
+
+    def encode(self, pieces, should_cancel=None):
         """Run the encoder on a list of 1-D sample arrays as one zero-padded batch.
 
         Returns one (frames, dim) array per piece (CTC: log-probabilities).
+        should_cancel is not used: one encoder call takes well under a second.
         """
         longest = max(len(piece) for piece in pieces)
         batch = np.zeros((len(pieces), longest), dtype=np.float32)
