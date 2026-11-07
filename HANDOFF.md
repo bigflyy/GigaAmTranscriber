@@ -1,7 +1,7 @@
 # Handoff: state and findings
 
 Last updated 2026-11-07 (session 10). Current plan: [docs/plans/04-whisper.md](docs/plans/04-whisper.md)
-(Whisper; A1-A4 done, A5 = owner's choice). Plan 02 (window) has D for later; plan 01 still holds B9, F
+(Whisper; Stage A done, B next). Plan 02 (window) has D for later; plan 01 still holds B9, F
 (Parakeet, Qwen3-ASR) and E. Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
 
 ## Session 10 (2026-11-07): plan 04 written, Whisper runtimes tested
@@ -28,8 +28,9 @@ Last updated 2026-11-07 (session 10). Current plan: [docs/plans/04-whisper.md](d
   Vulkan headers (README). The first run after a build or driver change spent about 35 s compiling
   shaders (later runs 12 s); ggml-vulkan.dll is 45 MB. Auto language: 128 of 129 call chunks ru,
   one "is". whisper.cpp 1.9.5 also ships Parakeet support (plan 01 F).
-- Recommendation given to the owner: whisper.cpp + Vulkan, q5_0, app's chunks, greedy, language
-  once per file or chosen. Waiting for the owner's choice (A5) and model size.
+- Owner's decision (2026-11-07): whisper.cpp + Vulkan; q5_0 the default download, "configurable (to
+  download) in the future" (IDEAS.md). Next: plan 04 Stage B (B0 shipping build of whisper.cpp,
+  B1 ctypes engine on the app's VAD chunks). Owner's order after Whisper: plan 03 Stage A.
 - Incident: the first queued build ran `cmd.exe /c` from Git Bash without MSYS_NO_PATHCONV, so /c
   became C:/ and an idle cmd.exe held a queue slot; stopped (own process).
 - The owner's app was open from build/try during this session: do not build there either while it runs.

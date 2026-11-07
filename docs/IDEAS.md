@@ -6,6 +6,8 @@ models, Stage E speaker diarization) and plan 02 (D1-D3).
 
 ## Models
 
+- 2026-11-07: Whisper model size: q5_0 is the default, but make it "configurable (to download) in the future" (q8_0 874 MB, f16 1.6 GB).
+
 ## Languages and speakers
 
 - 2026-11-06: detect the language (there, in the selected part or the file).
