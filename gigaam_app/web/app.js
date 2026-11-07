@@ -401,10 +401,11 @@ function showConfidence(event) {
   else word.title = '';
 }
 
-async function copyText() {
+async function copyText(forLlm) {
+  // forLlm: the text with doubtful words marked as word[?66%] and a note on the marks.
   const file = fileById(state.selected);
   if (!file) return;
-  const text = await call('copy_text', file.id, $('times').checked);
+  const text = await call('copy_text', file.id, $('times').checked, !!forLlm);
   if (text === null) return;
   try {
     await navigator.clipboard.writeText(text);
@@ -419,7 +420,7 @@ async function copyText() {
     document.execCommand('copy');
     area.remove();
   }
-  toast('Текст скопирован');
+  toast(forLlm ? 'Текст для ИИ скопирован' : 'Текст скопирован');
 }
 
 // ------------------------------------------------------------------ fixing a selected part (plan 03)
@@ -870,7 +871,8 @@ $('file-cancel').addEventListener('click', () => state.selected && call('cancel'
 $('file-retry').addEventListener('click', () => { state.followRunning = true; call('retry', state.selected); });
 $('file-remove').addEventListener('click', () => removeFile(state.selected));
 $('show-folder').addEventListener('click', () => call('show_folder', state.selected));
-$('copy').addEventListener('click', copyText);
+$('copy').addEventListener('click', () => copyText(false));
+$('copy-llm').addEventListener('click', () => copyText(true));
 $('times').addEventListener('change', () => {
   applyTimes($('times').checked);
   call('set_settings', { include_timestamps: $('times').checked });

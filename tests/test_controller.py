@@ -340,6 +340,8 @@ def test_live_segments_and_copy(app, media):
                                          "words": [[3.0, 4.0, "Вторая.", None]]}
     assert app.copy_text(item.id, False) == "Первая.\nВторая.\n"
     assert app.copy_text(item.id, True).startswith("[00:01.000 - 00:02.500] Первая.\n")
+    for_llm = app.copy_text(item.id, False, True)
+    assert for_llm.startswith("Автоматическая расшифровка речи") and for_llm.endswith("Первая.\nВторая.\n")
 
 
 def test_open_create_and_show_outputs(app, media):
@@ -348,7 +350,7 @@ def test_open_create_and_show_outputs(app, media):
     finish(app, media[0], [segment(0.0, 2.0, "Текст.")])
     view = app._file_view(item)
     assert [(o["format"], bool(o["path"])) for o in view["outputs"]] == [
-        ("txt", True), ("timestamps", True), ("md", False), ("srt", False), ("json", False)]
+        ("txt", True), ("timestamps", True), ("md", False), ("srt", False), ("json", False), ("llm", False)]
     assert app.open_output(item.id, "txt")
     assert app.desktop.opened == [media[0].with_name("a-transcript.txt").resolve()]
     assert app.create_output(item.id, "srt")

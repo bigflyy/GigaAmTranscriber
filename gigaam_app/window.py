@@ -191,8 +191,8 @@ class Api:
     def segments(self, file_id):
         return self._controller.segments(file_id)
 
-    def copy_text(self, file_id, with_times):
-        return self._controller.copy_text(file_id, with_times)
+    def copy_text(self, file_id, with_times, for_llm=False):
+        return self._controller.copy_text(file_id, with_times, for_llm)
 
     def open_output(self, file_id, fmt):
         return self._controller.open_output(file_id, fmt)

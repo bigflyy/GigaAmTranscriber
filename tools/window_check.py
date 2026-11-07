@@ -359,6 +359,12 @@ def scenario(window, control, long_audio, short_audio, shoot, whisper=False):
         wait(lambda: markdown.is_file(), 10, "Markdown written")
         check("Markdown created from the page",
               markdown.is_file() and markdown.read_text(encoding="utf-8").startswith("# " + Path(short_audio).name))
+        js("document.querySelector('#saved-list .chip[data-format=llm]').click()")
+        for_llm = Path(short_audio).with_name(Path(short_audio).stem + "-transcript-llm.txt")
+        wait(lambda: for_llm.is_file(), 10, "text for an LLM written")
+        check("text for an LLM created from the page",
+              for_llm.is_file() and "[?" in for_llm.read_text(encoding="utf-8"))
+        check("copy for an LLM button", js("!!$('copy-llm') && !$('copy-llm').hidden"))
         shoot("04-done")
         doubt_steps(js, control, control.files[1], shoot)
         fix_steps(js, control, control.files[1], short_audio, shoot)

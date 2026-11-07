@@ -1,4 +1,5 @@
-"""Write a Transcript as plain text, timestamped text, Markdown, SRT subtitles or JSON."""
+"""Write a Transcript as plain text, timestamped text, Markdown, SRT subtitles, JSON,
+or text for an LLM (doubtful words marked)."""
 
 from dataclasses import asdict
 import datetime
@@ -11,13 +12,18 @@ import tempfile
 from .catalog import model_title
 from .paths import replace_file
 
-FORMATS = ("txt", "timestamps", "md", "srt", "json")
+FORMATS = ("txt", "timestamps", "md", "srt", "json", "llm")
 DEFAULT_FORMATS = ("txt", "timestamps")
 
 # Subtitle cues: split at these limits, preferring sentence ends.
 CUE_MAX_SECONDS = 6.0
 CUE_MAX_CHARS = 84
 CUE_BREAK_GAP = 1.0  # a pause this long between words always starts a new cue
+
+# Text for an LLM: a word below this confidence gets a mark (the window's dotted threshold).
+LLM_DOUBT_BELOW = 0.97
+# Punctuation that stays after the mark: "слово[?66%]," rather than "слово,[?66%]".
+TRAILING_PUNCTUATION = re.compile(r"^(.*?)([.,!?;:\u00bb\")\]]*)$", re.S)
 
 # Markdown sections: a new "## MM:SS" heading after about a minute of text, or earlier
 # at a long pause once the section has some text.
@@ -156,8 +162,38 @@ def markdown_text(transcript, today=None):
     return "\n".join(lines) + "\n"
 
 
+def marked_word(word, doubt_below):
+    """A word as text, with [?NN%] (the model's confidence) when it is below doubt_below."""
+    if word.confidence is None or word.confidence >= doubt_below:
+        return word.text
+    body, tail = TRAILING_PUNCTUATION.match(word.text).groups()
+    if not body:
+        return word.text
+    return f"{body}[?{round(word.confidence * 100)}%]{tail}"
+
+
+def llm_text(transcript, doubt_below=LLM_DOUBT_BELOW):
+    """Text to paste into a chat with an LLM (plan 03, owner's idea 2026-11-08): a short note
+    on how it was made and what the marks mean, then one paragraph per speech fragment with
+    doubtful words marked as слово[?66%]. The model can then check exactly those words
+    against the sentence around them."""
+    words = [word for segment in transcript.segments for word in segment.words]
+    marked = sum(1 for word in words if word.confidence is not None and word.confidence < doubt_below)
+    made_by = f" (модель {model_title(transcript.model)})" if transcript.model else ""
+    lines = [f"Автоматическая расшифровка речи{made_by}. Слова, в которых модель распознавания "
+             "не уверена, отмечены так: слово[?66%], где число - её уверенность в слове. "
+             "Эти слова могли быть распознаны неверно.",
+             f"Отмечено слов: {marked} из {len(words)}.", ""]
+    for segment in transcript.segments:
+        if segment.words:
+            lines.append(" ".join(marked_word(word, doubt_below) for word in segment.words))
+        elif segment.text:
+            lines.append(segment.text)
+    return "\n".join(lines) + "\n"
+
+
 RENDERERS = {"txt": plain_text, "timestamps": timestamped_text, "md": markdown_text, "srt": srt_text,
-             "json": json_text}
+             "json": json_text, "llm": llm_text}
 
 
 def output_paths(source, formats, out_dir=None):
@@ -166,12 +202,13 @@ def output_paths(source, formats, out_dir=None):
     folder = Path(out_dir) if out_dir else source.parent
     stem = source.stem + "-transcript"
     names = {"txt": stem + ".txt", "timestamps": stem + "-timestamps.txt",
-             "md": stem + ".md", "srt": stem + ".srt", "json": stem + ".json"}
+             "md": stem + ".md", "srt": stem + ".srt", "json": stem + ".json", "llm": stem + "-llm.txt"}
     return {fmt: folder / names[fmt] for fmt in formats}
 
 
-def write_outputs(transcript, formats=DEFAULT_FORMATS, out_dir=None):
-    """Write the chosen formats atomically and return their paths."""
+def write_outputs(transcript, formats=DEFAULT_FORMATS, out_dir=None, doubt_below=LLM_DOUBT_BELOW):
+    """Write the chosen formats atomically and return their paths.
+    doubt_below: the confidence below which the llm format marks a word."""
     paths = output_paths(transcript.source, formats, out_dir)
     source = Path(transcript.source).resolve()
     for fmt, path in paths.items():
@@ -182,7 +219,7 @@ def write_outputs(transcript, formats=DEFAULT_FORMATS, out_dir=None):
         handle, temporary = tempfile.mkstemp(dir=path.parent, prefix=path.name + ".", suffix=".tmp")
         try:
             with os.fdopen(handle, "w", encoding="utf-8", newline="\n") as stream:
-                stream.write(RENDERERS[fmt](transcript))
+                stream.write(llm_text(transcript, doubt_below) if fmt == "llm" else RENDERERS[fmt](transcript))
             replace_file(temporary, path)
         except BaseException:
             Path(temporary).unlink(missing_ok=True)

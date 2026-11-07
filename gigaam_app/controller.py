@@ -27,7 +27,7 @@ from . import catalog, config, fix
 from .audio import wav_clip
 from .engine import MODELS, Transcript
 from .history import Entry, new_key
-from .outputs import FORMATS, plain_text, timestamped_text, write_outputs
+from .outputs import FORMATS, llm_text, plain_text, timestamped_text, write_outputs
 from .paths import downloads_dir, ffmpeg_executable
 
 MEDIA_SUFFIXES = {".wav", ".mp3", ".m4a", ".ogg", ".opus", ".flac", ".aac", ".wma", ".mp4", ".mkv",
@@ -39,10 +39,11 @@ DEVICES = (("Auto", "Авто"), ("GPU", "Видеокарта"), ("CPU", "Пр�
 DEVICE_NAMES = {"GPU (DirectML)": "видеокарта (DirectML)", "GPU (CUDA)": "видеокарта (CUDA)",
                 "GPU (Vulkan)": "видеокарта (Vulkan)", "CPU": "процессор"}
 FORMAT_LABELS = {"txt": "TXT", "timestamps": "TXT с таймкодами", "md": "Markdown (разделы по времени)",
-                 "srt": "SRT (субтитры)", "json": "JSON (слова и время)"}
+                 "srt": "SRT (субтитры)", "json": "JSON (слова и время)",
+                 "llm": "TXT для ИИ (сомнительные слова отмечены)"}
 # Chips under a finished file: (format, short tag, label).
 OUTPUT_CHIPS = (("txt", "TXT", "Текст"), ("timestamps", "TXT", "С таймкодами"), ("md", "MD", "Markdown"),
-                ("srt", "SRT", "Субтитры"), ("json", "JSON", "Слова и время"))
+                ("srt", "SRT", "Субтитры"), ("json", "JSON", "Слова и время"), ("llm", "TXT", "Для ИИ"))
 # Russian notes for the model choice; catalog descriptions are English.
 MODEL_NOTES = {
     "RNNT": "Русский язык, пунктуация и заглавные буквы. Выбрана по умолчанию.",
@@ -494,13 +495,18 @@ class Controller:
         return {"index": index, "start": segment.start, "end": segment.end, "text": segment.text,
                 "words": [[word.start, word.end, word.text, word.confidence] for word in segment.words]}
 
-    def copy_text(self, file_id, with_times):
-        """The text as in the saved files: plain, or with [start - end] timecodes."""
+    def copy_text(self, file_id, with_times, for_llm=False):
+        """The text as in the saved files: plain, or with [start - end] timecodes, or for
+        an LLM (doubtful words marked, below the dotted threshold of the settings)."""
         with self.lock:
             item = self._find(file_id)
             if item is None:
                 return ""
-            transcript = Transcript(source=str(item.path), model="", device="", segments=list(item.segments))
+            model = item.result.model if item.result is not None else (item.model or "")
+            transcript = Transcript(source=str(item.path), model=model, device="", segments=list(item.segments))
+            doubt_below = self.settings.doubt_light
+        if for_llm:
+            return llm_text(transcript, doubt_below)
         return timestamped_text(transcript) if with_times else plain_text(transcript)
 
     def open_output(self, file_id, fmt):
@@ -522,8 +528,9 @@ class Controller:
             if item is None or item.result is None or not item.result.segments or fmt not in FORMATS:
                 return False
             result = item.result
+            doubt_below = self.settings.doubt_light
         try:
-            written = write_outputs(result, [fmt])
+            written = write_outputs(result, [fmt], doubt_below=doubt_below)
         except (OSError, ValueError) as error:
             with self.lock:
                 self._error(f"Не удалось сохранить {FORMAT_LABELS[fmt]}: {error}")
@@ -617,7 +624,7 @@ class Controller:
             formats = list(item.written)
         error = None
         try:
-            written = write_outputs(item.result, formats) if formats else []
+            written = write_outputs(item.result, formats, doubt_below=self.settings.doubt_light) if formats else []
         except (OSError, ValueError) as problem:
             written, error = [], problem
         with self.lock:
@@ -893,7 +900,7 @@ class Controller:
         item.formats = formats
         self.running = item
         self.worker.jobs.put(("transcribe", item.path, self._engine_key(), self.settings.vad, formats,
-                              self.settings.language))
+                              self.settings.language, self.settings.doubt_light))
         self._emit_file(item)
 
     # ------------------------------------------------------------------ worker events

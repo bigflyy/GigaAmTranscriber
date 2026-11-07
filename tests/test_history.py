@@ -80,7 +80,7 @@ def test_finished_files_come_back_in_the_next_session(tmp_path, monkeypatch, med
     restored = files[0]
     # The model that made the text comes back too (finish() reports RNNT).
     assert restored["model"] == "GigaAM v3 RNNT" and restored["detail"].endswith("готово, RNNT")
-    assert [chip["path"] is not None for chip in restored["outputs"]] == [True, True, False, False, False]
+    assert [chip["path"] is not None for chip in restored["outputs"]] == [True, True, False, False, False, False]
     assert later.copy_text(restored["id"], False) == "Первый.\nВторой.\n"
     assert [line["text"] for line in later.segments(restored["id"])] == ["Первый.", "Второй."]
     assert later.worker.jobs.empty()  # nothing is recognised again

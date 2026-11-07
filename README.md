@@ -53,6 +53,7 @@ Results are saved beside the source file:
 | `md` | `name-transcript.md` | Markdown: file name, date, length and model, then the text in sections of about a minute under their start times |
 | `srt` | `name-transcript.srt` | subtitles, short cues built from word times |
 | `json` | `name-transcript.json` | segments and every word with its start and end time and the model's confidence (0 to 1) |
+| `llm` | `name-transcript-llm.txt` | text to paste into a chat with an AI: a note on the marks, then the text with doubtful words marked as `word[?66%]` (below the dotted threshold) |
 
 TXT and timestamped TXT are on by default; a finished file also offers the
 other formats, made from the text already recognised. **Настройки** (bottom left)
@@ -63,7 +64,8 @@ settings also show **Язык речи**: automatic detection or a chosen langua
 Words the model was unsure of are underlined in the text (dotted: maybe wrong,
 wavy: likely wrong; hover a word for the number); the **Сомнения** switch above
 the text hides the marks, and **Настройки** can colour every word from green to
-red by confidence instead.
+red by confidence instead. **Копировать для ИИ** copies the text in the `llm`
+format, ready to paste into a chat with an AI model.
 Changes are saved at once to `gigaam-config.json` beside the app (the command
 line reads the same file); **Сбросить настройки** goes back to the defaults. The window follows the system's light or dark theme.
 

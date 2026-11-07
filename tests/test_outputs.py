@@ -7,7 +7,7 @@ import pytest
 
 from gigaam_app.asr import Word
 from gigaam_app.engine import Segment, Transcript
-from gigaam_app.outputs import clock, json_text, markdown_escape, markdown_text, output_paths, plain_text, \
+from gigaam_app.outputs import clock, json_text, llm_text, markdown_escape, markdown_text, output_paths, plain_text, \
     srt_text, subtitle_cues, timestamped_text, write_outputs
 
 
@@ -85,6 +85,29 @@ def test_json_keeps_a_known_confidence_and_leaves_out_an_unknown_one():
     words = json.loads(json_text(transcript))["segments"][0]["words"]
     assert words[1]["confidence"] == 0.62
     assert "confidence" not in words[0]
+
+
+def test_llm_text_marks_doubtful_words_before_their_punctuation():
+    transcript = make_transcript()
+    transcript.segments[0].words[0].confidence = 0.66   # "Привет." -> "Привет[?66%]."
+    transcript.segments[0].words[2].confidence = 0.97   # at the threshold: not marked
+    transcript.segments[2].words[0].confidence = 0.5
+    text = llm_text(transcript)
+    lines = text.splitlines()
+    assert "слово[?66%]" in lines[0] and "GigaAM v3 RNNT" in lines[0]
+    assert lines[1] == "Отмечено слов: 2 из 5."
+    assert lines[3:] == ["Привет[?66%]. Как дела?", "Хорошо[?50%] спасибо."]
+    assert llm_text(transcript, doubt_below=0.6).splitlines()[3] == "Привет. Как дела?"
+
+
+def test_llm_file_uses_the_given_threshold(tmp_path):
+    transcript = make_transcript(tmp_path / "talk.mp3")
+    transcript.segments[0].words[1].confidence = 0.9
+    [path] = write_outputs(transcript, ["llm"], doubt_below=0.95)
+    assert path.name == "talk-transcript-llm.txt"
+    assert "Как[?90%] дела?" in path.read_text(encoding="utf-8")
+    [path] = write_outputs(transcript, ["llm"], doubt_below=0.8)
+    assert "Как дела?" in path.read_text(encoding="utf-8")
 
 
 def test_markdown_layout():

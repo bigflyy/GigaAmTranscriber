@@ -210,7 +210,7 @@ def main(argv=None):
             if not result.segments:
                 say(f"{path.name}: no speech found, nothing written")
                 continue
-            written = write_outputs(result, formats, args.out_dir)
+            written = write_outputs(result, formats, args.out_dir, doubt_below=settings.doubt_light)
             speed = result.audio_seconds / result.elapsed_seconds if result.elapsed_seconds else 0
             say(f"{path.name}: {result.audio_seconds:.0f} s of audio in {result.elapsed_seconds:.1f} s "
                 f"({speed:.0f}x realtime)")

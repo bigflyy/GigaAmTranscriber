@@ -18,7 +18,7 @@ import time
 from . import catalog, download, fix
 from .audio import SAMPLE_RATE, decode_range
 from .engine import Transcriber
-from .outputs import write_outputs
+from .outputs import LLM_DOUBT_BELOW, write_outputs
 
 # Audio decoded around a selection beyond its search windows, so the cut never ends the samples.
 REREAD_MARGIN = 0.05
@@ -108,7 +108,7 @@ class Worker(threading.Thread):
             return
         self.events.put(("download_done", model, folder))
 
-    def _transcribe(self, path, key, options, formats, language=None):
+    def _transcribe(self, path, key, options, formats, language=None, doubt_below=LLM_DOUBT_BELOW):
         self.cancel.clear()
         engine = self._ensure(key)
         engine.set_language(language)  # Whisper only; changing it needs no reload
@@ -122,7 +122,7 @@ class Worker(threading.Thread):
             on_segment=lambda segment: self.events.put(("segment", segment)),
             on_stats=lambda transcript: self.events.put(("stats", transcript)),
             should_cancel=self.cancel.is_set)
-        written = write_outputs(result, formats) if result.segments else []
+        written = write_outputs(result, formats, doubt_below=doubt_below) if result.segments else []
         self.events.put(("finished", result, written))
 
     def _engine_for(self, key, on_load=None):
