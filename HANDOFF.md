@@ -61,7 +61,11 @@ holds B9, F (Parakeet, Qwen3-ASR) and E. Owner's ideas: [docs/IDEAS.md](docs/IDE
 - Limit: 25 s selection (Whisper's 30 s window with context). Tests 400 passed, 2 skipped;
   window_check.py with --whisper: 47/47 (Windows, off screen; the clip is played muted).
   Screens in this session's scratchpad wcheck/shots (04a-04c).
-- Not tried by the owner yet. Not built into a frozen app yet (no release asked).
+- Owner tried it from source (dev venv, `-m gigaam_app`): "it does work"; asked how it works and why
+  readings differ (answered: another cut of the audio, CTC another decoder, Whisper another model).
+  Owner: "i cant click away from the selected part. i kinda want to?" Read as the fix dialog: a click
+  on its backdrop now closes it unless the text field was edited (window_check 49/49). Asked the
+  owner to confirm that reading; not answered yet. Not built into a frozen app (no release asked).
 - Next: owner tries it from source or a build; then plan 03 Stage B (RNNT beam N-best, doubtful
   words marked) or other work the owner picks.
 

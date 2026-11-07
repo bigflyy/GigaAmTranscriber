@@ -200,6 +200,13 @@ def fix_steps(js, control, item, short_audio, shoot):
           and all("Распознаю" not in text and "Загрузка" not in text for text in readings), readings)
     check("dialog shows the selected text", js("$('fix-text').value") == current, js("$('fix-text').value"))
     shoot("04b-fix-dialog")
+    # A click on the backdrop closes the dialog; with the text changed by hand it does not.
+    click_outside = "$('fix').dispatchEvent(new MouseEvent('click', {bubbles: true, clientX: 2, clientY: 2}))"
+    js("$('fix-text').value = 'check fix words'; " + click_outside)
+    check("click outside keeps an edited dialog", js("$('fix').open"))
+    js("$('fix-text').value = fix.current; " + click_outside)
+    check("click outside closes the dialog", not js("$('fix').open"))
+    js("$('fix').showModal()")
     js("$('fix-text').value = 'check fix words'; $('fix-save').click()")
     wait(lambda: not js("$('fix').open"), 10, "dialog closes")
     wait(lambda: "check fix words" in js("$('text').textContent"), 10, "fixed text on the page")

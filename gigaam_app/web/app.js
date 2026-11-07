@@ -848,6 +848,16 @@ $('fix-terms').addEventListener('keydown', (event) => { if (event.key === 'Enter
 $('fix-cancel').addEventListener('click', () => $('fix').close());
 $('fix-save').addEventListener('click', () => saveFix($('fix-text').value, null));
 $('fix').addEventListener('close', () => { stopPlaying(); fix.request = null; });
+// A click outside the dialog (on its backdrop) closes it, unless the text was changed by hand:
+// a stray click must not lose an edit (Esc and "Otmena" still close it).
+$('fix').addEventListener('click', (event) => {
+  if (event.target !== $('fix')) return;
+  const box = $('fix').getBoundingClientRect();
+  const outside = event.clientX < box.left || event.clientX > box.right
+    || event.clientY < box.top || event.clientY > box.bottom;
+  const edited = $('fix-text').value.trim().split(/\s+/).join(' ') !== fix.current;
+  if (outside && !edited) $('fix').close();
+});
 
 $('confirm-close-no').addEventListener('click', () => $('confirm-close').close());
 $('confirm-close-yes').addEventListener('click', () => call('close_anyway'));
