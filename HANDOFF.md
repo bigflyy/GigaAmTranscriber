@@ -1,7 +1,7 @@
 # Handoff: state and findings
 
 Last updated 2026-11-07 (session 13). Current plan: [docs/plans/04-whisper.md](docs/plans/04-whisper.md)
-(Whisper; Stages A, B and C1 done; models-1 uploaded; next C2: owner tries the build, then release v0.4.0). Plan 02 (window) has D for later; plan 01 still
+(Whisper; A, B, C1 done; v0.4.0 release assets built and checked in build/v0.4.0/release; waiting for the owner's OK to push, tag and publish). Plan 02 (window) has D for later; plan 01 still
 holds B9, F (Parakeet, Qwen3-ASR) and E. Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
 
 ## Session 13 (2026-11-07): builds with Whisper (C1), models-1 release, notes draft (C2 prep)
@@ -24,12 +24,28 @@ holds B9, F (Parakeet, Qwen3-ASR) and E. Owner's ideas: [docs/IDEAS.md](docs/IDE
   trickled at about 30 KB/s (under the 30 s read timeout, so no retry), then 2-4 MB/s. HF took
   3.5 min in session 12. Watch the speed when the owner tries it; if GitHub stays slow, an
   idea is to switch address when a download runs far below the other's speed.
-- RELEASE_NOTES.md now holds the v0.4.0 draft (960c53b); SIZE-WINDOWS and SIZE-LINUX are
-  placeholders until the release build. README Downloads still names v0.3.0: update at release.
-- Next (C2): owner tries the build; then bump __version__ to 0.4.0, release builds with zips
-  (Windows first, then Linux with --release build/<out>/release), fill sizes, README downloads,
-  push main (owner: push at the Whisper release), tag v0.4.0, GitHub release from RELEASE_NOTES.md.
-  Disk: 23.9 GB free before this session's builds; release zips add about 2 GB.
+- Owner tried build/whisper-frozen: Whisper download from models-1 "like 5 mins", "it
+  worked"; release notes "fine".
+- Owner's request: "the ui must show with that model the transcript was made" (605c902):
+  "Модель: <title>" line under the file status (running, done, cancelled) and the key in the
+  list line ("0:09 - готово, Whisper"); kept from the transcript, so right after a settings
+  change and for history files. window_check.py: 38 checks.
+- window_check once failed "language saved" with "[WinError 5] Access is denied" on replacing
+  settings.json (the check reads the file every 0.1 s); rerun passed. Fix (5e77302):
+  paths.replace_file retries PermissionError 10 x 0.1 s for settings, history and transcripts.
+- Owner asked whether Whisper gains from longer fragments or beam search: answered (30 s fixed
+  window; long-form carries the previous text and loops; beam only tried on whole files). Offered,
+  not asked for yet: measure beam 5 on our fragments, and a user term list as prompt.
+- Old local release copies build/release (v0.3.0) and build/release-linux deleted (owner OK'd).
+- Version 0.4.0 (d41aa27). Release assets in `C:\MyProjects\GigaAmTranscriber\build\v0.4.0\release`
+  (the owner's app ran from build/whisper-frozen): Windows zip 933.5 MiB (978,793,324 bytes),
+  Linux tar.gz 842.9 MiB, licences zip (windows/ + linux/), FFmpeg source, SHA256SUMS
+  (`sha256sum -c` OK; archive file counts match the folders). All smoke tests passed, including
+  Whisper (Windows Vulkan 2.6 s and CPU 17.9 s; Linux CPU 19.4 s). Sizes filled in
+  RELEASE_NOTES.md and README.
+- Left for C2: owner's OK, then push main, tag v0.4.0, GitHub release "GigaAM Transcriber v0.4.0"
+  from RELEASE_NOTES.md with the five assets. Docker images: v0.3.0 had none (owner's choice);
+  ask again only if the owner wants them.
 
 ## Session 12 (2026-11-07): Whisper download, Settings, CLI, checks, docs (B2-B5)
 

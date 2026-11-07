@@ -45,7 +45,7 @@ and its text are the same as in v0.3.0.
 
 ## Windows
 
-`GigaAmTranscriber-v0.4.0-windows-x64.zip` (about SIZE-WINDOWS MB): unzip it anywhere and
+`GigaAmTranscriber-v0.4.0-windows-x64.zip` (about 930 MB): unzip it anywhere and
 run `GigaAmTranscriber.exe`; `gigaam-cli.exe` beside it is the command line. Both
 GigaAM models and FFmpeg are inside; GigaAM uses any DirectX 12 GPU through DirectML,
 Whisper any Vulkan GPU, both with the CPU as fallback. The EXEs are not code-signed,
@@ -53,7 +53,7 @@ so Windows SmartScreen may ask once.
 
 ## Linux
 
-`GigaAmTranscriber-v0.4.0-linux-x64.tar.gz` (about SIZE-LINUX MB): the window and
+`GigaAmTranscriber-v0.4.0-linux-x64.tar.gz` (about 840 MB): the window and
 `gigaam-cli`, both GigaAM models inside. GigaAM runs on the CPU. Whisper runs on the
 CPU too; the Linux app also carries whisper.cpp's Vulkan backend, but it has not been
 tried on a Linux GPU yet. Unpack it and run `./GigaAmTranscriber/GigaAmTranscriber`.
