@@ -28,7 +28,7 @@ Findings behind it: HANDOFF.md, session 10.
 
 ### Stage B: Whisper in the app
 
-- [ ] **B0** whisper.cpp build for shipping: GGML_NATIVE off with CPU variants loaded at run time, Vulkan backend, Windows (MSVC) and Linux (WSL); a tool script like build_windows.py; check the DLLs load from the frozen app
+- [x] **B0** whisper.cpp build for shipping: GGML_NATIVE off with CPU variants loaded at run time, Vulkan backend, Windows (MSVC) and Linux (WSL); a tool script like build_windows.py; check the DLLs load from the frozen app
 - [x] **B1** Engine: whisper.dll through ctypes (no Python binding package), the app's VAD chunks fed to whisper_full one by one, greedy, token times to words; Whisper model behind the same Transcriber interface (VAD chunks in, segments with word times out); language: automatic or chosen
 - [ ] **B2** Catalog entry and download (files, sizes, SHA-256 in code; a release asset or the model's own hosting, owner decides)
 - [ ] **B3** Model switch in Settings and `--model` in the CLI; the download prompt as for any extra model; language choice in Settings and `--language`

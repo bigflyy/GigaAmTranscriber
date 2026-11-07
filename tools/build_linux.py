@@ -14,11 +14,13 @@ Debian 13, Fedora 40 and later), GTK 3, WebKitGTK 4.1 with its GObject introspec
 files, and FFmpeg. Recognition runs on the CPU.
 
 Steps:
-1. check the environment, the exported models (SHA-256 against model.json) and PyGObject;
+1. check the environment, the exported models (SHA-256 against model.json), the whisper.cpp
+   libraries from tools/build_whisper_cpp.py (SHA-256 against build-info.json) and PyGObject;
 2. PyInstaller onedir build from packaging/GigaAmTranscriber-linux.spec;
-3. check that every bundled library resolves, copy models/, the example settings,
-   README.txt and licences beside the programs;
-4. smoke test the CLI on a silent file (and on --speech FILE if given), and open the window
+3. copy models/, the example settings, README.txt and licences beside the programs and the
+   whisper.cpp libraries into _internal/whisper_cpp/, then check that every bundled library resolves;
+4. smoke test the CLI on a silent file (and on --speech FILE if given), check that it loads
+   whisper.cpp (gigaam-cli --devices), and open the window
    under Xvfb (with --speech it must also write the transcript);
 5. pack <release>/GigaAmTranscriber-v<version>-linux-x64.tar.gz and add it to SHA256SUMS.txt;
    put the licences under linux/ in <release>/THIRD_PARTY_LICENSES.zip, beside the windows/
@@ -45,7 +47,9 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tools"))
 from gigaam_app import __version__  # noqa: E402
 from build_windows import (APP_NAME, BUNDLED_MODELS, REPO_LICENCES, VAD_MODEL, check_models,  # noqa: E402
-                           check_no_torch, distribution_licences, folder_size, sha256)
+                           check_no_torch, check_whisper_cpp, distribution_licences, folder_size, sha256)
+
+WHISPER_CPP = ROOT / "third_party" / "whisper.cpp" / "linux-x64"  # tools/build_whisper_cpp.py
 
 SYSTEM_GI = Path("/usr/lib/python3/dist-packages/gi")
 TITLE_START = "GigaAM - "
@@ -118,6 +122,11 @@ def copy_payload(app, models_root):
     readme = (ROOT / "packaging" / "README-linux.txt").read_text(encoding="utf-8").replace("{version}", __version__)
     (app / "README.txt").write_text(readme, encoding="utf-8", newline="\n")
     shutil.copy2(ROOT / "THIRD_PARTY_NOTICES.md", app / "THIRD_PARTY_NOTICES.md")
+    # whisper_cpp.library_dir() looks here; the libraries find each other through RPATH $ORIGIN.
+    libraries = app / "_internal" / "whisper_cpp"
+    libraries.mkdir()
+    for path in sorted(WHISPER_CPP.glob("lib*.so*")):
+        shutil.copy2(path, libraries / path.name)
 
 
 def owning_packages(app):
@@ -157,6 +166,7 @@ def collect_licences(app, gi_dir):
             put(source, Path(package) / relative)
     put(REPO_LICENCES / "proxy_tools-LICENSE.txt", "proxy_tools/LICENSE.txt")
     put(Path(sysconfig.get_path("stdlib")) / "LICENSE.txt", "python/LICENSE.txt")
+    put(WHISPER_CPP / "LICENSE.txt", "whisper.cpp/LICENSE.txt")  # whisper.cpp and ggml: MIT
     # PyGObject (LGPL-2.1-or-later), copied from the system package with its copyright file.
     gi_copyright = Path("/usr/share/doc/python3-gi/copyright")
     if gi_dir.resolve() == SYSTEM_GI and not gi_copyright.is_file():
@@ -194,6 +204,10 @@ def smoke_cli(app, speech):
         version = subprocess.run([cli, "--version"], capture_output=True, text=True, env=clean_env(), cwd=temporary)
         if version.returncode != 0 or __version__ not in version.stdout:
             fail(f"gigaam-cli --version failed: {version.stdout} {version.stderr}")
+        devices = subprocess.run([cli, "--devices"], capture_output=True, text=True, env=clean_env(), cwd=temporary)
+        if devices.returncode != 0 or "backends" not in devices.stdout or "CPU" not in devices.stdout:
+            fail(f"gigaam-cli --devices failed (whisper.cpp not loaded):\n{devices.stdout}\n{devices.stderr}")
+        print("smoke test devices:\n  " + devices.stdout.strip().replace("\n", "\n  "), flush=True)
         started = time.perf_counter()
         run = subprocess.run([cli, str(audio), "--device", "cpu"], capture_output=True, text=True,
                              env=clean_env(), cwd=temporary)
@@ -371,6 +385,7 @@ def main():
 
     check_environment(args.gi)
     check_models(args.models)
+    check_whisper_cpp(WHISPER_CPP)
     out = args.out.expanduser().resolve()
     dist = out / "app"
     if dist.exists():
@@ -378,9 +393,9 @@ def main():
     started = time.perf_counter()
     app = run_pyinstaller(out / "pyinstaller", dist, args.gi)
     check_no_torch(app)
-    check_libraries(app)
     code_size = folder_size(app)
     copy_payload(app, args.models)
+    check_libraries(app)  # after the copy, so the whisper.cpp libraries are checked too
     collect_licences(app, args.gi)
     print(f"App folder {app}: {folder_size(app) / 1024 ** 2:.0f} MiB "
           f"(program {code_size / 1024 ** 2:.0f} MiB), built in {time.perf_counter() - started:.0f} s", flush=True)

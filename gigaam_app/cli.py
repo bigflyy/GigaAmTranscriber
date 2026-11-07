@@ -1,7 +1,8 @@
 """Command line: gigaam-cli FILE [FILE ...]. The model loads once for all files.
 
 gigaam-cli --list-models shows every model and whether it is installed;
-gigaam-cli --download MODEL fetches an extra model (resumes if interrupted).
+gigaam-cli --download MODEL fetches an extra model (resumes if interrupted);
+gigaam-cli --devices shows the GPUs and CPU each recognition engine can use.
 """
 
 import argparse
@@ -31,6 +32,8 @@ def build_parser():
     parser.add_argument("--config", type=Path, help="settings file (default: gigaam-config.json beside the app)")
     parser.add_argument("--quiet", action="store_true", help="print only errors")
     parser.add_argument("--list-models", action="store_true", help="show the models and where they are installed")
+    parser.add_argument("--devices", action="store_true",
+                        help="show the GPUs and CPU that GigaAM (ONNX Runtime) and Whisper (whisper.cpp) can use")
     parser.add_argument("--download", metavar="MODEL", choices=tuple(MODELS),
                         help="download an extra model, then transcribe FILES if any are given")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
@@ -74,6 +77,32 @@ def list_models():
     print(f"\nBundled models: {models_dir()}\nDownloaded models: {downloads_dir()}")
 
 
+def list_devices():
+    """Print what each engine can run on; exit code 1 if whisper.cpp cannot be loaded."""
+    import onnxruntime
+    from .asr import GPU_PROVIDERS, PROVIDER_NAMES
+    from . import whisper_cpp
+    providers = [name for name in onnxruntime.get_available_providers()
+                 if name in GPU_PROVIDERS or name == "CPUExecutionProvider"]
+    print("GigaAM (ONNX Runtime): " + ", ".join(PROVIDER_NAMES.get(name, name) for name in providers))
+    try:
+        library = whisper_cpp.Library.get()
+    except (OSError, RuntimeError) as error:
+        print(f"Whisper (whisper.cpp): cannot be loaded: {error}")
+        return 1
+    print(f"Whisper (whisper.cpp {library.version}): backends {', '.join(library.backends())}")
+    gpus = library.gpus()
+    chosen = whisper_cpp.preferred_gpu(gpus)
+    for index, (_, _, description, memory) in enumerate(gpus):
+        print(f"  GPU {index}: {description}, {memory / 1024 ** 3:.1f} GB" + (" (used)" if index == chosen else ""))
+    if not gpus:
+        print("  no Vulkan GPU found: Whisper runs on the CPU")
+    for kind, _, description, _ in library.devices():
+        if kind == whisper_cpp.DEVICE_CPU:
+            print(f"  CPU: {description.strip()}")
+    return 0
+
+
 def download_model(key, quiet):
     """Download one catalog model with a progress line; returns an exit code."""
     info = catalog.find(key)
@@ -115,6 +144,8 @@ def main(argv=None):
     if args.list_models:
         list_models()
         return 0
+    if args.devices:
+        return list_devices()
     if args.download:
         code = download_model(args.download, args.quiet)
         if code or not args.files:

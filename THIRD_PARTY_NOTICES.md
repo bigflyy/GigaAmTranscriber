@@ -17,6 +17,11 @@ download (one folder per app, `windows/` and `linux/`), and at the sources below
   `onnxruntime-directml` package, under the
   [Microsoft Software License Terms](https://www.nuget.org/packages/Microsoft.AI.DirectML/1.15.4/License)
   (`licenses/directml/LICENSE.txt`). Windows only.
+- **whisper.cpp 1.9.5 with ggml:** [ggml-org/whisper.cpp](https://github.com/ggml-org/whisper.cpp), MIT
+  (`licenses/whisper.cpp/LICENSE.txt`); runs the Whisper model. The app ships libraries built from
+  the unmodified [v1.9.5 source](https://github.com/ggml-org/whisper.cpp/archive/refs/tags/v1.9.5.tar.gz)
+  by `tools/build_whisper_cpp.py` (in `_internal/whisper_cpp`). The Vulkan loader comes with the
+  GPU driver and is not bundled.
 - **NumPy:** [numpy.org](https://numpy.org/), BSD-3-Clause, with the licenses of the libraries it bundles.
 - **Python:** [Python licensing](https://docs.python.org/3/license.html). Windows: libraries that
   Python loads (zlib, OpenSSL, libffi, xz, bzip2 and others) are listed with their licenses under

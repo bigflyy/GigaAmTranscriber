@@ -1,16 +1,20 @@
 """Build the Windows release: one folder with both EXEs, the models, ffmpeg.exe and licences.
 
 Run from the repository root with a Python environment that has only the app
-dependencies (requirements.txt) and PyInstaller (requirements-build.txt):
+dependencies (requirements.txt) and PyInstaller (requirements-build.txt), after
+tools/build_whisper_cpp.py has built whisper.cpp into third_party/whisper.cpp/windows-x64:
 
     python tools/build_windows.py
 
 Steps:
-1. check the environment, the exported models (SHA-256 against model.json) and ffmpeg;
+1. check the environment, the exported models (SHA-256 against model.json), the
+   whisper.cpp libraries (SHA-256 against build-info.json) and ffmpeg;
 2. PyInstaller onedir build from packaging/GigaAmTranscriber.spec;
-3. copy models/, ffmpeg.exe, the example settings, README.txt and licences beside the EXEs;
-4. smoke test the console EXE on a silent file with ffmpeg removed from PATH, and
-   start the windowed EXE off screen (tools/gui_smoke_test.py);
+3. copy models/, ffmpeg.exe, the example settings, README.txt and licences beside the EXEs,
+   and the whisper.cpp libraries into _internal/whisper_cpp/;
+4. smoke test the console EXE on a silent file with ffmpeg removed from PATH, check that
+   it loads whisper.cpp (gigaam-cli --devices), and start the windowed EXE off screen
+   (tools/gui_smoke_test.py);
 5. pack the release assets into build/release/:
        GigaAmTranscriber-v<version>-windows-x64.zip   the app folder
        THIRD_PARTY_LICENSES.zip                      the licences folder alone, under windows/
@@ -45,6 +49,7 @@ VAD_MODEL = "silero_vad_scan.onnx"
 FFMPEG_BUILD = "8.0.1-full_build-www.gyan.dev"
 FFMPEG_SOURCE = ROOT / "third_party" / "ffmpeg" / "FFmpeg-8.0.1-source.zip"
 REPO_LICENCES = ROOT / "packaging" / "licenses"
+WHISPER_CPP = ROOT / "third_party" / "whisper.cpp" / "windows-x64"  # tools/build_whisper_cpp.py
 
 
 def fail(message):
@@ -91,6 +96,21 @@ def check_models(models_root):
                 fail(f"{path} is missing or does not match model.json")
     if not (models_root / VAD_MODEL).is_file():
         fail(f"{VAD_MODEL} not found; run tools/make_silero_scan.py first")
+
+
+def check_whisper_cpp(folder=WHISPER_CPP):
+    """The whisper.cpp build must exist, match its build record and the version the app expects."""
+    from gigaam_app.whisper_cpp import WHISPER_CPP_VERSION
+    record_path = folder / "build-info.json"
+    if not record_path.is_file():
+        fail(f"{record_path} not found; run tools/build_whisper_cpp.py first")
+    record = json.loads(record_path.read_text(encoding="utf-8"))
+    if record["version"] != WHISPER_CPP_VERSION:
+        fail(f"whisper.cpp {record['version']} in {folder}, the app expects {WHISPER_CPP_VERSION}")
+    for name, entry in record["files"].items():
+        path = folder / name
+        if not path.is_file() or sha256(path) != entry["sha256"]:
+            fail(f"{path} is missing or does not match build-info.json")
 
 
 def find_ffmpeg(explicit):
@@ -154,6 +174,12 @@ def copy_payload(app, models_root, ffmpeg):
     # Windows Notepad shows UTF-8 with a byte order mark reliably on every version.
     (app / "README.txt").write_text(readme, encoding="utf-8-sig", newline="\r\n")
     shutil.copy2(ROOT / "THIRD_PARTY_NOTICES.md", app / "THIRD_PARTY_NOTICES.md")
+    # whisper_cpp.library_dir() looks here. Copied, not given to PyInstaller, so its DLL
+    # analysis does not move them; ggml loads the backends from this one folder.
+    libraries = app / "_internal" / "whisper_cpp"
+    libraries.mkdir()
+    for path in sorted(WHISPER_CPP.glob("*.dll")):
+        shutil.copy2(path, libraries / path.name)
 
 
 def distribution_licences(name):
@@ -208,6 +234,7 @@ def collect_licences(app, ffmpeg_notices):
     put(find_python_licence(), "python/LICENSE.txt")
     put(ffmpeg_notices / "LICENSE", "ffmpeg/LICENSE.txt")
     put(ffmpeg_notices / "README.txt", "ffmpeg/README.txt")
+    put(WHISPER_CPP / "LICENSE.txt", "whisper.cpp/LICENSE.txt")  # whisper.cpp and ggml: MIT
     conda_licences(app, target)
 
 
@@ -263,6 +290,11 @@ def smoke_test(app):
         version = subprocess.run([cli, "--version"], capture_output=True, text=True, env=env, cwd=temporary)
         if version.returncode != 0 or __version__ not in version.stdout:
             fail(f"gigaam-cli --version failed: {version.stdout} {version.stderr}")
+        devices = subprocess.run([cli, "--devices"], capture_output=True, text=True, encoding="utf-8",
+                                 env=env, cwd=temporary)
+        if devices.returncode != 0 or "backends" not in devices.stdout or "CPU" not in devices.stdout:
+            fail(f"gigaam-cli --devices failed (whisper.cpp not loaded):\n{devices.stdout}\n{devices.stderr}")
+        print("smoke test devices:\n  " + devices.stdout.strip().replace("\n", "\n  "), flush=True)
         for device in ("cpu", "auto"):
             started = time.perf_counter()
             run = subprocess.run([cli, str(audio), "--device", device], capture_output=True, text=True,
@@ -339,6 +371,7 @@ def main():
 
     check_environment()
     check_models(args.models)
+    check_whisper_cpp()
     ffmpeg, ffmpeg_notices = find_ffmpeg(args.ffmpeg)
     out = args.out.resolve()
     dist = out / "app"
