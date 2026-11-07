@@ -79,6 +79,14 @@ def test_json_has_words_and_full_text():
 DAY = datetime.date(2026, 11, 6)
 
 
+def test_json_keeps_a_known_confidence_and_leaves_out_an_unknown_one():
+    transcript = make_transcript()
+    transcript.segments[0].words[1].confidence = 0.62
+    words = json.loads(json_text(transcript))["segments"][0]["words"]
+    assert words[1]["confidence"] == 0.62
+    assert "confidence" not in words[0]
+
+
 def test_markdown_layout():
     """Title, info line, then one section per minute or long pause (owner's choice, 2026-11-06)."""
     assert markdown_text(make_transcript(), today=DAY) == (

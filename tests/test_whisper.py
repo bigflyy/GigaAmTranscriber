@@ -19,7 +19,7 @@ import pytest
 
 from gigaam_app import engine, whisper_cpp
 from gigaam_app.whisper_cpp import Token
-from gigaam_app.whisper_model import WhisperModel, is_whisper_folder, words_from_tokens
+from gigaam_app.whisper_model import WhisperModel, is_whisper_folder, whisper_confidence, words_from_tokens
 
 
 def tokens(*items):
@@ -56,6 +56,25 @@ def test_times_stay_inside_the_chunk_and_in_order():
     assert words[0].start == 1.0                      # negative token time clamped to the chunk start
     assert all(w.end >= w.start for w in words)       # end before start is lifted to the start
     assert words[-1].end == 4.0                       # past the end of the chunk clamped to it
+
+
+def test_word_confidence_is_the_lowest_letter_token_and_skips_punctuation():
+    cyrillic = "да".encode("utf-8")
+    items = [Token(b" " + cyrillic[:1], 0.0, 0.1, 0.7), Token(cyrillic[1:], 0.1, 0.2, 0.9),
+             Token(b",", 0.2, 0.2, 0.1), Token(b" no", 0.3, 0.5, 0.95)]
+    words = words_from_tokens(items, 0.0)
+    # The half of a Cyrillic letter counts; the comma's low probability does not.
+    assert [(w.text, w.confidence) for w in words] == [("да,", round(whisper_confidence(0.7), 3)),
+                                                       ("no", round(whisper_confidence(0.95), 3))]
+
+
+def test_whisper_confidence_puts_the_two_marks_where_gigaam_has_them():
+    assert whisper_confidence(0.5) == pytest.approx(0.80)
+    assert whisper_confidence(0.7) == pytest.approx(0.97)
+    assert whisper_confidence(0.0) == 0.0 and whisper_confidence(1.0) == pytest.approx(1.0)
+    assert whisper_confidence(1.2) == pytest.approx(1.0) and whisper_confidence(-1) == 0.0
+    values = [whisper_confidence(p / 20) for p in range(21)]
+    assert values == sorted(values)
 
 
 def test_no_tokens_no_words():

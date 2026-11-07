@@ -18,7 +18,7 @@ from test_controller import FakeDesktop, FakeWorker, finish, segment  # noqa: E4
 
 def transcript(source, cancelled=False):
     return Transcript(source=str(source), model="RNNT", device="CPU", audio_seconds=61.0, speech_seconds=40.0,
-                      segments=[Segment(1.0, 2.5, "Привет.", [Word(1.0, 2.5, "Привет.")])], cancelled=cancelled)
+                      segments=[Segment(1.0, 2.5, "Привет.", [Word(1.0, 2.5, "Привет.", 0.75)])], cancelled=cancelled)
 
 
 def test_entries_round_trip_and_keep_their_order(tmp_path):
@@ -32,7 +32,7 @@ def test_entries_round_trip_and_keep_their_order(tmp_path):
     loaded = history.load()
     assert [entry.key for entry in loaded] == ["b", "a"]
     assert loaded[1] == first
-    assert loaded[1].transcript.segments[0].words[0] == Word(1.0, 2.5, "Привет.")
+    assert loaded[1].transcript.segments[0].words[0] == Word(1.0, 2.5, "Привет.", 0.75)
     history.delete("b")
     assert [entry.key for entry in history.load()] == ["a"]
 

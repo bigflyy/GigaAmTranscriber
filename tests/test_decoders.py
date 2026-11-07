@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from gigaam_app.asr import AsrModel, RnntHead, Word, ctc_decode
+from gigaam_app.asr import AsrModel, RnntHead, Word, ctc_decode, letter_groups, letter_key, token_confidence
 
 # ---------------------------------------------------------------- CTC
 
@@ -137,3 +137,59 @@ def test_words_from_character_vocabulary():
 
 def test_words_empty():
     assert bare_model(["▁a"]).words([], 3.0) == []
+
+
+# ---------------------------------------------------------------- word confidence (plan 03 B2)
+
+
+def test_letter_groups_join_case_and_punctuation_variants():
+    vocab = ["<unk>", ".", ",", "▁", "▁вы", "▁Вы", "▁вы,", "ть", "blank"]
+    groups = letter_groups(vocab, blank_id=8)
+    assert letter_key("▁Вы,") == letter_key("▁вы") == "▁вы"
+    assert groups[1] is None and groups[2] is None and groups[3] is None and groups[8] is None
+    assert sorted(groups[5].tolist()) == [4, 5, 6]
+    assert groups[7].tolist() == [7]
+
+
+def test_token_confidence_leaves_out_blank_and_adds_up_the_group():
+    vocab = ["▁да", "▁Да", "▁нет", "."]
+    blank = 4
+    groups = letter_groups(vocab + ["<blank>"], blank)
+    probabilities = np.array([0.2, 0.2, 0.1, 0.0, 0.5])
+    # (0.2 + 0.2) / (1 - 0.5): the case variants count together, blank does not count.
+    assert token_confidence(probabilities, 1, groups, blank) == pytest.approx(0.8)
+    assert token_confidence(probabilities, 3, groups, blank) is None
+
+
+def test_ctc_with_groups_gives_each_token_its_confidence():
+    vocab = ["▁да", "▁нет", "."]
+    blank = 3
+    groups = letter_groups(vocab + ["<blank>"], blank)
+    probabilities = np.array([[0.9, 0.05, 0.0, 0.05],
+                              [0.0, 0.0, 0.0, 1.0],
+                              [0.1, 0.6, 0.0, 0.3],
+                              [0.0, 0.0, 0.8, 0.2]])
+    tokens = ctc_decode(np.log(probabilities + 1e-12), blank, groups)
+    assert [(t, f) for t, f, _ in tokens] == [(0, 0), (1, 2), (2, 3)]
+    assert tokens[0][2] == pytest.approx(0.9 / 0.95)
+    assert tokens[1][2] == pytest.approx(0.6 / 0.7)
+    assert tokens[2][2] is None
+
+
+@pytest.mark.parametrize("seed", range(4))
+def test_rnnt_with_groups_keeps_the_same_tokens_and_gives_the_softmax(tmp_path, seed):
+    path = write_head(tmp_path / "head.npz", seed)
+    encoded = np.random.default_rng(200 + seed).normal(0, 1, (30, ENC_DIM)).astype(np.float32)
+    head = RnntHead(path, blank_id=VOCAB, max_symbols_per_frame=3)
+    groups = [np.array([token]) for token in range(VOCAB)] + [None]
+    with_confidence = head.decode(encoded, groups)
+    assert [(t, f) for t, f, _ in with_confidence] == head.decode(encoded)
+    assert all(0.0 < p <= 1.0 for _, _, p in with_confidence)
+
+
+def test_word_confidence_is_the_lowest_of_its_letter_tokens():
+    model = bare_model(["▁при", "вет", ",", "▁мир"])
+    tokens = [(0, 1, 0.9), (1, 2, 0.6), (2, 3, None), (3, 5, 0.99)]
+    words = model.words(tokens, offset_seconds=0.0)
+    assert [(w.text, w.confidence) for w in words] == [("привет,", 0.6), ("мир", 0.99)]
+    assert bare_model(["▁a"]).words([(0, 0)], 0.0)[0].confidence is None

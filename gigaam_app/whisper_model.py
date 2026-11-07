@@ -21,6 +21,23 @@ from . import whisper_cpp
 
 AUTO_LANGUAGE = "auto"
 
+# Whisper's token probability -> the confidence scale of the GigaAM models (plan 03 B2b).
+# Whisper's raw probability also carries its doubt about case and punctuation, which it
+# writes in the same token: on a 455 s lecture 21 % of its words were below 0.97 (RNNT:
+# 3 %), short words like "а", "и", "это" among them. Its wrong words still came lowest
+# (Baylor 0.26, DeepSync 0.25, LIND-4 0.33). So 0.5 counts as 0.80 and 0.7 as 0.97, the
+# window's two marks, which gives about as many marked words as RNNT on that file.
+WHISPER_SCALE = ((0.0, 0.0), (0.5, 0.80), (0.7, 0.97), (1.0, 1.0))
+
+
+def whisper_confidence(probability):
+    """A Whisper token probability on the GigaAM confidence scale (WHISPER_SCALE)."""
+    probability = min(1.0, max(0.0, float(probability)))
+    for (low, low_value), (high, high_value) in zip(WHISPER_SCALE, WHISPER_SCALE[1:]):
+        if probability <= high:
+            return low_value + (probability - low) * (high_value - low_value) / (high - low)
+    return 1.0
+
 
 def is_whisper_folder(folder):
     """True if the model folder holds a Whisper model (model.json type 'whisper')."""
@@ -29,6 +46,13 @@ def is_whisper_folder(folder):
     except (OSError, ValueError):
         return False
     return meta.get("type") == "whisper"
+
+
+def _has_letters(data):
+    """True if token bytes hold a letter or digit. A part of a character split between
+    two tokens counts as a letter: that is how Cyrillic letters are often cut."""
+    text = data.decode("utf-8", "ignore")
+    return any(ch.isalnum() for ch in text) or len(text.encode("utf-8")) < len(data)
 
 
 def words_from_tokens(tokens, offset_seconds, duration=None):
@@ -40,9 +64,12 @@ def words_from_tokens(tokens, offset_seconds, duration=None):
     Cyrillic). A word runs from its first token's start to its last token's end.
     Times are kept inside the chunk (0..duration) and in order: whisper.cpp's token
     times come from a heuristic and can step back a little or run past the end.
+    A word's confidence is the lowest probability among its tokens that hold letters
+    (punctuation tokens are left out, as for GigaAM in asr.letter_groups), put on the
+    GigaAM scale by whisper_confidence.
     """
     words = []
-    state = {"data": b"", "start": None, "end": None}
+    state = {"data": b"", "start": None, "end": None, "lowest": None}
 
     def flush():
         text = state["data"].decode("utf-8", "replace").strip()
@@ -53,8 +80,10 @@ def words_from_tokens(tokens, offset_seconds, duration=None):
             if words:
                 start = max(start, words[-1].start - offset_seconds)
                 end = max(end, start)
-            words.append(Word(round(offset_seconds + start, 3), round(offset_seconds + end, 3), text))
-        state.update(data=b"", start=None, end=None)
+            lowest = state["lowest"]
+            words.append(Word(round(offset_seconds + start, 3), round(offset_seconds + end, 3), text,
+                              None if lowest is None else round(whisper_confidence(lowest), 3)))
+        state.update(data=b"", start=None, end=None, lowest=None)
 
     for token in tokens:
         if token.data.startswith(b" ") and state["data"].strip():
@@ -63,6 +92,9 @@ def words_from_tokens(tokens, offset_seconds, duration=None):
             if state["start"] is None:
                 state["start"] = max(0.0, token.start)
             state["end"] = max(0.0, token.end)
+        probability = getattr(token, "probability", None)
+        if probability is not None and _has_letters(token.data):
+            state["lowest"] = probability if state["lowest"] is None else min(state["lowest"], probability)
         state["data"] += token.data
     flush()
     return words
