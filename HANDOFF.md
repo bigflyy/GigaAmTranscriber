@@ -1,10 +1,10 @@
 # Handoff: state and findings
 
 Last updated 2026-11-07 (session 13). Current plan: [docs/plans/04-whisper.md](docs/plans/04-whisper.md)
-(Whisper; A, B, C1 done; v0.4.0 release assets built and checked in build/v0.4.0/release; waiting for the owner's OK to push, tag and publish). Plan 02 (window) has D for later; plan 01 still
+(Whisper; done: v0.4.0 published 2026-11-07). Owner's order after Whisper: plan 03 Stage A (docs/plans/03-fix-a-part.md). Plan 02 (window) has D for later; plan 01 still
 holds B9, F (Parakeet, Qwen3-ASR) and E. Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
 
-## Session 13 (2026-11-07): builds with Whisper (C1), models-1 release, notes draft (C2 prep)
+## Session 13 (2026-11-07): builds with Whisper (C1), release v0.4.0 (C2), plan 04 done
 
 - C1 (05f67ae): build_windows.py and build_linux.py transcribe a short Russian file with
   Whisper through the built CLI: a downloaded model folder is linked (hard link, else symlink,
@@ -43,9 +43,12 @@ holds B9, F (Parakeet, Qwen3-ASR) and E. Owner's ideas: [docs/IDEAS.md](docs/IDE
   (`sha256sum -c` OK; archive file counts match the folders). All smoke tests passed, including
   Whisper (Windows Vulkan 2.6 s and CPU 17.9 s; Linux CPU 19.4 s). Sizes filled in
   RELEASE_NOTES.md and README.
-- Left for C2: owner's OK, then push main, tag v0.4.0, GitHub release "GigaAM Transcriber v0.4.0"
-  from RELEASE_NOTES.md with the five assets. Docker images: v0.3.0 had none (owner's choice);
-  ask again only if the owner wants them.
+- Released (owner: "Publish now"): main pushed (77323f7..2ee04ed, no attribution lines), tag
+  v0.4.0, https://github.com/bigflyy/GigaAmTranscriber/releases/tag/v0.4.0 is Latest; GitHub's
+  digests of the five assets equal SHA256SUMS. No Docker images (as for v0.3.0; DOCKER.md keeps
+  the v0.2.0 tags). Plan 04 finished; the Whisper idea moved to Finished in IDEAS.md.
+- Next: plan 03 Stage A (owner's order after Whisper; its questions were not asked yet). The
+  owner's app may still run from build/whisper-frozen or build/try: build elsewhere.
 
 ## Session 12 (2026-11-07): Whisper download, Settings, CLI, checks, docs (B2-B5)
 

@@ -43,5 +43,5 @@ pinned commit) as the backup download; push the commits when Whisper is released
 ### Stage C: Build and release
 
 - [x] **C1** Windows and Linux builds with Whisper; smoke tests transcribe a short file with it
-- [ ] **C2** Release notes, the owner tries the build, release; before it, create the models-1 release and
+- [x] **C2** Release notes, the owner tries the build, release; before it, create the models-1 release and
   upload the q5_0 file as its asset (until then the app downloads from Hugging Face), then push
