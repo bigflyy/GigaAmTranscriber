@@ -62,6 +62,11 @@ holds B9, F (Parakeet, Qwen3-ASR) and E. Owner's ideas: [docs/IDEAS.md](docs/IDE
   answered (Whisper beam 5 tried on whole files in session 14, no gain; terms and the
   three-model re-read built; RNNT N-best is plan 03 B1, not tried; Whisper temperature
   sampling on a part not tried; other models plan 03 C1 / plan 01 F).
+- Owner tried the player: Space did not work with the seek bar focused (now it does; the bar's
+  buttons and speed list give the focus back after a mouse click), and "there should be volume
+  too": speaker button (mute) and a volume slider, the level kept as Settings.player_volume.
+  window_check 75/75. LLM copy: "it is fine i guess". Owner asked which ideas are worth it:
+  answered in chat (recommendation: suggestions for doubtful words from Whisper and CTC).
 - Next: owner tries the player and the LLM copy from source; then plan 03 B1 (RNNT N-best,
   maybe Whisper beam / temperature on the selected part only) or other work.
 

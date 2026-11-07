@@ -381,7 +381,7 @@ class Controller:
         return {"model": s.model, "language": s.language, "device": s.device, "cpu_threads": s.cpu_threads,
                 "outputs": list(s.outputs), "include_timestamps": s.include_timestamps,
                 "terms": s.terms, "doubt_marks": s.doubt_marks, "doubt_style": s.doubt_style,
-                "doubt_light": s.doubt_light, "doubt_strong": s.doubt_strong}
+                "doubt_light": s.doubt_light, "doubt_strong": s.doubt_strong, "player_volume": s.player_volume}
 
     # ------------------------------------------------------------------ page calls
 
@@ -775,6 +775,8 @@ class Controller:
                 if change["doubt_style"] not in config.DOUBT_STYLES:
                     raise ValueError(f"Unknown doubt style {change['doubt_style']!r}")
                 s.doubt_style = change["doubt_style"]
+            if "player_volume" in change:
+                s.player_volume = min(1.0, max(0.0, float(change["player_volume"])))
             if "doubt_light" in change or "doubt_strong" in change:
                 light = float(change.get("doubt_light", s.doubt_light))
                 strong = float(change.get("doubt_strong", s.doubt_strong))

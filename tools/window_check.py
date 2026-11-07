@@ -309,6 +309,20 @@ def player_steps(js, control, item, shoot):
     js("$('audio-play').click()")
     wait(lambda: js("filePlayer.paused"), 5, "pause")
     check("pause", js("filePlayer.paused"))
+    space = ("$('audio-seek').focus(); $('audio-seek').dispatchEvent("
+             "new KeyboardEvent('keydown', {code: 'Space', bubbles: true}))")
+    js(space)
+    wait(lambda: js("!filePlayer.paused"), 5, "Space on the seek bar")
+    check("Space on the seek bar plays", js("!filePlayer.paused"))
+    js(space)
+    wait(lambda: js("filePlayer.paused"), 5, "Space pauses")
+    js("$('audio-volume').value = 40; $('audio-volume').dispatchEvent(new Event('input'));"
+       " $('audio-volume').dispatchEvent(new Event('change'))")
+    check("volume slider", abs(js("filePlayer.volume") - 0.4) < 0.01, js("filePlayer.volume"))
+    wait(lambda: '"player_volume": 0.4' in settings_text(), 5, "volume saved")
+    js("$('audio-mute').click()")
+    check("mute button", js("filePlayer.muted"))
+    js("$('audio-mute').click(); filePlayer.muted = true")  # back on, and silent for the rest of the test
     js("$('audio-seek').value = 500; $('audio-seek').dispatchEvent(new Event('change'))")
     wait(lambda: abs(js("filePlayer.currentTime - filePlayer.duration / 2")) < 0.3, 5, "seek")
     check("seek bar moves the position", abs(js("filePlayer.currentTime - filePlayer.duration / 2")) < 0.3,

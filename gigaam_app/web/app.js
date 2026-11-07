@@ -931,6 +931,7 @@ function renderSettings() {
   const style = settings.doubt_style || 'underline';
   for (const input of document.querySelectorAll('input[name="doubt-style"]')) input.checked = input.value === style;
   applyDoubts(settings.doubt_marks !== false, style);
+  if (typeof settings.player_volume === 'number') { filePlayer.volume = settings.player_volume; showVolume(); }
   $('doubt-light').value = Math.round((settings.doubt_light || 0.97) * 100);
   $('doubt-strong').value = Math.round((settings.doubt_strong || 0.80) * 100);
   markAllWords();
@@ -1170,6 +1171,13 @@ document.addEventListener('drop', (event) => {
 });
 
 $('audio-play').addEventListener('click', togglePlay);
+// After a mouse click the bar's controls give the focus back, so Space keeps playing and
+// pausing instead of pressing the last control again (keyboard users keep their focus).
+for (const id of ['audio-play', 'audio-mute', 'audio-speed']) {
+  $(id).addEventListener(id === 'audio-speed' ? 'change' : 'click', (event) => {
+    if (id === 'audio-speed' || event.detail > 0) $(id).blur();
+  });
+}
 $('audio-seek').addEventListener('input', () => {
   seeking = true;
   const total = filePlayer.duration || (playerFile() || {}).duration || 0;
@@ -1185,15 +1193,38 @@ $('audio-seek').addEventListener('change', async () => {
   followPlayer();
 });
 $('audio-speed').addEventListener('change', () => { filePlayer.playbackRate = Number($('audio-speed').value); });
+
+function showVolume() {
+  // The speaker shows muted or the level; the slider shows 0 while muted.
+  const silent = filePlayer.muted || filePlayer.volume === 0;
+  $('audio-mute').innerHTML = silent ? '&#128263;' : filePlayer.volume < 0.5 ? '&#128265;' : '&#128266;';
+  $('audio-mute').title = filePlayer.muted ? 'Включить звук' : 'Выключить звук';
+  $('audio-mute').setAttribute('aria-label', $('audio-mute').title);
+  $('audio-volume').value = filePlayer.muted ? 0 : Math.round(filePlayer.volume * 100);
+}
+
+$('audio-volume').addEventListener('input', () => {
+  filePlayer.volume = Number($('audio-volume').value) / 100;
+  filePlayer.muted = false;
+  showVolume();
+});
+// The level is kept for the next start (Settings.player_volume); muting is not.
+$('audio-volume').addEventListener('change', () => call('set_settings', { player_volume: filePlayer.volume }));
+$('audio-mute').addEventListener('click', () => {
+  filePlayer.muted = !filePlayer.muted;
+  if (!filePlayer.muted && filePlayer.volume === 0) filePlayer.volume = 1;
+  showVolume();
+});
 for (const kind of ['wheel', 'touchmove']) {
   $('text').addEventListener(kind, () => { readerScrolled = Date.now(); }, { passive: true });
 }
 
-// Space plays or pauses the file, unless typing or a dialog is open.
+// Space plays or pauses the file, unless typing or a dialog is open. On the seek bar it
+// plays too, as in common players (owner, 2026-11-08).
 document.addEventListener('keydown', (event) => {
   if (event.code !== 'Space' || event.ctrlKey || event.altKey || event.metaKey) return;
   const target = event.target;
-  if (target.closest && target.closest('input, textarea, select, button, dialog[open]')) return;
+  if (target.closest && target.closest('input:not([type=range]), textarea, select, button, dialog[open]')) return;
   if (document.querySelector('dialog[open]') || $('audio-bar').hidden || state.view !== 'file') return;
   event.preventDefault();
   togglePlay();

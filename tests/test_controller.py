@@ -379,7 +379,7 @@ def test_settings_apply_to_the_next_file_and_reload_the_model(app, media):
     assert last(app.sent, "settings") == {"model": "RNNT", "language": "auto", "device": "CPU", "cpu_threads": 4,
                                           "outputs": ["txt", "srt"], "include_timestamps": False, "terms": "",
                                           "doubt_marks": True, "doubt_style": "underline",
-                                          "doubt_light": 0.97, "doubt_strong": 0.80}
+                                          "doubt_light": 0.97, "doubt_strong": 0.80, "player_volume": 1.0}
     assert app.fake_worker.take() == [("load", ("RNNT", "cpu", 4))]
     app.add_files([str(media[0])])
     job = app.fake_worker.take()[0]

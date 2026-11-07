@@ -87,6 +87,8 @@ def test_vad_ints_stay_ints():
     ({"include_timestamps": "yes"}, "include_timestamps"),
     ({"doubt_marks": 1}, "doubt_marks"),
     ({"doubt_style": "bold"}, "doubt_style"),
+    ({"player_volume": 1.5}, "player_volume"),
+    ({"player_volume": True}, "player_volume"),
     ({"doubt_light": 0}, "doubt_light"),
     ({"doubt_light": 1.5}, "doubt_light"),
     ({"doubt_strong": "0.8"}, "doubt_strong"),

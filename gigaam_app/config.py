@@ -42,6 +42,7 @@ class Settings:
     doubt_style: str = "underline"    # one of DOUBT_STYLES
     doubt_light: float = 0.97         # underline style: below this a word is doubtful (dotted)
     doubt_strong: float = 0.80        # and below this likely wrong (wavy); 0 < strong < light <= 1
+    player_volume: float = 1.0        # the window's player, 0..1
     outputs: list = field(default_factory=lambda: list(DEFAULT_FORMATS))
     vad: VadOptions = field(default_factory=VadOptions)
 
@@ -107,6 +108,10 @@ def parse(data):
             if value not in DOUBT_STYLES:
                 raise ValueError(f"doubt_style: expected one of {', '.join(DOUBT_STYLES)}")
             settings.doubt_style = value
+        elif key == "player_volume":
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value <= 1:
+                raise ValueError("player_volume: expected a number from 0 to 1")
+            settings.player_volume = float(value)
         elif key in ("doubt_light", "doubt_strong"):
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 < value <= 1:
                 raise ValueError(f"{key}: expected a number above 0 and at most 1")
