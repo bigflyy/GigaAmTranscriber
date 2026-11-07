@@ -17,11 +17,20 @@ Owner's decisions (2026-11-06):
   ("Взять"), edits by hand or cancels. Nothing is replaced automatically.
 - Listening to the selection is part of Stage A.
 
+Owner's decisions (2026-11-08, after the Whisper measurements of HANDOFF session 14):
+- The readings are RNNT, CTC and Whisper (Whisper when it is downloaded): Whisper moves from
+  C1 into Stage A.
+- A "Термины" field in the re-recognise box, given to Whisper as its prompt for that part only
+  (not a Settings field for whole files). Measured: fixes the listed terms, at no time cost, but
+  nearby Russian forms of English words may come out in Latin.
+- The actions appear in a small bar right above the selected words (like the text-selection
+  menu in Google Docs or Telegram): "▶ Слушать", "Распознать заново", "✎" (edit).
+
 ### Stage A: Select, listen, re-recognise
 
-- [ ] **A1** Select words in the text (mouse drag over the live text of a finished file); the selection maps to a time range from the word times
+- [ ] **A1** Select words in the text (mouse drag over the live text of a finished file); the selection maps to a time range from the word times; the action bar appears above the selection
 - [ ] **A2** Play the selection (and a click-to-play on any line, plan 02 D3): audio cut by ffmpeg to a temporary WAV, played by the page's audio element
-- [ ] **A3** "Распознать заново" on the selection: decode the time range again, with 1-2 s of context on each side and the cut at the VAD's quietest point, with RNNT and with CTC; show the readings that differ from the current text side by side
+- [ ] **A3** "Распознать заново" on the selection: decode the time range again, with 1-2 s of context on each side and the cut at the VAD's quietest point, with RNNT, with CTC and with Whisper (when downloaded; the box's "Термины" go to Whisper as its prompt); show the readings that differ from the current text side by side
 - [ ] **A4** Pick a reading or edit the text by hand; the change goes into the transcript (words keep times), the saved files are written again, the history entry is updated
 - [ ] **A5** Tests (controller with a fake model; real models on a known hard sample) and window_check.py steps
 
@@ -32,4 +41,4 @@ Owner's decisions (2026-11-06):
 
 ### Stage C: Another model for the part
 
-- [ ] **C1** Depends on plan 04 Stage B (Whisper in the app, [04-whisper.md](04-whisper.md)) and plan 01 Stage F (Parakeet, Qwen3-ASR): offer the winner as an optional download and as one more reading in A3
+- [ ] **C1** (Whisper moved into A3 on 2026-11-08; this stays for Parakeet and Qwen3-ASR.) Depends on plan 04 Stage B (Whisper in the app, [04-whisper.md](04-whisper.md)) and plan 01 Stage F (Parakeet, Qwen3-ASR): offer the winner as an optional download and as one more reading in A3
