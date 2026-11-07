@@ -34,10 +34,28 @@ Owner's decisions (2026-11-08, after the Whisper measurements of HANDOFF session
 - [x] **A4** Pick a reading or edit the text by hand; the change goes into the transcript (words keep times), the saved files are written again, the history entry is updated
 - [x] **A5** Tests (controller with a fake model; real models on a known hard sample) and window_check.py steps
 
+Owner's decisions (2026-11-08, session 15, mock-ups at https://claude.ai/artifact/QWAEb2PS8uAaKGatDYFRtL):
+- B2 before B1 ("i guess we can add coloring by confidence of the model").
+- Doubtful words get an underline like a spell check, two levels: dotted amber for 0.80-0.97,
+  wavy orange below 0.80. On by default, with a "Сомнения" switch beside "Таймкоды".
+- Also a mode in Settings that colours all the words by confidence, "from green to red ...
+  green - orange - red".
+- Measured on the 455 s lecture (experiments/confidence/word_confidence.py): a word's
+  confidence = the lowest probability among its tokens, with blank left out and tokens that
+  differ only in case or punctuation counted together (raw RNNT probabilities sit near 0.5 on
+  correct words). About 3 % of words fall below 0.97, about 60 % of them read differently by
+  Whisper with terms; above 0.97 2 %. Caught: файндтюнинг, пром-инжиниринга, Tullz, DepS,
+  Umail-промтинга, ризанинга, Линт-4, Promet-Inginiring; missed: Colling (0.99).
+
 ### Stage B: More readings
 
 - [ ] **B1** RNNT beam search (width 4-8) giving the N best readings of the range; measure speed and whether the second-best readings are useful on the sample files
-- [ ] **B2** Mark doubtful words (low token probability) in the text, so the user knows where to look
+- [x] **B2** Mark doubtful words (low token probability) in the text, so the user knows where to look
+  - [x] **B2a** Word confidence from RNNT and CTC decoding (blank left out, case and punctuation merged), kept per word in the transcript, the history and the JSON output
+  - [x] **B2b** Whisper: word confidence from its token probabilities; measure on the lecture whether the same thresholds work
+  - [x] **B2c** Page: dotted / wavy underline for doubtful words, the "Сомнения" switch (remembered), the confidence on hover; readings taken in the fix dialog carry their confidence, hand-typed words none
+  - [x] **B2d** Settings: a mode that colours all the words from green to red by confidence
+  - [x] **B2e** Tests and window_check.py steps
 
 ### Stage C: Another model for the part
 

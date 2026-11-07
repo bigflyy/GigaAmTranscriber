@@ -1,8 +1,41 @@
 # Handoff: state and findings
 
-Last updated 2026-11-08 (session 14). Current plan: [docs/plans/03-fix-a-part.md](docs/plans/03-fix-a-part.md)
-(Stage A done 2026-11-08, waits for the owner to try it; Stage B next). Plan 04 (Whisper) done: v0.4.0. Plan 02 (window) has D for later; plan 01 still
+Last updated 2026-11-08 (session 15). Current plan: [docs/plans/03-fix-a-part.md](docs/plans/03-fix-a-part.md)
+(Stage A done and tried by the owner; B2 doubtful words built, waits for the owner to try it; B1 and C left).
+Plan 04 (Whisper) done: v0.4.0. Plan 02 (window) has D for later; plan 01 still
 holds B9, F (Parakeet, Qwen3-ASR) and E. Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
+
+## Session 15 (2026-11-08): plan 03 B2, word confidence in the window
+
+- Owner picked B2: "i guess we can add coloring by confidence of the model". Mock-ups of three
+  styles (underline, highlighter, coloured letters): https://claude.ai/artifact/QWAEb2PS8uAaKGatDYFRtL.
+  Owner chose the underline with two levels, on by default with a switch, plus "a mode in
+  settings ... that actually just colors all the letters ... green - orange - red".
+- experiments/confidence/word_confidence.py (455 s lecture, no reference text: "disputed" =
+  another model reads it differently). Raw RNNT token probabilities put 20 % of words near
+  0.5 (the model splits between "emit now" and blank, and between case / punctuation
+  variants of a token): useless. With blank left out and same-letter tokens summed, 3.3 % of
+  words are below 0.97 and about 60 % of those are disputed by Whisper with terms (above
+  0.97: 2 %). Flagged real errors: файндтюнинг, пром-инжиниринга, Tullz, DepS,
+  Umail-промтинга, ризанинга, Линт-4, Promet-Inginiring, "принятии" (missing "в"); false
+  alarms: сотней, Подключим, детекции; missed: Colling (0.99). CTC's confidence is a bit
+  stronger still (5.8 % flagged).
+- experiments/confidence/whisper_confidence.py: Whisper's raw token p puts 21 % of words below
+  0.97 (short words "а", "и", "это" too), its errors lowest (Baylor 0.26, DeepSync 0.25,
+  LIND-4 0.33). whisper_model.WHISPER_SCALE maps 0.5 -> 0.80 and 0.7 -> 0.97, so one pair of
+  thresholds serves every model. Only one file measured.
+- Built (a558176 backend, f5c47d2 window): Word.confidence (asr.letter_groups,
+  token_confidence; decode returns (token, frame, confidence)); in history and the JSON output
+  (left out when unknown); costs 0.2 s of decoding on the lecture (4.9 s total). Window:
+  dotted amber underline 0.80-0.97, wavy orange below 0.80, hover shows "Уверенность модели:
+  N %"; "Сомнения" switch (Settings.doubt_marks); Settings "Сомнительные слова": Подчёркивать
+  / Цвет всех слов (doubt_style; 5 steps green -> red, each at least 4.5:1 contrast). A
+  reading taken in the fix dialog keeps its confidence; text typed by hand has none; files
+  from before this have no marks until recognised again.
+- Tests 415 passed, 2 skipped; window_check.py --whisper 58/58 (long file: the 455 s lecture,
+  short: clips/lecture-4.mp3). Screens 04d-doubts, 04e-doubt-colours in this session's
+  scratchpad wcheck/shots.
+- Next: owner tries it from source; then B1 (RNNT beam N-best) or other work.
 
 ## Session 14 (2026-11-07/08): Whisper beam 5 and terms measured; plan 03 Stage A built
 
