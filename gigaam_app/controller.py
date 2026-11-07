@@ -34,7 +34,8 @@ FILE_DIALOG_TYPES = ("Аудио и видео (" + ";".join("*" + suffix for su
                      "Все файлы (*.*)")
 
 DEVICES = (("Auto", "Авто"), ("GPU", "Видеокарта"), ("CPU", "Процессор"))
-DEVICE_NAMES = {"GPU (DirectML)": "видеокарта (DirectML)", "GPU (CUDA)": "видеокарта (CUDA)", "CPU": "процессор"}
+DEVICE_NAMES = {"GPU (DirectML)": "видеокарта (DirectML)", "GPU (CUDA)": "видеокарта (CUDA)",
+                "GPU (Vulkan)": "видеокарта (Vulkan)", "CPU": "процессор"}
 FORMAT_LABELS = {"txt": "TXT", "timestamps": "TXT с таймкодами", "md": "Markdown (разделы по времени)",
                  "srt": "SRT (субтитры)", "json": "JSON (слова и время)"}
 # Chips under a finished file: (format, short tag, label).
@@ -44,7 +45,17 @@ OUTPUT_CHIPS = (("txt", "TXT", "Текст"), ("timestamps", "TXT", "С тайм
 MODEL_NOTES = {
     "RNNT": "Русский язык, пунктуация и заглавные буквы. Выбрана по умолчанию.",
     "CTC": "Русский язык, пунктуация и заглавные буквы. Немного быстрее RNNT.",
+    "Whisper": "Whisper large-v3-turbo: 99 языков, английские термины пишет латиницей. "
+               "Медленнее GigaAM примерно в 2,5 раза; на русском GigaAM обычно точнее.",
 }
+# Speech languages offered in the window for Whisper: (code, Russian name). The settings
+# file and --language take any code Whisper knows; a code not listed here is still shown.
+LANGUAGES = (("auto", "Определять автоматически"), ("ru", "Русский"), ("en", "Английский"),
+             ("uk", "Украинский"), ("be", "Белорусский"), ("kk", "Казахский"), ("uz", "Узбекский"),
+             ("de", "Немецкий"), ("fr", "Французский"), ("es", "Испанский"), ("it", "Итальянский"),
+             ("pt", "Португальский"), ("pl", "Польский"), ("cs", "Чешский"), ("tr", "Турецкий"),
+             ("ar", "Арабский"), ("he", "Иврит"), ("hi", "Хинди"), ("zh", "Китайский"),
+             ("ja", "Японский"), ("ko", "Корейский"))
 
 WAITING, RUNNING, DONE, CANCELLED, FAILED = "waiting", "running", "done", "cancelled", "failed"
 
@@ -322,9 +333,13 @@ class Controller:
             if not info.bundled:
                 installed = catalog.installed_folder(info) is not None
                 note += " Скачана." if installed else f" Скачивается отдельно, {size_text(info.download_size)}."
-            models.append({"key": key, "title": key, "note": note})
+            models.append({"key": key, "title": key, "note": note, "language": info.model_type == "whisper"})
+        languages = [{"key": code, "label": name} for code, name in LANGUAGES]
+        if self.settings.language not in dict(LANGUAGES):
+            languages.append({"key": self.settings.language, "label": self.settings.language})
         return {
             "models": models,
+            "languages": languages,
             "devices": [{"key": key, "label": label} for key, label in DEVICES],
             "formats": [{"key": fmt, "label": FORMAT_LABELS[fmt]} for fmt in FORMATS],
             "cpu_count": os.cpu_count() or 8,
@@ -334,7 +349,7 @@ class Controller:
 
     def _settings_view(self):
         s = self.settings
-        return {"model": s.model, "device": s.device, "cpu_threads": s.cpu_threads,
+        return {"model": s.model, "language": s.language, "device": s.device, "cpu_threads": s.cpu_threads,
                 "outputs": list(s.outputs), "include_timestamps": s.include_timestamps}
 
     # ------------------------------------------------------------------ page calls
@@ -509,6 +524,10 @@ class Controller:
             before = self._engine_key()
             if "model" in change:
                 s.model = catalog.find(change["model"]).key
+            if "language" in change:
+                if change["language"] not in dict(LANGUAGES):
+                    raise ValueError(f"Unknown language {change['language']!r}")
+                s.language = change["language"]
             if "device" in change:
                 if change["device"] not in dict(DEVICES):
                     raise ValueError(f"Unknown device {change['device']!r}")
@@ -712,7 +731,8 @@ class Controller:
         item.phase = "Подготовка..."
         item.formats = formats
         self.running = item
-        self.worker.jobs.put(("transcribe", item.path, self._engine_key(), self.settings.vad, formats))
+        self.worker.jobs.put(("transcribe", item.path, self._engine_key(), self.settings.vad, formats,
+                              self.settings.language))
         self._emit_file(item)
 
     # ------------------------------------------------------------------ worker events

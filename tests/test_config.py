@@ -53,6 +53,13 @@ def test_dropped_multilingual_models_load_as_rnnt(old):
     assert settings.model == "RNNT" and json.loads(settings.to_json())["model"] == "RNNT"
 
 
+def test_whisper_and_its_language_load():
+    settings = config.parse({"model": "Whisper", "language": "en"})
+    assert (settings.model, settings.language) == ("Whisper", "en")
+    assert config.parse({}).language == "auto"
+    assert json.loads(settings.to_json())["language"] == "en"
+
+
 def test_vad_ints_stay_ints():
     settings = config.parse({"vad_min_speech_ms": 300.0, "max_duration": 20})
     assert type(settings.vad.vad_min_speech_ms) is int and type(settings.vad.max_duration) is float
@@ -62,6 +69,9 @@ def test_vad_ints_stay_ints():
     ([], "JSON object"),
     ({"version": 3}, "version"),
     ({"model": "Parakeet"}, "model"),
+    ({"language": "English"}, "language"),
+    ({"language": ""}, "language"),
+    ({"language": 1}, "language"),
     ({"device": "TPU"}, "device"),
     ({"cpu_threads": -1}, "cpu_threads"),
     ({"cpu_threads": 2.5}, "cpu_threads"),

@@ -98,6 +98,18 @@ class Transcriber:
     def device_label(self):
         return self.asr.device_label
 
+    @property
+    def uses_language(self):
+        """True for Whisper, which can be told the language; GigaAM knows only Russian."""
+        return hasattr(self.asr, "set_language")
+
+    def set_language(self, language):
+        """Language for the next files (Whisper only; GigaAM ignores it): a code such as
+        "en", or None / "auto" to detect it per chunk. No reload is needed.
+        ValueError for a code Whisper does not know."""
+        if self.uses_language:
+            self.asr.set_language(language)
+
     def transcribe(self, path, options=None, on_progress=None, on_segment=None,
                    should_cancel=None, on_stats=None):
         """Transcribe one file and return a Transcript.

@@ -350,7 +350,7 @@ def test_open_output_of_a_deleted_file(app, media):
 def test_settings_apply_to_the_next_file_and_reload_the_model(app, media):
     app.fake_worker.take()
     app.set_settings({"device": "CPU", "cpu_threads": 4, "outputs": ["srt", "txt"]})
-    assert last(app.sent, "settings") == {"model": "RNNT", "device": "CPU", "cpu_threads": 4,
+    assert last(app.sent, "settings") == {"model": "RNNT", "language": "auto", "device": "CPU", "cpu_threads": 4,
                                           "outputs": ["txt", "srt"], "include_timestamps": False}
     assert app.fake_worker.take() == [("load", ("RNNT", "cpu", 4))]
     app.add_files([str(media[0])])
@@ -359,6 +359,37 @@ def test_settings_apply_to_the_next_file_and_reload_the_model(app, media):
     # While a file runs, a change does not load at once; the next file loads it.
     app.set_settings({"model": "CTC"})
     assert app.fake_worker.take() == []
+
+
+def test_language_goes_with_each_file_without_a_reload(app, media):
+    app.fake_worker.take()
+    app.set_settings({"language": "en"})
+    assert app.fake_worker.take() == []  # Whisper takes the language per file
+    assert config.load(app.settings_path).language == "en"
+    app.add_files([str(media[0])])
+    job = app.fake_worker.take()[0]
+    assert job[0] == "transcribe" and job[5] == "en"
+    with pytest.raises(ValueError):
+        app.set_settings({"language": "klingon"})
+
+
+def test_options_offer_whisper_with_its_language_choice(app):
+    options = app.snapshot["options"]
+    models = {model["key"]: model for model in options["models"]}
+    assert models["Whisper"]["language"] and not models["RNNT"]["language"]
+    assert "Скачивается отдельно, 547 МБ." in models["Whisper"]["note"]
+    assert options["languages"][0] == {"key": "auto", "label": "Определять автоматически"}
+
+
+def test_a_language_from_the_file_outside_the_list_is_still_offered(tmp_path, monkeypatch):
+    monkeypatch.setattr(catalog, "installed_folder", lambda info: tmp_path)
+    config.save(config.Settings(model="Whisper", language="haw"), tmp_path / "settings.json")
+    control = Controller(FakeWorker(), queue.Queue(), send=lambda message: None, clock=Clock(),
+                         probe=lambda path: 1.0, sound_check=fake_sound_check, desktop=FakeDesktop(),
+                         settings_path=tmp_path / "settings.json")
+    snapshot = control.ready()
+    assert snapshot["options"]["languages"][-1] == {"key": "haw", "label": "haw"}
+    assert snapshot["settings"]["language"] == "haw"
 
 
 def test_unknown_device_is_refused(app):

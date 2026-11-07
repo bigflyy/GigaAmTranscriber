@@ -269,10 +269,12 @@ legend { font-size: 12px; font-weight: 600; color: var(--muted); text-transform:
 .checks { display: flex; flex-wrap: wrap; gap: 8px 18px; }
 .checks label, .inline { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; }
 .checks input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
-input[type="number"] {
-  width: 72px; height: 32px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--card-line);
+select { min-width: 240px; align-self: flex-start; }
+input[type="number"], select {
+  height: 32px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--card-line);
   background: var(--card); color: var(--text); font: inherit;
 }
+input[type="number"] { width: 72px; }
 .settings-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
 
 /* ------------------------------------------------------------------ overlays */

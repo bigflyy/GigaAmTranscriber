@@ -94,10 +94,11 @@ class WhisperModel:
         if not path.is_file() or path.stat().st_size != entry["size"]:
             raise RuntimeError(f"Model file is missing or damaged: {path}")
         self.cpu_threads = cpu_threads or default_cpu_threads()
-        self.language = language
+        self.language = None
         self.last_language = ""
         self.lib = library or whisper_cpp.Library.get()
         self.context, self.gpu_name = self._open(path, device)
+        self.set_language(language)
 
     def _open(self, path, device):
         """Load on the preferred GPU, or on the CPU. 'auto' falls back to the CPU when

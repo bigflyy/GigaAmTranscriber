@@ -29,6 +29,40 @@ def test_bad_settings_file_exits_2(tmp_path, capsys):
     assert "Settings error" in capsys.readouterr().err
 
 
+class FakeTranscriber:
+    """Records what the CLI asks for and stops before any audio is read."""
+    made = []
+
+    def __init__(self, model, device, cpu_threads, language):
+        if language == "xx":
+            raise ValueError("Whisper does not know the language 'xx'")
+        FakeTranscriber.made.append((model, language))
+        self.uses_language = model == "Whisper"
+        raise SystemExit(0)
+
+
+@pytest.mark.parametrize("argv, expected", [
+    (["--model", "Whisper", "--language", "en"], ("Whisper", "en")),
+    (["--model", "Whisper"], ("Whisper", "auto")),
+])
+def test_language_reaches_the_model(tmp_path, monkeypatch, argv, expected):
+    monkeypatch.setattr(cli, "Transcriber", FakeTranscriber)
+    FakeTranscriber.made.clear()
+    audio = tmp_path / "a.wav"
+    audio.write_bytes(b"")
+    with pytest.raises(SystemExit):
+        cli.main([str(audio), *argv, "--config", str(tmp_path / "none.json")])
+    assert FakeTranscriber.made == [expected]
+
+
+def test_unknown_language_exits_2(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(cli, "Transcriber", FakeTranscriber)
+    audio = tmp_path / "a.wav"
+    audio.write_bytes(b"")
+    assert cli.main([str(audio), "--model", "Whisper", "--language", "xx", "--config", str(tmp_path / "n.json")]) == 2
+    assert "xx" in capsys.readouterr().err
+
+
 def test_version(capsys):
     with pytest.raises(SystemExit) as stop:
         cli.main(["--version"])

@@ -9,6 +9,7 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import tempfile
 
 from .catalog import ALIASES
@@ -20,6 +21,8 @@ from .vad import VadOptions
 CONFIG_NAME = "gigaam-config.json"
 DEVICES = ("Auto", "GPU", "CPU")
 RETIRED_KEYS = {"min_duration", "vad_window_samples"}
+# A Whisper language code ("en", "haw", "yue"); whisper.cpp checks it is one it knows.
+LANGUAGE_PATTERN = re.compile(r"auto|[a-z]{2,3}")
 
 
 @dataclass
@@ -27,6 +30,7 @@ class Settings:
     model: str = DEFAULT_MODEL
     device: str = "Auto"
     cpu_threads: int = 0              # 0 = choose automatically
+    language: str = "auto"            # Whisper only: a code such as "en", or "auto" to detect it
     include_timestamps: bool = False  # preview only; files are written as listed in outputs
     outputs: list = field(default_factory=lambda: list(DEFAULT_FORMATS))
     vad: VadOptions = field(default_factory=VadOptions)
@@ -73,6 +77,10 @@ def parse(data):
             if type(value) is not int or value < 0:
                 raise ValueError("cpu_threads: expected a whole number, 0 for automatic")
             settings.cpu_threads = value
+        elif key == "language":
+            if not isinstance(value, str) or not LANGUAGE_PATTERN.fullmatch(value):
+                raise ValueError('language: expected "auto" or a language code such as "en"')
+            settings.language = value
         elif key == "include_timestamps":
             if type(value) is not bool:
                 raise ValueError("include_timestamps: expected true or false")

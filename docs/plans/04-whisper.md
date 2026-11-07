@@ -36,7 +36,7 @@ Owner's decision (2026-11-07): our own GitHub release asset first (models-1, ass
 whisper_large_v3_turbo_q5_0.ggml-large-v3-turbo-q5_0.bin), Hugging Face (ggerganov/whisper.cpp,
 pinned commit) as the backup download; push the commits when Whisper is released.
 
-- [ ] **B3** Model switch in Settings and `--model` in the CLI; the download prompt as for any extra model; language choice in Settings and `--language`
+- [x] **B3** Model switch in Settings and `--model` in the CLI; the download prompt as for any extra model; language choice in Settings and `--language`
 - [ ] **B4** Tests (decoder with a fake model, real model on a short file) and window_check.py steps
 - [ ] **B5** Docs and licences (Whisper weights MIT; whisper.cpp MIT if chosen)
 

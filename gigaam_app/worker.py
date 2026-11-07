@@ -91,9 +91,10 @@ class Worker(threading.Thread):
             return
         self.events.put(("download_done", model, folder))
 
-    def _transcribe(self, path, key, options, formats):
+    def _transcribe(self, path, key, options, formats, language=None):
         self.cancel.clear()
         engine = self._ensure(key)
+        engine.set_language(language)  # Whisper only; changing it needs no reload
         if self.cancel.is_set():
             self.events.put(("finished", None, []))
             return

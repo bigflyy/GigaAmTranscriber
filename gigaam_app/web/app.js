@@ -350,6 +350,17 @@ function renderSettings() {
     label.append(input, body);
     models.appendChild(label);
   }
+  // The language choice only matters for Whisper; GigaAM recognises Russian only.
+  const chosen = options.models.find((model) => model.key === settings.model);
+  $('language-box').hidden = !(chosen && chosen.language);
+  const language = $('language');
+  language.textContent = '';
+  for (const item of options.languages || []) {
+    const option = el('option', '', item.label);
+    option.value = item.key;
+    language.appendChild(option);
+  }
+  language.value = settings.language || 'auto';
   const devices = $('devices');
   devices.textContent = '';
   for (const device of options.devices) {
@@ -498,6 +509,7 @@ $('times').addEventListener('change', () => {
   applyTimes($('times').checked);
   call('set_settings', { include_timestamps: $('times').checked });
 });
+$('language').addEventListener('change', () => changeSetting({ language: $('language').value }));
 $('threads').addEventListener('change', () => {
   const value = Math.max(0, Math.floor(Number($('threads').value) || 0));
   $('threads').value = value;

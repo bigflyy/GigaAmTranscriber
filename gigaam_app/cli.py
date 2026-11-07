@@ -21,10 +21,13 @@ from .vad import VadOptions
 def build_parser():
     parser = argparse.ArgumentParser(
         prog="gigaam-cli",
-        description="Transcribe Russian speech in audio or video files with GigaAM.")
+        description="Transcribe speech in audio or video files with GigaAM (Russian) or Whisper.")
     parser.add_argument("files", nargs="*", type=Path, help="audio or video files")
     parser.add_argument("-o", "--out-dir", type=Path, help="output folder (default: beside each file)")
     parser.add_argument("--model", choices=tuple(MODELS), help="recognition model (default: RNNT)")
+    parser.add_argument("--language", metavar="CODE",
+                        help='Whisper only: speech language such as "en" or "ru", or "auto" to detect it '
+                             "(default: the settings file, else auto)")
     parser.add_argument("--device", choices=("auto", "gpu", "cpu"), help="default: auto")
     parser.add_argument("--threads", type=int, help="CPU threads for recognition (default: automatic)")
     parser.add_argument("--formats", help=f"comma-separated list from {','.join(FORMATS)} "
@@ -159,6 +162,7 @@ def main(argv=None):
         print(f"Settings error: {error}", file=sys.stderr)
         return 2
     model = args.model or settings.model
+    language = args.language or settings.language
     device = args.device or settings.engine_device
     threads = args.threads if args.threads is not None else (settings.cpu_threads or None)
     formats = args.formats.split(",") if args.formats else settings.outputs
@@ -181,10 +185,12 @@ def main(argv=None):
         print("File not found: " + ", ".join(missing), file=sys.stderr)
         return 2
     try:
-        transcriber = Transcriber(model, device=device, cpu_threads=threads)
-    except ModelNotInstalled as error:
+        transcriber = Transcriber(model, device=device, cpu_threads=threads, language=language)
+    except (ModelNotInstalled, ValueError) as error:  # ValueError: a language Whisper does not know
         print(error, file=sys.stderr)
         return 2
+    if args.language and not transcriber.uses_language:
+        print(f"Note: --language is for Whisper; {model} recognises Russian only.", file=sys.stderr)
     say(f"{model} on {transcriber.device_label}, loaded in {transcriber.load_seconds:.1f} s")
     failures = 0
     for path in args.files:
