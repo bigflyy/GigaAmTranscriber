@@ -10,9 +10,9 @@ models, Stage E speaker diarization) and plan 02 (D1-D3).
 - 2026-11-07: merge the two models' strengths: "gigaam does bad with english namings and whisper is good with english namings. idk if we can merge these capabilities, but if we could it d be nice. somehow. in the future." (On the lecture GigaAM wrote "tullz colling", "deps", "umail" where Whisper wrote "tools calling", "deepsync", "uml".) For now only Whisper as a model you can choose and run (plan 04).
 - 2026-11-07: a user's list of terms (for example "LLM, fine tuning") given to Whisper as a hint (initial prompt), and beam search on our fragments. Owner: "beam search we can try. a list of terms i dk, you may test it a bit. maybe it will even transfer to 03 stage A" (the hint when a selected part is recognised again). Measured in session 14 (experiments/whisper/variants.py; results in HANDOFF.md). Owner 2026-11-08: terms in the re-recognise box of plan 03 A3 (Whisper reading of that part only), not a Settings field for whole files yet. Beam 5 gave little at 1.4-1.8x the time, so it is not proposed for now.
 
-## Exports
+## Window
 
-- 2026-11-08: export the word confidence, "to feed to llm maybe" ("does it export confidence in json txt or smh?"). The JSON output has it per word since plan 03 B2; txt / md / srt do not.
+- 2026-11-08: an audio player: "maybe there should be a play/pause button. and how much time passed (the player of audio interface?)".
 
 ## Languages and speakers
 
@@ -32,6 +32,7 @@ models, Stage E speaker diarization) and plan 02 (D1-D3).
 
 ## Finished
 
+- 2026-11-08: export the word confidence, "to feed to llm maybe" ("does it export confidence in json txt or smh?"). Owner chose both a file and a button. Finished 2026-11-08: format "llm" (name-transcript-llm.txt) and "Копировать для ИИ", doubtful words as слово[?66%]; commit cb570ae.
 - 2026-11-06: the app icon: "we need to do mockups and fix it". Finished 2026-11-06: owner
   picked idea A (wave into lines, blue) from the mockups at
   https://claude.ai/artifact/W1UuSDLLfjZPy1rRvonVm5; commit 86f4f68. The Linux window icon is
