@@ -35,6 +35,15 @@ holds B9, F (Parakeet, Qwen3-ASR) and E. Owner's ideas: [docs/IDEAS.md](docs/IDE
 - Tests 415 passed, 2 skipped; window_check.py --whisper 58/58 (long file: the 455 s lecture,
   short: clips/lecture-4.mp3). Screens 04d-doubts, 04e-doubt-colours in this session's
   scratchpad wcheck/shots.
+- Owner: thresholds "fine but should be configurable in settings"; "i meant colors to be
+  gradient. slowly like changing between colors with confidence score"; asked which mark is
+  more critical (answered: wavy). Built: Settings.doubt_light / doubt_strong (percent fields
+  under "Сомнительные слова", wavy below dotted enforced); colour style mixes the two nearest
+  steps per word (color-mix in oklab, steps at 0.98 / 0.92 / 0.85 / 0.75 / 0.60, the step
+  classes stay as fallback); hover says "Возможно ошибка" / "Скорее ошибка". window_check
+  reads settings.json with retries (hit the replace race once): 61/61. Tests 419 passed.
+- Owner asked whether confidence is exported, "to feed to llm maybe": only in the JSON output
+  (per word). Kept as an idea in docs/IDEAS.md (Exports).
 - Next: owner tries it from source; then B1 (RNNT beam N-best) or other work.
 
 ## Session 14 (2026-11-07/08): Whisper beam 5 and terms measured; plan 03 Stage A built

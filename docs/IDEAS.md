@@ -10,6 +10,10 @@ models, Stage E speaker diarization) and plan 02 (D1-D3).
 - 2026-11-07: merge the two models' strengths: "gigaam does bad with english namings and whisper is good with english namings. idk if we can merge these capabilities, but if we could it d be nice. somehow. in the future." (On the lecture GigaAM wrote "tullz colling", "deps", "umail" where Whisper wrote "tools calling", "deepsync", "uml".) For now only Whisper as a model you can choose and run (plan 04).
 - 2026-11-07: a user's list of terms (for example "LLM, fine tuning") given to Whisper as a hint (initial prompt), and beam search on our fragments. Owner: "beam search we can try. a list of terms i dk, you may test it a bit. maybe it will even transfer to 03 stage A" (the hint when a selected part is recognised again). Measured in session 14 (experiments/whisper/variants.py; results in HANDOFF.md). Owner 2026-11-08: terms in the re-recognise box of plan 03 A3 (Whisper reading of that part only), not a Settings field for whole files yet. Beam 5 gave little at 1.4-1.8x the time, so it is not proposed for now.
 
+## Exports
+
+- 2026-11-08: export the word confidence, "to feed to llm maybe" ("does it export confidence in json txt or smh?"). The JSON output has it per word since plan 03 B2; txt / md / srt do not.
+
 ## Languages and speakers
 
 - 2026-11-06: detect the language (there, in the selected part or the file).
