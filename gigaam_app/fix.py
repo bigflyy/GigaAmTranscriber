@@ -348,8 +348,13 @@ def keep_edges(old_words, new_words):
     """The new words with the punctuation around the old ones: the text's own sentence
     stays as it was. A reading of a piece puts its own sentence ends in ("промпт-
     инжиниринга." in the middle of a sentence, "«Lin»."); the offer is about the words.
-    An edge word that is nothing but punctuation is kept as it is."""
+    Edge words that are nothing but punctuation ("prompt engineering –") are dropped, unless
+    nothing else is left."""
     new_words = [Word(word.start, word.end, word.text, word.confidence) for word in new_words]
+    while len(new_words) > 1 and not word_key(new_words[0].text):
+        new_words.pop(0)
+    while len(new_words) > 1 and not word_key(new_words[-1].text):
+        new_words.pop()
     if not old_words or not new_words:
         return new_words
     lead = _LEADING.match(old_words[0].text)

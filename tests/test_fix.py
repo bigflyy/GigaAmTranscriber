@@ -185,6 +185,11 @@ def test_suggestion_keeps_the_texts_punctuation():
     assert [w.text for w in fix.suggestion_from(heard, current, 0, 0)[2]] == ["(Tools", "Calling),"]
     # The reading's own Words are not changed.
     assert heard[0].text == "Tools"
+    # A dash read as a word of its own at the edge is dropped (lecture, centred reading).
+    current = words(("положим", 0, 1), ("Promet-Inginiring,", 1, 2), ("настройку", 2, 3))
+    heard = words(("положим", 0, 1), ("prompt", 1, 1.4), ("engineering", 1.4, 1.9), ("–", 1.9, 2),
+                  ("настройку", 2, 3))
+    assert [w.text for w in fix.suggestion_from(heard, current, 1, 1)[2]] == ["prompt", "engineering,"]
 
 
 def test_suggestion_none_when_the_reading_went_its_own_way():
