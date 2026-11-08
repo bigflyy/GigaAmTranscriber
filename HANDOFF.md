@@ -10,7 +10,7 @@ Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
 
 ## Session 17 (2026-11-08): plan 06 Stage C, models in their own process
 
-- Owner chose option 1 (Worker in a separate process, before v0.5.0): "1 yes". Built (1dba76b):
+- Owner chose option 1 (Worker in a separate process, before v0.5.0): "1 yes". Built (d892e59):
   worker.WorkerProcess runs the Worker in a spawned process (never fork) behind the same jobs /
   cancel / engine_key / start / stop, so the controller is unchanged. The process sends
   internal events "_job" (which job runs, or None between jobs), "_engine_key" (before
@@ -42,11 +42,11 @@ Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
   when a search ends and when an offer is left (take rewrites all files already). Found on
   the way: with the model process the finished result is a copy of the lines shown, so
   offers found after it missed the history; _finish now sets item.segments = result.segments
-  (tests' finish() now passes deep copies, as the process does). 8ff01f3; tests 465 passed.
-- Owner: the note for an AI also says unmarked words may be wrong (336eaa7). New idea (IDEAS,
+  (tests' finish() now passes deep copies, as the process does). 484e803; tests 465 passed.
+- Owner: the note for an AI also says unmarked words may be wrong (d74b4cd). New idea (IDEAS,
   plan 01 F5): try Parakeet, Qwen3-ASR and similar, also as readers for suggested fixes.
-- v0.5.0 builds (owner: "it can"; publishing still needs a separate go-ahead). Version 88b0532,
-  notes and README 8fcc2d5. Assets in `C:\MyProjects\GigaAmTranscriber\build\v0.5.0\release`
+- v0.5.0 builds (owner: "it can"; publishing still needs a separate go-ahead). Version 3c3f604,
+  notes and README 4559129. Assets in `C:\MyProjects\GigaAmTranscriber\build\v0.5.0\release`
   (Windows zip 933.6 MiB / 978,910,985 bytes, Linux tar.gz 843.0 MiB, licences zip with
   windows/ and linux/, FFmpeg source, SHA256SUMS; `sha256sum -c` OK). Windows app folder
   build/v0.5.0/app/GigaAmTranscriber (1234 MiB): all build smoke tests pass (CLI CPU and
