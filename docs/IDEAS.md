@@ -32,6 +32,7 @@ models, Stage E speaker diarization) and plan 02 (D1-D3).
 
 ## Finished
 
+- 2026-11-08: the text for an AI should show the suggested fixes: "make Копировать для ИИ makes it clear for AI that there are two versions of some words (whsiper vs giga am)". Finished 2026-11-08: "Копировать для ИИ" and the -llm.txt file give {GigaAM v3 RNNT: Tullz[?50%] Colling | Whisper large-v3-turbo (q5_0): Tools Calling} with a note on the format; commit 8ff01f3.
 - 2026-11-08: export the word confidence, "to feed to llm maybe" ("does it export confidence in json txt or smh?"). Owner chose both a file and a button. Finished 2026-11-08: format "llm" (name-transcript-llm.txt) and "Копировать для ИИ", doubtful words as слово[?66%]; commit cb570ae.
 - 2026-11-06: the app icon: "we need to do mockups and fix it". Finished 2026-11-06: owner
   picked idea A (wave into lines, blue) from the mockups at

@@ -35,6 +35,14 @@ Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
   model). So a cache could save ~1-1.5 s on the CPU only, at the cost of a per-device copy
   on disk that must be redone for each ONNX Runtime version; on the GPU at most ~0.7 s
   (lower optimisation level, slower recognition untested). Not built; recommended to leave it.
+- Owner asked whether "Копировать для ИИ" shows the other model's version (it did not): now
+  outputs.llm_text gives {main model: words with [?NN%] | other model(s): their words} for each
+  place with offers, plus a note and "Мест с разными версиями: N"; a shorter offer keeps the
+  rest of the span so all versions cover the same words. The -llm.txt file is written again
+  when a search ends and when an offer is left (take rewrites all files already). Found on
+  the way: with the model process the finished result is a copy of the lines shown, so
+  offers found after it missed the history; _finish now sets item.segments = result.segments
+  (tests' finish() now passes deep copies, as the process does). 8ff01f3; tests 465 passed.
 
 ## Session 16 (2026-11-08): plan 06, suggested fixes for doubtful words
 
