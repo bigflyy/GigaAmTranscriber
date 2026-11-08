@@ -41,6 +41,20 @@ Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
   offers: GigaAM's time span of the replaced words, confidence None (no doubt mark). Owner asked
   for "Исправить..." in the card (B4, 1e7a44c: the fix dialog filled with the offer).
   window_check 88/88 (04h-edit-from-card.png). Plan 06 left: C1, the v0.5.0 release.
+- Owner: "on cpu it should be off by default and there should be a button" (B5, 44d767c):
+  Settings.suggest gpu (default) / always / off; old true / false load as gpu / off. Not yet seen
+  in a window_check run (the next one covers it). 216 light tests pass.
+- Owner: the window cannot be moved while the model loads. Measured (scratchpad gil_probe.py,
+  through agg-queue): ONNX Runtime holds the GIL while it creates GigaAM's sessions, and
+  pywebview runs Python on every window move (winforms.py on_move / on_resize), so the window
+  freezes: RNNT GPU load 4.1 s / longest main-thread gap 3.8 s; RNNT CPU 3.6 / 3.3 s; Whisper
+  (ctypes, releases the GIL) 2.2 / 0.13 s. Options given: (1, recommended) run the Worker in a
+  separate process (it already talks through the jobs and events queues; Transcript and Word
+  are picklable), (2) cache the optimized model to shorten the load, (3) leave it. Waiting for
+  the owner's choice, and for the go-ahead to start the v0.5.0 builds.
+- Hook note: a hook now queues every Python script in agg-queue as GPU work, even small
+  text-patch scripts; edit files with the Edit tool, and wrap light pytest runs yourself with
+  agg-queue run --kind tests --ram-gb 1 --cores 2.
 - Plan 06 A5, experiments/suggest/suggest_check.py on the 455 s lecture, RNNT text, no terms,
   29 doubtful groups (outputs build/suggest-test/lecture-words.* and lecture-chunk.*):
   | context | readings | search | offers | Whisper right | CTC right |
