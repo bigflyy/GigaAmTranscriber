@@ -8,6 +8,12 @@ Plan 04 (Whisper) done: v0.4.0. Plan 02 (window) has D for later; plan 01 still
 holds B9, F (Parakeet, Qwen3-ASR, F5 for suggestions) and E (speakers: the owner's next big task, for about v0.6.0).
 Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
 
+## Session 18 (2026-11-08): speaker labels, questions first
+
+- Decision (owner, "leave them"): the 17 older commits on GitHub that carry a Claude co-author
+  line stay as they are. No history rewrite, no force push; tags v0.3.0, v0.4.0, models-1 keep
+  their ids. New commits carry no co-author or attribution lines.
+
 ## Session 17 (2026-11-08): plan 06 Stage C, models in their own process
 
 - Owner chose option 1 (Worker in a separate process, before v0.5.0): "1 yes". Built (d892e59):
