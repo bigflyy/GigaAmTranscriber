@@ -358,6 +358,30 @@ def suggest_steps(js, control, item, shoot):
     wait(lambda: control.suggesting is None and item.result.suggestions_searched, 240, "search again")
     check("the button searches again", item.result.suggestions_searched
           and not js("$('file-suggest-text').textContent").startswith(("Ищу", "Варианты")))
+    # "Исправить...": the fix dialog for the offer's words, filled with the offer; the user's
+    # own text goes in. If the search found nothing left, one test offer is added.
+    if not js("$('text').querySelectorAll('.w.sg').length"):
+        with control.lock:
+            last = item.segments[0].words[-1]
+            fix.add_suggestion(item.segments, (0, len(item.segments[0].words) - 1), 1,
+                               [Word(last.start, last.end, "проверка", 0.9)], "Whisper")
+            control._emit("line", {"id": item.id, **control._segment_view(0, item.segments[0])})
+        wait(lambda: js("$('text').querySelectorAll('.w.sg').length") > 0, 10, "a mark for the edit step")
+    js("window.getSelection().removeAllRanges(); $('text').querySelector('.w.sg')"
+       ".dispatchEvent(new MouseEvent('click', {bubbles: true}))")
+    wait(lambda: not js("$('sg-card').hidden"), 5, "offer card for editing")
+    offer_text = js("$('sg-list').querySelector('.sg-text strong').textContent")
+    js("$('sg-edit').click()")
+    wait(lambda: js("$('fix').open"), 5, "fix dialog from the card")
+    check("Ispravit opens the fix dialog with the offer", js("$('fix').open") and js("$('sg-card').hidden")
+          and js("$('fix-text').value") == offer_text, js("$('fix-text').value"))
+    shoot("04h-edit-from-card")
+    own = "своя правка"
+    js(f"$('fix-text').value = '{own}'; $('fix-save').click()")
+    wait(lambda: own in js("$('text').textContent"), 10, "own text on the page")
+    check("the own text goes in, not doubtful", own in js("$('text').textContent")
+          and all(word.confidence is None for segment in item.segments for word in segment.words
+                  if word.text in own.split()))
 
 
 def player_steps(js, control, item, shoot):

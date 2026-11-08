@@ -666,6 +666,23 @@ function playCard() {
   playFrom(Math.min(...times.map((word) => word[0])), Math.max(...times.map((word) => word[1])));
 }
 
+function editCard() {
+  // "Исправить...": the fix dialog for every word the card's offers cover. The box starts
+  // with the first offer when it covers all of them, so a nearly right offer needs only a
+  // few keys; otherwise with the current text, as for a selection.
+  if (!card) return;
+  const all = [...$('text').querySelectorAll('.w')];
+  const spans = [...new Set(card.offers.flatMap(coveredSpans))].sort((a, b) => all.indexOf(a) - all.indexOf(b));
+  if (!spans.length) return;
+  const { fileId } = card;
+  const first = card.offers[0];
+  const whole = first.offer.count === spans.length && coveredSpans(first)[0] === spans[0];
+  closeCard();
+  selection = { fileId, first: spanPosition(spans[0]), last: spanPosition(spans[spans.length - 1]) };
+  openFix(false);
+  if (whole) $('fix-text').value = wordsText(first.offer.words);
+}
+
 function renderSuggest(file) {
   // The line under the file name: how the search goes, and "Найти варианты".
   const info = file.suggest || {};
@@ -1230,6 +1247,7 @@ $('text').addEventListener('mouseover', showConfidence);
 $('suggest').addEventListener('change', () => changeSetting({ suggest: $('suggest').checked }));
 $('find-suggest').addEventListener('click', () => state.selected && call('find_suggestions', state.selected));
 $('sg-play').addEventListener('click', playCard);
+$('sg-edit').addEventListener('click', editCard);
 $('sg-leave').addEventListener('click', leaveOffers);
 // The card closes on Esc, on a click elsewhere, and when its word scrolls out of sight.
 document.addEventListener('pointerdown', (event) => {

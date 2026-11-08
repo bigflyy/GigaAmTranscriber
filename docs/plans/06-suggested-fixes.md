@@ -33,11 +33,15 @@ the punctuation of the words it replaces. Numbers in HANDOFF.md, session 16.
 - [x] **A4** Controller: take a suggestion (words keep their times, files written again, like apply_fix), leave it (the suggestion is dropped); Settings.suggest switch
 - [x] **A5** Measure on the 455 s lecture: how many suggestions, how many right, how long; decide whether a suggestion needs two models to agree. Compare the 1.5 s / 6 words of context with reading each whole line (VAD chunk, at most 25 s) once (owner 2026-11-08: "yes"); switch the app to whole lines if they win
 
+- [ ] **A6** Measure about 25 s centred on each group (half before, half after, across line ends) against whole lines (owner 2026-11-08: "measure it, test it"); switch if it wins
+
 ### Stage B: Window
 
 - [x] **B1** Blue underline for words with a suggestion; hover text names the suggestion; a click opens the card under the word (each model's reading, "Взять", "Оставить"), Esc and a click away close it
 - [x] **B2** File status shows the search ("Ищу варианты: 5 / 35"); "Найти варианты" for files without suggestions; Settings switch "Предлагать исправления"
 - [x] **B3** Tests (fix.py, controller with a fake model) and window_check.py steps
+
+- [ ] **B4** "Исправить..." in the offer card (owner 2026-11-08: "yes"): opens the fix dialog for the words the offer covers, the box filled with the offer's text, so a nearly right offer can be corrected by hand
 
 ### Stage C: Release v0.5.0
 
