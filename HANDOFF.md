@@ -79,6 +79,29 @@ Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
 - Owner checked the review pages ("seems fine i guess", "ok") and decided (A4): "ok lets try this
   approach in v1 and try others in future". So community-1 on ONNX Runtime for v0.6.0; other
   engines are an idea for later (IDEAS.md).
+- Plan 07 Stage B, engine (commits 8451810, 797e65b, fa81053):
+  - export_speaker_models.py (cuda-torch2) writes build/diar-data/export: segmentation.onnx
+    (5.9 MB, seg-3.0, waveform (B,1,160000) -> powerset log-probs (B,589,7)), embedding.onnx
+    (26.5 MB, ResNet34 trunk + pyannote's weighted StatsPool + seg_1 inside: centred fbank
+    (B,998,80) + weights (B,3,125) -> (B,3,256)), speakers.npz (powerset table, PLDA with the
+    eigh done offline, so no scipy), speakers.json (frame grid 0 / 0.0619375 / 0.016875,
+    VBx 0.6 / 0.07 / 0.8). ONNX vs torch: 2e-5 and 1.4e-7.
+  - gigaam_app/diarize.py: numpy port of every step (chunking, powerset, speaker count,
+    Kaldi fbank once per batch span, centroid-linkage AHC with Lance-Williams (stops at the
+    first pair above 0.6, same as fcluster), VBx, k-means for a fixed count, constrained
+    assignment by trying every assignment, reconstruct, frame-middle turns). Speakers are
+    numbered by first appearance. Step 1 s on a GPU, 2 s on the CPU. exclude_overlap off
+    (as measured; community-1's own config may have it on, untested).
+  - Check (run_port.py, run_port_sets.sh): segmentation 1e-6 of frames differ, count exact,
+    fbank 5e-4; scores equal torch: AMI DER 19.9 (excl 26.0), kremlin 0.3% words wrong, all
+    counts right. DirectML ~50x realtime (an hour in ~70 s: segmentation ~25 s, voice prints
+    ~45 s; numpy pooling was 3x slower before it moved into the ONNX model). CPU speed not
+    yet measured with the port.
+  - Word.speaker, Transcript.speakers (names), diarize.assign_speakers; JSON output keeps
+    them when known. Worker job "diarize" (events in worker.py's docstring). 486 tests pass.
+  - catalog.SPEAKER_MODEL points at models-1 assets speakers_community1.<file>; NOT uploaded
+    yet (needs the owner's go-ahead; licences MIT / CC BY 4.0 to add to THIRD_PARTY_NOTICES).
+  - Next: B4 controller part, then Stage C (window), D (files, CLI).
 
 ## Session 17 (2026-11-08): plan 06 Stage C, models in their own process
 
