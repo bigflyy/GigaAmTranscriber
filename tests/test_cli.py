@@ -66,7 +66,7 @@ def test_unknown_language_exits_2(tmp_path, monkeypatch, capsys):
 def test_version(capsys):
     with pytest.raises(SystemExit) as stop:
         cli.main(["--version"])
-    assert stop.value.code == 0 and "0.4.0" in capsys.readouterr().out
+    assert stop.value.code == 0 and "0.5.0" in capsys.readouterr().out
 
 
 def test_wildcards_are_expanded(tmp_path):
