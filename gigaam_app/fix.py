@@ -329,7 +329,31 @@ def suggestion_from(reading, context_words, first_selected, last_selected):
             return None
     if i2 - i1 > high - low + SUGGEST_EXTRA_WORDS:
         return None
-    return i1, i2 - i1, list(reading[j1:j2])
+    return i1, i2 - i1, keep_edges(context_words[i1:i2], reading[j1:j2])
+
+
+_LEADING = re.compile(r"^[^\w]+")
+_TRAILING = re.compile(r"[^\w]+$")
+
+
+def keep_edges(old_words, new_words):
+    """The new words with the punctuation around the old ones: the text's own sentence
+    stays as it was. A reading of a piece puts its own sentence ends in ("промпт-
+    инжиниринга." in the middle of a sentence, "«Lin»."); the offer is about the words.
+    An edge word that is nothing but punctuation is kept as it is."""
+    new_words = [Word(word.start, word.end, word.text, word.confidence) for word in new_words]
+    if not old_words or not new_words:
+        return new_words
+    lead = _LEADING.match(old_words[0].text)
+    trail = _TRAILING.search(old_words[-1].text)
+    first, last = new_words[0], new_words[-1]
+    stripped = _LEADING.sub("", first.text)
+    if stripped:
+        first.text = (lead.group() if lead else "") + stripped
+    stripped = _TRAILING.sub("", last.text)
+    if stripped:
+        last.text = stripped + (trail.group() if trail else "")
+    return new_words
 
 
 def add_suggestion(segments, position, count, words, model):

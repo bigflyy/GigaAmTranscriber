@@ -171,6 +171,22 @@ def test_suggestion_of_an_added_or_dropped_word_takes_a_neighbour():
     assert (first, count, [w.text for w in offered]) == (0, 2, ["решение"])
 
 
+def test_suggestion_keeps_the_texts_punctuation():
+    """Whisper puts its own sentence ends and quotes in; the offer keeps the text's ones
+    (lecture, 2026-11-08: "промпт-инжиниринга?" mid-sentence, "«Lin».")."""
+    current = words(("основе", 0, 1), ("пром-инжиниринга", 1, 2), ("и", 2, 3))
+    heard = words(("основе", 0, 1), ("промпт-инжиниринга?", 1, 2), ("и", 2, 3))
+    assert [w.text for w in fix.suggestion_from(heard, current, 1, 1)[2]] == ["промпт-инжиниринга"]
+    current = words(("нотацию", 0, 1), ("Лин.", 1, 2), ("А", 2, 3))
+    heard = words(("нотацию", 0, 1), ("«Lean»,", 1, 2), ("А", 2, 3))
+    assert [w.text for w in fix.suggestion_from(heard, current, 1, 1)[2]] == ["Lean."]
+    current = words(("(Tullz", 0, 1), ("Colling),", 1, 2))
+    heard = words(("Tools", 0, 1), ("Calling", 1, 2))
+    assert [w.text for w in fix.suggestion_from(heard, current, 0, 0)[2]] == ["(Tools", "Calling),"]
+    # The reading's own Words are not changed.
+    assert heard[0].text == "Tools"
+
+
 def test_suggestion_none_when_the_reading_went_its_own_way():
     current = words(*[(f"w{i}", i, i + 1) for i in range(12)])
     other = words(*[(f"x{i}", i, i + 1) for i in range(12)])
