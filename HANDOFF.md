@@ -1,12 +1,44 @@
 # Handoff: state and findings
 
-Last updated 2026-11-08 (session 17). Last plan: [docs/plans/06-suggested-fixes.md](docs/plans/06-suggested-fixes.md)
-(finished: suggested fixes, models in their own process, release v0.5.0 published as its
+Last updated 2026-11-09 (session 19). Current plan: [docs/plans/07-speaker-labels.md](docs/plans/07-speaker-labels.md) (speakers; B-D done, E1 release left).
+Plan 06 finished (suggested fixes, models in their own process, release v0.5.0 published as its
 Stage D). Plan 03 (fix a part):
 A and B2 done; B1 and C left. Plan 05 (player) done (C3 in v0.5.0).
 Plan 04 (Whisper) done: v0.4.0. Plan 02 (window) has D for later; plan 01 still
-holds B9, F (Parakeet, Qwen3-ASR, F5 for suggestions) and E (speakers: the owner's next big task, for about v0.6.0).
+holds B9, F (Parakeet, Qwen3-ASR, F5 for suggestions) (its E moved to plan 07).
 Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
+
+## Session 19 (2026-11-09): plan 07 B4, C, D done (speakers in the window, files, CLI)
+
+- B4 controller (c0354ac): Settings.speakers (off) queues a search after each DONE file;
+  find_speakers(file, count) for the button; the speaker models (catalog.SPEAKER_MODEL, 31 MiB)
+  download by themselves the first time through the worker's "download" job (no question: the
+  user asked for speakers). One search at a time; it holds the next file (a whole-file job on
+  the worker; a waiting file says "...когда закончится определение говорящих") and goes before
+  suggestion searches. diarize_result -> assign_speakers (turns come as tuples, made Turns
+  again), history, files rewritten. cancel_speakers, rename_speaker (empty name = number back),
+  close question names a running search. fix.replace_words: new words take the speaker of the
+  first word they replace.
+- C window (a9bf314): #file-speakers line (status, "Говорящих: авто / 1-20", button "Определить
+  говорящих" / "Определить заново", "Отменить"); Settings fieldset "Говорящие". With speakers a
+  change of speaker (also inside a line) starts a paragraph with a coloured name (--spk-0..7 per
+  theme); the lines of one long turn stay their own paragraphs (my choice: a lecture would
+  otherwise be one paragraph). A click on the name opens a rename dialog. Page words carry
+  word[5] = speaker. window_check speaker_steps: --whisper 103/103 (screens 04i-04k in this
+  session's scratchpad wcheck/shots; the lecture clip has one voice, so a second speaker is set
+  by the check to see a split line).
+- D files and CLI (748a27c): outputs.line_parts; txt and the AI text "Имя: " at each turn after
+  a blank line (the AI note says speakers are automatic and may be wrong); timestamps name the
+  speaker on every line; srt cues never mix speakers, the first cue of a turn has the name; md
+  "**Имя:**" per turn; copying uses the same texts. CLI --speakers [auto|N|off] (default from
+  the settings file), --download Speakers, --list-models lists them. 517 tests pass, 2 skipped.
+- CPU speed of the port (PORT_DEVICE=cpu, 2 s step, run_port_sets.sh port-cpu, results in
+  build/diar-data/out/port-cpu.txt): 14-18x realtime, about 17x overall (an hour in ~3.5 min;
+  voice prints ~90% of the time). Same quality as the GPU at 2 s: AMI DER 20.9 (excl 26.8),
+  kremlin 0.3% words wrong, all counts right except TS3003a (2 of 4, as always). Another
+  session's light test jobs may have run alongside.
+- Not seen by the owner yet: the speaker line, labels, rename, Settings checkbox, the files.
+  Plan 07 left: E1 (v0.6.0 builds, smoke tests, notes, README; publishing waits for the owner).
 
 ## Session 18 (2026-11-08): speaker labels, questions first
 
