@@ -1,5 +1,6 @@
 """The window's logic (gigaam_app/controller.py) with a fake worker: no model, no window."""
 
+import copy
 from pathlib import Path
 import queue
 import threading
@@ -92,11 +93,12 @@ def segment(start, end, text):
 
 def finish(control, item_path, segments, cancelled=False, formats=("txt", "timestamps"), model="RNNT",
            device="GPU (DirectML)"):
-    """Play a whole transcription of the running file and write real outputs."""
+    """Play a whole transcription of the running file and write real outputs. The result holds
+    copies of the lines, as it does when it comes from the model process (worker.WorkerProcess)."""
     for seg in segments:
         control.handle(("segment", seg))
     result = Transcript(source=str(item_path), model=model, device=device, audio_seconds=61.0,
-                        segments=list(segments), cancelled=cancelled)
+                        segments=copy.deepcopy(list(segments)), cancelled=cancelled)
     from gigaam_app.outputs import write_outputs
     written = write_outputs(result, list(formats)) if segments else []
     control.handle(("finished", result, written))
@@ -863,6 +865,33 @@ def test_a_new_file_goes_before_the_next_group(app, media, searching):
     second = suggest_jobs(app)
     assert len(second) == 1 and second[0][2] == searching.path  # the first file's search goes on
     assert app._file_view(app.files[1])["suggest"]["text"].endswith("в очереди")
+
+
+def test_offers_reach_the_result_and_the_file_for_an_ai(app, media, monkeypatch):
+    """The result from the model process is a copy of the lines shown: offers found later must
+    still reach it (the history and the files are written from it), and the llm file is
+    written again with both versions once the search ends, and again when an offer is left."""
+    monkeypatch.setattr(app, "_model_installed", lambda key: key in ("RNNT", "CTC", "Whisper"))
+    app.set_settings({"outputs": ["txt", "llm"]})
+    app.add_files([str(media[0])])
+    item = app.files[0]
+    finish(app, media[0], doubtful_lines(), formats=("txt", "llm"))
+    assert item.segments is item.result.segments
+    [job] = suggest_jobs(app)
+    app.handle(("suggest_result", job[1], "Whisper", TOOLS_READING, None))
+    assert item.result.segments[0].words[3].suggestions  # in the result, so in the history
+    app.handle(("suggest_done", job[1]))
+    [second] = suggest_jobs(app)
+    app.handle(("suggest_done", second[1]))
+    llm_file = item.written["llm"]
+    text = llm_file.read_text(encoding="utf-8")
+    assert "{GigaAM v3 RNNT: Tullz[?50%] Colling, | Whisper" in text and ": Tools Calling,}" in text
+    assert "Мест с разными версиями: 1." in text
+    assert "{" not in item.written["txt"].read_text(encoding="utf-8")  # plain text has no versions
+    assert "{GigaAM v3 RNNT: Tullz" in app.copy_text(item.id, False, True)
+    assert app.leave_suggestion(item.id, [0, 3], 0)
+    assert "Tullz[?50%] Colling, и" in llm_file.read_text(encoding="utf-8")
+    assert "{" not in llm_file.read_text(encoding="utf-8")
 
 
 def test_an_edit_during_the_search_drops_the_offer_for_changed_words(app, searching):

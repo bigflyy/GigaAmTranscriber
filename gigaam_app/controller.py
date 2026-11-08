@@ -726,6 +726,18 @@ class Controller:
         item.edits += 1
         self.rereading = None
 
+    def _write_llm_again(self, item):
+        """The offers changed (found, or one left): write the file for an AI again, since it
+        gives the other models' versions (outputs.llm_text). The other files do not show offers."""
+        if "llm" not in item.written or item.result is None:
+            return
+        try:
+            [path] = write_outputs(item.result, ["llm"], doubt_below=self.settings.doubt_light)
+        except (OSError, ValueError) as problem:
+            self._error(f"Не удалось перезаписать файл для ИИ: {problem}")
+            return
+        item.written["llm"] = path
+
     def _write_again(self, item):
         """After the text changed: write the saved files again, remember the file, redraw it."""
         with self.lock:
@@ -946,6 +958,7 @@ class Controller:
         self.suggesting = None
         if error is None:
             item.result.suggestions_searched = True
+            self._write_llm_again(item)
             self._remember(item)
         else:
             self._notice(f"Не удалось найти варианты для {item.path.name}: {error}")
@@ -1021,6 +1034,7 @@ class Controller:
             if not 0 <= index < len(fix.word_at(item.segments, position).suggestions or []):
                 return False
             fix.drop_suggestion(item.segments, position, index)
+            self._write_llm_again(item)
             self._remember(item)
             self._emit("line", {"id": item.id, **self._segment_view(position[0], item.segments[position[0]])})
             self._emit_file(item)
@@ -1340,6 +1354,11 @@ class Controller:
         item.elapsed = self.clock() - item.started
         item.cancelling = False
         item.result = result
+        if result is not None:
+            # The model process sends the result as a copy of the lines it sent one by one.
+            # Keep one set of lines: offers and edits change them in place, and the history
+            # and the files are written from the result.
+            item.segments = result.segments
         if result is not None and result.model:
             item.model = result.model  # the model that really ran (the same key as at the start)
         if result is None or result.cancelled:

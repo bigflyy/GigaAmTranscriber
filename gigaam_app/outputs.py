@@ -174,24 +174,65 @@ def marked_word(word, doubt_below):
     return f"{body}[?{round(word.confidence * 100)}%]{tail}"
 
 
+def versions_line(words, transcript_title, doubt_below):
+    """One line of the llm text. Where another model heard the words differently (offers kept
+    on the first word, plan 06), both versions are given:
+    {GigaAM v3 RNNT: Tullz[?60%] Colling | Whisper large-v3-turbo (q5_0): Tools Calling}.
+    Returns (line, number of places with versions)."""
+    parts, places, index = [], 0, 0
+    while index < len(words):
+        offers = words[index].suggestions or []
+        if not offers:
+            parts.append(marked_word(words[index], doubt_below))
+            index += 1
+            continue
+        # The span the offers replace; an offer never reaches past its line (fix.doubt_groups).
+        span = min(max(offer["count"] for offer in offers), len(words) - index)
+        own = " ".join(marked_word(word, doubt_below) for word in words[index:index + span])
+        versions = [f"{transcript_title}: {own}"]
+        for offer in offers:
+            # A shorter offer keeps the rest of the span from the text, so every version
+            # covers the same words.
+            text = " ".join([item[2] for item in offer["words"]] +
+                            [word.text for word in words[index + offer["count"]:index + span]])
+            names = ", ".join(model_title(model) for model in offer["models"])
+            versions.append(f"{names}: {text}")
+        parts.append("{" + " | ".join(versions) + "}")
+        places += 1
+        index += span
+    return " ".join(parts), places
+
+
 def llm_text(transcript, doubt_below=LLM_DOUBT_BELOW):
     """Text to paste into a chat with an LLM (plan 03, owner's idea 2026-11-08): a short note
     on how it was made and what the marks mean, then one paragraph per speech fragment with
     doubtful words marked as слово[?66%]. The model can then check exactly those words
-    against the sentence around them."""
+    against the sentence around them. Where another model heard a place differently
+    (suggested fixes, plan 06), both versions are given in {...} (owner 2026-11-08)."""
     words = [word for segment in transcript.segments for word in segment.words]
     marked = sum(1 for word in words if word.confidence is not None and word.confidence < doubt_below)
-    made_by = f" (модель {model_title(transcript.model)})" if transcript.model else ""
-    lines = [f"Автоматическая расшифровка речи{made_by}. Слова, в которых модель распознавания "
-             "не уверена, отмечены так: слово[?66%], где число - её уверенность в слове. "
-             "Эти слова могли быть распознаны неверно.",
-             f"Отмечено слов: {marked} из {len(words)}.", ""]
+    title = model_title(transcript.model) if transcript.model else "Основная модель"
+    made_by = f" (модель {title})" if transcript.model else ""
+    body, places = [], 0
     for segment in transcript.segments:
         if segment.words:
-            lines.append(" ".join(marked_word(word, doubt_below) for word in segment.words))
+            line, found = versions_line(segment.words, title, doubt_below)
+            body.append(line)
+            places += found
         elif segment.text:
-            lines.append(segment.text)
-    return "\n".join(lines) + "\n"
+            body.append(segment.text)
+    lines = [f"Автоматическая расшифровка речи{made_by}. Слова, в которых модель распознавания "
+             "не уверена, отмечены так: слово[?66%], где число - её уверенность в слове. "
+             "Эти слова могли быть распознаны неверно."]
+    if places:
+        other = next(model_title(word.suggestions[0]["models"][0]) for word in words if word.suggestions)
+        lines.append("Места, которые другая модель распознала иначе, даны в нескольких версиях: "
+                     f"{{{title}: как услышала она | {other}: как услышала другая модель}}. "
+                     "Первая версия - основной текст. Выберите версию, которая лучше подходит по "
+                     "смыслу, или исправьте её: правы могут быть обе модели или ни одна.")
+    lines.append(f"Отмечено слов: {marked} из {len(words)}." +
+                 (f" Мест с разными версиями: {places}." if places else ""))
+    return "\n".join(lines + [""] + body) + "\n"
 
 
 RENDERERS = {"txt": plain_text, "timestamps": timestamped_text, "md": markdown_text, "srt": srt_text,

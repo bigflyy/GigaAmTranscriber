@@ -109,6 +109,22 @@ def test_llm_text_marks_doubtful_words_before_their_punctuation():
     assert llm_text(transcript, doubt_below=0.6).splitlines()[3] == "Привет. Как дела?"
 
 
+def test_llm_text_gives_both_versions_where_another_model_heard_otherwise():
+    transcript = make_transcript()
+    words = transcript.segments[0].words              # "Привет." "Как" "дела?"
+    words[1].confidence = 0.6
+    words[1].suggestions = [{"models": ["Whisper"], "count": 2,
+                             "words": [[0.0, 0.5, "Как", None], [0.5, 1.0, "дела?", None]]},
+                            {"models": ["CTC", "Whisper"], "count": 1, "words": [[0.0, 0.5, "Каг", None]]}]
+    lines = llm_text(transcript).splitlines()
+    assert "даны в нескольких версиях" in lines[1] and "GigaAM v3 RNNT" in lines[1]
+    assert lines[2] == "Отмечено слов: 1 из 5. Мест с разными версиями: 1."
+    # A shorter offer keeps the rest of the span, so every version covers the same words.
+    assert lines[4] == ("Привет. {GigaAM v3 RNNT: Как[?60%] дела? | Whisper large-v3-turbo (q5_0): Как дела? | "
+                        "GigaAM v3 CTC, Whisper large-v3-turbo (q5_0): Каг дела?}")
+    assert "версиях" not in llm_text(make_transcript())  # no offers: no note
+
+
 def test_llm_file_uses_the_given_threshold(tmp_path):
     transcript = make_transcript(tmp_path / "talk.mp3")
     transcript.segments[0].words[1].confidence = 0.9
