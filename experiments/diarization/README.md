@@ -17,5 +17,6 @@ conda `newrag` (NeMo 2.7.2). Every model run goes through agg-queue.
 | `score_der.py` | DER with pyannote.metrics (collar, overlap options, UEM) |
 | `score_words.py` | word speaker error: share of recognised words with the wrong speaker |
 | `speed_probe.py` | DirectML vs CPU time of the segmentation and embedding ONNX models |
+| `quantize_probe.py` | int8 (dynamic) copy of an embedding model: CPU time and closeness to float |
 
-Shell drivers used in session 18: `build/diar-data/run_refs.sh`, `run_set.sh`, `run_ami_oracle.sh`.
+Shell drivers used in session 18: `build/diar-data/run_refs.sh`, `run_set.sh`, `run_ami_oracle.sh`, `relabel_rescore.sh`.

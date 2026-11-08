@@ -13,6 +13,11 @@ from the label is underlined in red, so the places where a system fails can
 be found by ear.
 
 Usage: python make_review.py KREMLIN_DIR OUT.html [HYP_DIR]
+       python make_review.py --system OUT.html HYP_DIR ASR_DIR AUDIO...
+The second form is for recordings without true labels (the owner's files): the
+names are the system's speakers (SPEAKER_00, ...), every word of the app's
+transcript (ASR_DIR/<stem>-transcript.json) gets the speaker that covers it in
+HYP_DIR/<stem>.rttm, and the local audio file plays in the page.
 """
 import json
 import sys
@@ -126,7 +131,33 @@ show(0);
 """
 
 
+def system_events(hyp_dir, asr_dir, audio_paths):
+    """Events for recordings without labels: words coloured by the system's speakers."""
+    events = []
+    for audio_path in audio_paths:
+        data = json.loads((asr_dir / f"{audio_path.stem}-transcript.json").read_text(encoding="utf-8"))
+        segments = read_rttm(hyp_dir / f"{audio_path.stem}.rttm")
+        words = []
+        for segment in data["segments"]:
+            for word in segment["words"]:
+                start, end = float(word["start"]), float(word["end"])
+                words.append([round(start, 2), round(end, 2), word["text"], speaker_at(segments, start, end) or "?"])
+        speakers = len({w[3] for w in words if w[3] != "?"})
+        events.append({"title": f"{audio_path.name} ({speakers} speakers found)",
+                       "video": audio_path.resolve().as_uri(), "words": words, "score": ""})
+    return events
+
+
 def main():
+    if sys.argv[1] == "--system":
+        out_path, hyp_dir, asr_dir = Path(sys.argv[2]), Path(sys.argv[3]), Path(sys.argv[4])
+        events = system_events(hyp_dir, asr_dir, [Path(p) for p in sys.argv[5:]])
+        page = PAGE.replace("__EVENTS__", json.dumps(events, ensure_ascii=False))
+        page = page.replace("names who should be speaking now (from the kremlin.ru transcript, lined up with GigaAM's word times)",
+                            "names the speaker the system found for the current word (names are the system's own numbers)")
+        out_path.write_text(page, encoding="utf-8")
+        print(out_path)
+        return
     kremlin_dir, out_path = Path(sys.argv[1]), Path(sys.argv[2])
     hyp_dir = Path(sys.argv[3]) if len(sys.argv) > 3 else None
     index = {e["id"]: e for e in json.loads((kremlin_dir / "index.json").read_text(encoding="utf-8"))}

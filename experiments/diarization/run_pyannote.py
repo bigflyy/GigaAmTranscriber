@@ -12,6 +12,8 @@ are cached, and the PLDA files (plda.npz, xvec_transform.npz) are cached too.
 Usage: python run_pyannote.py MODE OUT_DIR SPEAKERS AUDIO...
 MODE: "p31" (speaker-diarization-3.1) or "c1" (community-1).
 SPEAKERS: "auto", "oracle" (count from the reference RTTM next to the audio) or a number.
+Environment: PYANNOTE_STEP, the window step as a share of the 10 s window (default 0.1 = 1 s;
+0.2 = 2 s halves the work), to measure what a faster CPU setting costs in quality.
 Writes OUT_DIR/<stem>.rttm; for c1 also OUT_DIR-excl/<stem>.rttm (the exclusive
 version, one speaker at a time, meant for labelling words).
 """
@@ -39,7 +41,8 @@ def build(mode):
         pipeline = SpeakerDiarization(
             segmentation="pyannote/segmentation-3.0",
             embedding="pyannote/wespeaker-voxceleb-resnet34-LM",
-            plda=str(PLDA_DIR), clustering="VBxClustering")
+            plda=str(PLDA_DIR), clustering="VBxClustering",
+            segmentation_step=float(os.environ.get("PYANNOTE_STEP", "0.1")))
         pipeline.instantiate(pipeline.default_parameters())
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     pipeline.to(device)
