@@ -43,6 +43,8 @@ the punctuation of the words it replaces. Numbers in HANDOFF.md, session 16.
 
 - [x] **B4** "Исправить..." in the offer card (owner 2026-11-08: "yes"): opens the fix dialog for the words the offer covers, the box filled with the offer's text, so a nearly right offer can be corrected by hand
 
+- [x] **B5** On the CPU only the button searches (owner 2026-11-08: "on cpu it should be off by default and there should be a button"; Whisper on the CPU is slower than the recording): Settings "Варианты для сомнительных слов" gpu (default) / always / off
+
 ### Stage C: Release v0.5.0
 
 - [ ] **C1** Release v0.5.0 (fix a part, doubt marks, AI export, player, suggested fixes): Windows and Linux builds with smoke tests, plan 05 C3 (player on Linux), notes, owner's go-ahead before publishing
