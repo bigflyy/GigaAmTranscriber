@@ -51,7 +51,7 @@ def build(mode):
 
 def write(annotation, path, file_id):
     """Write a pyannote Annotation as RTTM."""
-    lines = [f"SPEAKER {file_id} 1 {seg.start:.3f} {seg.duration:.3f} <NA> <NA> {label} <NA> <NA>"
+    lines = [f"SPEAKER {file_id.replace(' ', '_')} 1 {seg.start:.3f} {seg.duration:.3f} <NA> <NA> {label} <NA> <NA>"
              for seg, _, label in annotation.itertracks(yield_label=True)]
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")

@@ -25,18 +25,22 @@ def write_rttm(path, file_id, segments):
     lines = []
     for start, end, speaker in sorted(segments):
         if end > start:
-            lines.append(f"SPEAKER {file_id} 1 {start:.3f} {end - start:.3f} <NA> <NA> {speaker} <NA> <NA>")
+            lines.append(f"SPEAKER {file_id.replace(' ', '_')} 1 {start:.3f} {end - start:.3f} <NA> <NA> {speaker} <NA> <NA>")
     Path(path).write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def read_rttm(path):
-    """Read an RTTM file as [(start, end, speaker)]."""
+    """Read an RTTM file as [(start, end, speaker)].
+
+    A line has 10 fields; extra ones come from a file id with spaces (written
+    before the writers replaced them), so the fields are counted from the end.
+    """
     segments = []
     for line in Path(path).read_text(encoding="utf-8").splitlines():
         fields = line.split()
-        if len(fields) >= 8 and fields[0] == "SPEAKER":
-            start, duration = float(fields[3]), float(fields[4])
-            segments.append((start, start + duration, fields[7]))
+        if len(fields) >= 10 and fields[0] == "SPEAKER":
+            start, duration = float(fields[-7]), float(fields[-6])
+            segments.append((start, start + duration, fields[-3]))
     return segments
 
 
