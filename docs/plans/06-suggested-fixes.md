@@ -45,6 +45,16 @@ the punctuation of the words it replaces. Numbers in HANDOFF.md, session 16.
 
 - [x] **B5** On the CPU only the button searches (owner 2026-11-08: "on cpu it should be off by default and there should be a button"; Whisper on the CPU is slower than the recording): Settings "Варианты для сомнительных слов" gpu (default) / always / off
 
-### Stage C: Release v0.5.0
+### Stage C: Models in their own process
 
-- [ ] **C1** Release v0.5.0 (fix a part, doubt marks, AI export, player, suggested fixes): Windows and Linux builds with smoke tests, plan 05 C3 (player on Linux), notes, owner's go-ahead before publishing
+The window froze for about 4 s while GigaAM loaded: ONNX Runtime holds Python's interpreter lock
+while it opens the model, and pywebview runs Python on every move of the window (measured in
+session 16). Owner 2026-11-08: run the models in a separate process, before v0.5.0 ("1 yes").
+
+- [x] **C1** worker.WorkerProcess: the Worker in a spawned process, the same jobs / cancel / engine_key / start / stop for the controller; a crashed process is reported (the running file fails, a search gets its _failed event) and replaced; the process ends when the window's process is gone; launchers/gui_main.py calls freeze_support(); tests/test_worker_process.py
+- [ ] **C2** Check: window_check with Whisper passes; the window's main thread no longer stops during a load (probe); the frozen Windows and Linux builds start the process (in the release smoke tests, D1)
+- [ ] **C3** Owner's question 2026-11-08: can the load itself be shortened? Measure where the time goes (CUDA start-up, graph optimisation, an optimised copy kept on disk) and answer
+
+### Stage D: Release v0.5.0
+
+- [ ] **D1** Release v0.5.0 (fix a part, doubt marks, AI export, player, suggested fixes): Windows and Linux builds with smoke tests, plan 05 C3 (player on Linux), notes, owner's go-ahead before publishing

@@ -21,7 +21,7 @@ from . import __version__
 from .controller import FILE_DIALOG_TYPES, Controller
 from .history import History
 from .paths import history_dir
-from .worker import Worker
+from .worker import WorkerProcess
 
 WEB_DIR = Path(__file__).resolve().parent / "web"
 # Window icon: WinForms (Windows) loads an .ico, GTK (Linux) a .png. tools/make_icon.py draws both.
@@ -283,7 +283,7 @@ def main(argv=None, scenario=None):
 
     theme = system_theme()
     events = queue.Queue()
-    worker = Worker(events)
+    worker = WorkerProcess(events)  # the models run in their own process, so loading never freezes the window
     outbox = queue.Queue()
     controller = Controller(worker, events, send=outbox.put, initial_files=argv,
                             history=History(history_dir()))

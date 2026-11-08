@@ -1,4 +1,9 @@
-"""The model thread behind the window: owns the Transcriber, runs one job at a time.
+"""The models behind the window: the Worker owns the Transcriber and runs one job at a time.
+
+The window runs the Worker in a process of its own (WorkerProcess, below). ONNX Runtime holds
+Python's interpreter lock for seconds while it opens a GigaAM model, and pywebview runs Python
+on every move of the window, so a Worker thread in the window's process froze the window for
+about 4 s at each load (measured in session 16). Experiments still use Worker as a thread.
 
 Jobs come in through `jobs`, events go out through the queue given to it:
 ("loading", model), ("load_failed", model, text), ("loaded", device_label, seconds, model),
@@ -16,6 +21,8 @@ the job "suggest" sends the same events named suggest_range, suggest_loading, su
 suggest_failed and suggest_done.
 """
 
+import multiprocessing
+import os
 import queue
 import threading
 import time
@@ -24,19 +31,27 @@ from . import catalog, download, fix
 from .audio import SAMPLE_RATE, decode_range
 from .engine import Transcriber
 from .outputs import LLM_DOUBT_BELOW, write_outputs
+from .paths import restore_child_environment
 
 # Audio decoded around a selection beyond its search windows, so the cut never ends the samples.
 REREAD_MARGIN = 0.05
+# How often the window's side checks that the model process is still alive, in seconds.
+ALIVE_CHECK = 0.5
+# Seconds the model process gets to end by itself after its last job, before it is ended.
+EXIT_WAIT = 5
 
 
 class Worker(threading.Thread):
-    """Owns the Transcriber. Jobs come in through a queue, events go out through another."""
+    """Owns the Transcriber. Jobs come in through a queue, events go out through another.
 
-    def __init__(self, events):
+    jobs and cancel may be given (the model process passes its multiprocessing ones);
+    by default they are a queue.Queue and a threading.Event."""
+
+    def __init__(self, events, jobs=None, cancel=None):
         super().__init__(daemon=True)
-        self.jobs = queue.Queue()
+        self.jobs = queue.Queue() if jobs is None else jobs
         self.events = events
-        self.cancel = threading.Event()
+        self.cancel = threading.Event() if cancel is None else cancel
         self.engine = None
         self.engine_key = None
         self.spare = {}  # other models loaded to recognise a selected part again: key -> Transcriber
@@ -85,9 +100,6 @@ class Worker(threading.Thread):
             return self.engine
         self.engine = None
         self.events.put(("loading", model))
-        # Opening the model holds the interpreter for about two seconds; let the
-        # window's threads show "loading" first instead of a stale status.
-        time.sleep(0.1)
         try:
             engine = Transcriber(model, device=device, cpu_threads=threads or None)
         except Exception as error:
@@ -98,8 +110,11 @@ class Worker(threading.Thread):
         return engine
 
     def _download(self, model):
+        """model: a catalog key, or its ModelInfo (WorkerProcess sends the ModelInfo, so a
+        model registered only in the window's process, like window_check's test model, works)."""
         self.cancel.clear()
-        info = catalog.find(model)
+        info = model if isinstance(model, catalog.ModelInfo) else catalog.find(model)
+        model = info.key
         last = [0.0]
 
         def progress(done, total):
@@ -179,3 +194,209 @@ class Worker(threading.Thread):
             except Exception as error:  # one model failing must not hide the others' readings
                 self.events.put((prefix + "_result", request, model, None, str(error) or type(error).__name__))
         self.events.put((prefix + "_done", request))
+
+
+# ---------------------------------------------------------------------- the model process
+
+def _job_subject(job):
+    """What a job is about, for WorkerProcess when the process ends unexpectedly:
+    the model key of a load or a file, the request of a reread or a suggestion search."""
+    if job[0] == "load":
+        return job[1]
+    if job[0] == "transcribe":
+        return job[2]
+    if job[0] in ("reread", "suggest"):
+        return job[1]
+    return None
+
+
+class _ChildJobs:
+    """The model process's job queue: tells the window when the last job has ended and
+    which job starts, before it runs."""
+
+    def __init__(self, jobs, events):
+        self.jobs = jobs
+        self.events = events
+
+    def get(self):
+        self.events.put(("_job", None, None))  # between jobs
+        job = self.jobs.get()
+        if job is not None:
+            self.events.put(("_job", job[0], _job_subject(job)))
+        return job
+
+
+class _ChildEvents:
+    """The model process's event queue: before "loaded" it sends the Worker's engine_key,
+    which the controller reads from WorkerProcess.engine_key when "loaded" arrives."""
+
+    def __init__(self, events):
+        self.events = events
+        self.worker = None
+
+    def put(self, event):
+        if event[0] == "loaded":
+            self.events.put(("_engine_key", self.worker.engine_key))
+        self.events.put(event)
+
+
+def _end_with_parent(parent):
+    """Model process: end at once when the window's process has gone (also when it was
+    killed), so no model stays loaded in memory with nobody to use it."""
+    parent.join()
+    os._exit(0)
+
+
+def run_model_process(jobs, events, cancel):
+    """The model process's main function: a Worker reading jobs until None arrives."""
+    restore_child_environment()  # ffmpeg started from here must get the user's libraries (Linux build)
+    parent = multiprocessing.parent_process()
+    if parent is not None:
+        threading.Thread(target=_end_with_parent, args=(parent,), name="gigaam-parent-watch", daemon=True).start()
+    outbox = _ChildEvents(events)
+    worker = Worker(outbox, jobs=_ChildJobs(jobs, events), cancel=cancel)
+    outbox.worker = worker
+    worker.run()
+    events.put(("_exit",))
+
+
+class _Jobs:
+    """WorkerProcess.jobs: put() sends a job to the model process (a download carries the
+    ModelInfo, not only its key); get_nowait() and empty() as on a queue."""
+
+    def __init__(self, owner):
+        self.owner = owner
+
+    def put(self, job):
+        if job is not None and job[0] == "download" and not isinstance(job[1], catalog.ModelInfo):
+            job = ("download", catalog.find(job[1]))
+        with self.owner.lock:
+            self.owner.inbox.put(job)
+
+    def get_nowait(self):
+        return self.owner.inbox.get_nowait()
+
+    def empty(self):
+        return self.owner.inbox.empty()
+
+
+class WorkerProcess:
+    """The Worker in a process of its own, used by the window like the Worker thread:
+    jobs.put(job), cancel (set / clear / is_set), engine_key, start() and stop().
+
+    A thread here passes the process's events on to the window's events queue. If the
+    process ends unexpectedly (a crash in a model library), the window gets an error for
+    the job that was running and a new process takes the jobs that were waiting."""
+
+    def __init__(self, events):
+        self.events = events
+        self.context = multiprocessing.get_context("spawn")  # never fork: the window has threads
+        self.cancel = self.context.Event()
+        self.engine_key = None
+        self.jobs = _Jobs(self)
+        self.lock = threading.Lock()   # guards inbox while a new process replaces it
+        self.inbox = None              # jobs to the process
+        self.process = None
+        self.forwarder = None
+        self.current = None            # (kind, subject) of the job the process started last
+        self.loading = None            # the model the process is opening, between loading and loaded
+        self.stopping = False
+
+    def start(self):
+        with self.lock:
+            self._launch()
+
+    def _launch(self):
+        """Start a model process with new queues (called with self.lock held)."""
+        self.inbox = self.context.Queue()
+        outbox = self.context.Queue()
+        self.process = self.context.Process(target=run_model_process, args=(self.inbox, outbox, self.cancel),
+                                            name="gigaam-models", daemon=True)
+        self.process.start()
+        self.forwarder = threading.Thread(target=self._forward, args=(self.process, outbox),
+                                          name="gigaam-model-events", daemon=True)
+        self.forwarder.start()
+
+    def _forward(self, process, outbox):
+        """Pass the process's events on until it says it has ended, or is found gone."""
+        while True:
+            try:
+                event = outbox.get(timeout=ALIVE_CHECK)
+            except queue.Empty:
+                if process.is_alive():
+                    continue
+                # Gone: take what it sent just before, then report the job it was on.
+                while True:
+                    try:
+                        event = outbox.get(timeout=0.1)
+                    except queue.Empty:
+                        break
+                    if not self._pass_on(event):
+                        return
+                self._lost(process)
+                return
+            if not self._pass_on(event):
+                return
+
+    def _pass_on(self, event):
+        """Handle one event from the process; False once the process has said it ends."""
+        kind = event[0]
+        if kind == "_exit":
+            return False
+        if kind == "_engine_key":
+            self.engine_key = event[1]
+        elif kind == "_job":
+            self.current = event[1:]
+        else:
+            if kind == "loading":
+                self.loading = event[1]
+            elif kind in ("loaded", "load_failed"):
+                self.loading = None
+            self.events.put(event)
+        return True
+
+    def _lost(self, process):
+        """The process ended without being asked: tell the window, start a new one."""
+        if self.stopping:
+            return
+        text = (f"Процесс распознавания неожиданно завершился (код {process.exitcode}). "
+                "Модель загрузится заново при следующем запуске.")
+        with self.lock:
+            waiting = []
+            while True:  # jobs the old process had not started yet go to the new one
+                try:
+                    waiting.append(self.inbox.get(timeout=0.1))
+                except (queue.Empty, OSError, EOFError):
+                    break
+            self.engine_key = None
+            current, self.current = self.current, None
+            loading, self.loading = self.loading, None
+            self._launch()
+            for job in waiting:
+                self.inbox.put(job)
+        kind, subject = current if current else (None, None)
+        if kind in ("reread", "suggest"):
+            self.events.put((kind + "_failed", subject, text))
+            self.events.put((kind + "_done", subject))
+            return
+        if loading is not None:
+            self.events.put(("load_failed", loading, text))
+        self.events.put(("error", text))
+
+    def stop(self, timeout=60):
+        """Cancel the running job and wait until the process has ended: a cancelled file
+        still writes the text found so far, and its last events reach the window."""
+        self.stopping = True
+        self.cancel.set()
+        with self.lock:
+            while True:  # jobs not started yet are dropped
+                try:
+                    self.inbox.get_nowait()
+                except (queue.Empty, OSError, EOFError):
+                    break
+            self.inbox.put(None)
+        self.forwarder.join(timeout)
+        self.process.join(EXIT_WAIT)
+        if self.process.is_alive():
+            self.process.terminate()
+            self.process.join(EXIT_WAIT)
