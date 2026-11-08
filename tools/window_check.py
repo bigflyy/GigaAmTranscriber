@@ -303,6 +303,15 @@ def suggest_steps(js, control, item, shoot):
     from gigaam_app.engine import Word
     js("document.querySelectorAll('#files li')[1].click()")
     wait(lambda: js("$('text').querySelectorAll('.w').length") > 4, 10, "words of the short file")
+    if not control._suggest_by_itself(item):
+        # Recognised on the CPU (WSL, a PC without a GPU): by default only the button
+        # searches (plan 06 B5), so nothing ran by itself; the button starts it.
+        time.sleep(1)
+        check("on the CPU no search by itself", not item.result.suggestions_searched and control.suggesting is None
+              and item.id not in control.suggest_queue)
+        check("on the CPU the button is offered", js("!$('find-suggest').hidden")
+              and js("$('find-suggest').textContent") == "Найти варианты", js("$('find-suggest').textContent"))
+        js("$('find-suggest').click()")
     wait(lambda: item.result.suggestions_searched and control.suggesting is None, 240, "suggestion search")
     status = js("$('file-suggest-text').textContent")
     offered = [word for segment in item.segments for word in segment.words if word.suggestions]
