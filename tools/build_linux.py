@@ -171,6 +171,7 @@ def collect_licences(app, gi_dir):
     put(Path(sysconfig.get_path("stdlib")) / "LICENSE.txt", "python/LICENSE.txt")
     put(WHISPER_CPP / "LICENSE.txt", "whisper.cpp/LICENSE.txt")  # whisper.cpp and ggml: MIT
     put(REPO_LICENCES / "whisper-LICENSE.txt", "whisper-model/LICENSE.txt")  # Whisper weights (downloaded): MIT
+    put(REPO_LICENCES / "speaker-models-LICENSE.txt", "speaker-models/LICENSE.txt")  # downloaded: MIT, CC BY 4.0
     # PyGObject (LGPL-2.1-or-later), copied from the system package with its copyright file.
     gi_copyright = Path("/usr/share/doc/python3-gi/copyright")
     if gi_dir.resolve() == SYSTEM_GI and not gi_copyright.is_file():

@@ -14,6 +14,15 @@ download (one folder per app, `windows/` and `linux/`), and at the sources below
   ([ggerganov/whisper.cpp](https://huggingface.co/ggerganov/whisper.cpp), file
   `ggml-large-v3-turbo-q5_0.bin`), unchanged, from this repository's `models-1` release or from
   Hugging Face.
+- **Speaker label models (downloaded on request, not bundled):** pyannote
+  [segmentation-3.0](https://huggingface.co/pyannote/segmentation-3.0) (MIT),
+  [WeSpeaker ResNet34-LM](https://huggingface.co/pyannote/wespeaker-voxceleb-resnet34-LM)
+  ([WeSpeaker](https://github.com/wenet-e2e/wespeaker), CC BY 4.0) and the PLDA of
+  [speaker-diarization-community-1](https://huggingface.co/pyannote/speaker-diarization-community-1)
+  (CC BY 4.0) (`licenses/speaker-models/LICENSE.txt`). Converted to ONNX by
+  `experiments/diarization/export_speaker_models.py` (weights unchanged) and downloaded from this
+  repository's `models-1` release. `gigaam_app/diarize.py` ports the clustering of
+  [pyannote.audio](https://github.com/pyannote/pyannote-audio) 4 (MIT).
 - **Silero VAD 6.2.1:** [upstream repository](https://github.com/snakers4/silero-vad), MIT.
   The unchanged model runs inside an ONNX loop made by `tools/make_silero_scan.py`.
   The speech-region logic in `gigaam_app/vad.py` is ported from silero-vad.

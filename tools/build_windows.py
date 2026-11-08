@@ -238,6 +238,7 @@ def collect_licences(app, ffmpeg_notices):
     put(ffmpeg_notices / "README.txt", "ffmpeg/README.txt")
     put(WHISPER_CPP / "LICENSE.txt", "whisper.cpp/LICENSE.txt")  # whisper.cpp and ggml: MIT
     put(REPO_LICENCES / "whisper-LICENSE.txt", "whisper-model/LICENSE.txt")  # Whisper weights (downloaded): MIT
+    put(REPO_LICENCES / "speaker-models-LICENSE.txt", "speaker-models/LICENSE.txt")  # downloaded: MIT, CC BY 4.0
     conda_licences(app, target)
 
 

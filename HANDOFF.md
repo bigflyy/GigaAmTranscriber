@@ -99,8 +99,10 @@ Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
     yet measured with the port.
   - Word.speaker, Transcript.speakers (names), diarize.assign_speakers; JSON output keeps
     them when known. Worker job "diarize" (events in worker.py's docstring). 486 tests pass.
-  - catalog.SPEAKER_MODEL points at models-1 assets speakers_community1.<file>; NOT uploaded
-    yet (needs the owner's go-ahead; licences MIT / CC BY 4.0 to add to THIRD_PARTY_NOTICES).
+  - catalog.SPEAKER_MODEL points at models-1 assets speakers_community1.<file>. Owner: "yes";
+    uploaded 2026-11-08, GitHub digests equal the catalog; download.install from the release
+    works. Licences: packaging/licenses/speaker-models-LICENSE.txt (bundled by both builds as
+    licenses/speaker-models/LICENSE.txt) and THIRD_PARTY_NOTICES.md.
   - Next: B4 controller part, then Stage C (window), D (files, CLI).
 
 ## Session 17 (2026-11-08): plan 06 Stage C, models in their own process
