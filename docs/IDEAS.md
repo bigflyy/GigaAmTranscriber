@@ -13,8 +13,6 @@ models, Stage E speaker diarization) and plan 02 (D1-D3).
 ## Languages and speakers
 
 - 2026-11-06: detect the language (there, in the selected part or the file).
-- 2026-11-06: speaker segments somehow, somewhere ("idea for now").
-  2026-11-08: owner: speaker labels are the next big task after suggested fixes (plan 06): "we are going to want this really", probably for v0.6.0, "unless something you or i think of something cool and better". Plan 01 Stage E holds the earlier diarization work.
 
 ## Links and summaries
 
@@ -24,6 +22,8 @@ models, Stage E speaker diarization) and plan 02 (D1-D3).
 
 ## Started
 
+- 2026-11-06: speaker segments somehow, somewhere ("idea for now").
+  2026-11-08: owner: speaker labels are the next big task after suggested fixes (plan 06): "we are going to want this really", probably for v0.6.0, "unless something you or i think of something cool and better". Plan 01 Stage E holds the earlier diarization work. Started 2026-11-08 (session 18): docs/plans/07-speaker-labels.md.
 - 2026-11-07: merge the two models' strengths: "gigaam does bad with english namings and whisper is good with english namings. idk if we can merge these capabilities, but if we could it d be nice. somehow. in the future." (On the lecture GigaAM wrote "tullz colling", "deps", "umail" where Whisper wrote "tools calling", "deepsync", "uml".) For now only Whisper as a model you can choose and run (plan 04). Started 2026-11-08 as suggested fixes for doubtful words: docs/plans/06-suggested-fixes.md.
 - 2026-11-08: an audio player: "maybe there should be a play/pause button. and how much time passed (the player of audio interface?)". Owner chose a whole-file player. Plan: docs/plans/05-audio-player.md.
 - 2026-11-06: select a part of the text and try to fix it somehow: decode again with

@@ -64,6 +64,8 @@ Whisper moved to its own plan, [04-whisper.md](04-whisper.md) (2026-11-07); Para
 
 ### Stage E: Speaker diarization
 
+Moved to its own plan, [07-speaker-labels.md](07-speaker-labels.md) (2026-11-08); the boxes below are kept for history.
+
 - [ ] **E1** Get a labelled multi-speaker recording (known speakers and turns) to score against
 - [ ] **E2** Compare sherpa-onnx with a lighter own pipeline (embeddings per VAD region on the same ORT provider)
 - [ ] **E3** Assign words to speakers by word timestamps; output "Speaker N:" turns

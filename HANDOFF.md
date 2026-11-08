@@ -13,6 +13,11 @@ Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
 - Decision (owner, "leave them"): the 17 older commits on GitHub that carry a Claude co-author
   line stay as they are. No history rewrite, no force push; tags v0.3.0, v0.4.0, models-1 keep
   their ids. New commits carry no co-author or attribution lines.
+- Speaker labels got their own plan, docs/plans/07-speaker-labels.md (plan 01 Stage E moved there).
+  Owner's answers are at its top: public labelled set (Russian if any) plus three own unlabelled
+  files; Settings checkbox (off) + "Определить говорящих" button; turns with a coloured, renamable
+  "Говорящий N:"; voice library later. Owner then asked: "research the options for speaker
+  labeling and segmentations. test them and check them out. including newer and better ones".
 
 ## Session 17 (2026-11-08): plan 06 Stage C, models in their own process
 
