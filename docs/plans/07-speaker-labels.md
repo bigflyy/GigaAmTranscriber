@@ -22,7 +22,7 @@ Earlier findings (HANDOFF.md, "Diarization findings"): sherpa-onnx 2.0.1 with py
 
 ### Stage A: Measure and decide
 
-- [ ] **A1** A public labelled set with known turns (Russian if one exists, else VoxConverse / AMI), a few recordings of 2-6 speakers, and a scoring script (DER with a 0.25 s collar, speaker count error, time per audio minute)
+- [x] **A1** A public labelled set with known turns (Russian if one exists, else VoxConverse / AMI), a few recordings of 2-6 speakers, and a scoring script (DER with a 0.25 s collar, speaker count error, time per audio minute)
 - [ ] **A2** The owner's three files: run every candidate, compare speaker counts and turns against the transcript (who answers whom); the owner checks a few turns by ear
 - [ ] **A3** Candidates: sherpa-onnx (pyannote segmentation 3.0 and newer, several embedding models, threshold sweep), a lighter own pipeline (embeddings per VAD region on the app's ORT provider, clustering), and newer models if they run on ONNX Runtime without torch (for example pyannote community-1, DiariZen, Sortformer); CPU and DirectML speed
 - [ ] **A4** Choose the pipeline, the default threshold and the download size; write the results to HANDOFF.md and ask the owner

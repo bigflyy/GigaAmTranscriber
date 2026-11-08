@@ -18,6 +18,41 @@ Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
   files; Settings checkbox (off) + "Определить говорящих" button; turns with a coloured, renamable
   "Говорящий N:"; voice library later. Owner then asked: "research the options for speaker
   labeling and segmentations. test them and check them out. including newer and better ones".
+  Owner also: prefer test sets the models were unlikely to be trained on; the app takes the
+  number of speakers when the user knows it (already B2 / C3); asked for GPU, not only CPU.
+- Research (web, 2026-11-08). Shippable: pyannote community-1 = segmentation-3.0 (MIT, 6 MB ONNX
+  from sherpa-onnx) + WeSpeaker ResNet34-LM (26.5 MB ONNX) + community-1 PLDA (CC-BY-4.0, mirrored
+  ungated in FinDIT-Studio/dia-models) with VBx clustering; Rust ports `dia` and `speakrs` reach
+  pyannote parity without torch. Nemotron-3-Diarization (NVIDIA, 2026-09, OpenMDW, max 8
+  speakers, 199 MB .nemo; ONNX exports in onnx-community need own mel + speaker-cache code; NeMo
+  2.7.2 in env newrag cannot load it: "TransformerEncoder" missing). Not shippable: DiariZen
+  (weights CC BY-NC), Rev reverb v1/v2 (Non-Production licence). Sortformer v2/v2.1: 4 speakers.
+  No free Russian labelled diarization set found.
+- Test sets in build/diar-data (gitignored; scripts in experiments/diarization, README there):
+  AMI test ES2004a, IS1009a, TS3003a, EN2002a (Mix-Headset, only_words RTTM + UEM; pyannote
+  trains on other AMI meetings, so a setup check only). Unseen Russian set from kremlin.ru
+  (CC BY 4.0): 5 events, 3.9 h, 2-13 speakers (81185 government meeting, 80874 party leaders,
+  80929 teachers, 80788 gas ceremony with video links, 81071 interview); labels from the
+  transcript's bold speaker names lined up (difflib) with GigaAM RNNT word times: 99.3-100% of
+  words labelled, text match 92-95%. Audio kept as 16 kHz FLAC only (disk below 20 GB free);
+  review page build/diar-data/kremlin/review.html plays the video from kremlin.ru.
+- AMI results (DER %, collar 0, overlap scored; 4 meetings, 92 min):
+  | system | DER | confusion part |
+  | --- | --- | --- |
+  | community-1 (torch, auto count) | 19.9 | 3-5 |
+  | community-1, true count | 19.8 | |
+  | pyannote 3.1, auto | 21.3 | (TS3003a: 2 speakers of 4) |
+  | sherpa-onnx seg-3.0 + ResNet34, true count | 29.0 | 5-29 |
+  | sherpa-onnx + CAM++ zh_en, true count | 32.4 | |
+  | sherpa-onnx + ERes2NetV2, true count (2 files) | 46.8 | |
+  Same segmentation, so the gap is the clustering: VBx + PLDA vs sherpa's complete-linkage AHC.
+  Exclusive (one speaker at a time) versions score ~26 (overlap counted as missed) but have
+  lower confusion: that is the one for labelling words. Speeds: pyannote torch GPU 20-35x
+  realtime (batch 1); sherpa-onnx CPU 6-8x.
+- ONNX speed probe (speed_probe.py, random input, batch 32), per hour of audio, 1 s step:
+  DirectML: segmentation 10 s, ResNet34 embeddings once per window 21 s (x3 per local speaker
+  62 s); CPU 8 threads: 36 s, 6 min (x3 18 min). Plan for B1: run the ResNet trunk once per
+  window and pool per speaker (pyannote's forward_frames / forward_embedding split), on DirectML.
 
 ## Session 17 (2026-11-08): plan 06 Stage C, models in their own process
 
