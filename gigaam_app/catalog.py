@@ -88,6 +88,22 @@ CATALOG = (
 )
 BY_KEY = {info.key: info for info in CATALOG}
 
+# Speaker labels (plan 07, gigaam_app/diarize.py): pyannote community-1 on ONNX, made by
+# experiments/diarization/export_speaker_models.py. Not a speech model, so not in CATALOG
+# (the window's model list); downloaded the first time speakers are looked for.
+# Licences: segmentation-3.0 MIT, WeSpeaker ResNet34-LM and the PLDA CC BY 4.0.
+SPEAKER_MODEL = ModelInfo(
+    "Speakers", "speakers_community1", "Speaker labels: pyannote community-1 (segmentation-3.0, WeSpeaker ResNet34-LM, PLDA)",
+    files=(RemoteFile("segmentation.onnx", 5_916_314,
+                      "3550ea68ca1ef51073036f4934513c03c4776065d009fa850d8e671e89ff0c91", role="segmentation"),
+           RemoteFile("embedding.onnx", 26_540_186,
+                      "140b763b61363bd37ef524546eeb5168a821b9cdf80d5772068f983c0093a179", role="embedding"),
+           RemoteFile("speakers.npz", 268_598,
+                      "3290ecac3ca358ea4c1ada30056da4dbe9fecd3f2d89043a7b6ae78b9f70c064", role="arrays"),
+           RemoteFile("speakers.json", 386,
+                      "e195b1d67fdf4bbd9ffe8ca5b7b4d65baed14d79d7d79a0b7a4ae42c912379d2", role="config")),
+    title="pyannote community-1 (ONNX)", model_type="speakers")
+
 
 def model_title(key):
     """Full model name for a settings key ("RNNT" -> "GigaAM v3 RNNT"); unknown keys stay as they are."""
