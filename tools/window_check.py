@@ -342,10 +342,22 @@ def suggest_steps(js, control, item, shoot):
     wait(lambda: offer_text in js("$('text').textContent"), 10, "offer on the page")
     check("Vzyat puts the offer into the text", offer_text in js("$('text').textContent")
           and js("$('sg-card').hidden"), offer_text)
+    check("the taken words are not doubtful", all(word.confidence is None for segment in item.segments
+                                                  for word in segment.words if word.text in offer_text.split()))
+    # Search again. The flag is cleared first, so the wait below cannot pass before the
+    # click has reached Python (it did, and the player steps then ran during the search).
+    item.result.suggestions_searched = False
     js("$('find-suggest').click()")
-    wait(lambda: control.suggesting is None and item.result.suggestions_searched
-         and not js("$('file-suggest-text').textContent").startswith(("Ищу", "Варианты")), 240, "search again")
-    check("the button searches again", item.result.suggestions_searched)
+    wait(lambda: control.suggesting is not None or item.result.suggestions_searched, 10, "search starts")
+    # The player works while the search reports its progress (each report replaced the
+    # file's object in the page, and play silently did nothing).
+    js("filePlayer.muted = true; $('audio-play').click()")
+    wait(lambda: js("!filePlayer.paused && filePlayer.currentTime > 0.3"), 15, "playing during the search")
+    check("play works during a search", js("!filePlayer.paused"))
+    js("filePlayer.pause(); filePlayer.currentTime = 0")
+    wait(lambda: control.suggesting is None and item.result.suggestions_searched, 240, "search again")
+    check("the button searches again", item.result.suggestions_searched
+          and not js("$('file-suggest-text').textContent").startswith(("Ищу", "Варианты")))
 
 
 def player_steps(js, control, item, shoot):
