@@ -57,6 +57,16 @@
               <button id="find-suggest" class="link" type="button"
                 title="Распознать сомнительные слова другими моделями и предложить их варианты">Найти варианты</button>
             </p>
+            <!-- Speaker labels (plan 07): how the search goes, the known number of speakers, the button. -->
+            <p id="file-speakers" class="muted suggest-line" hidden>
+              <span id="file-speakers-text"></span>
+              <label id="speaker-count-box" class="speaker-count"
+                title="Если известно, сколько людей говорит в записи, укажите число: так точнее">Говорящих:
+                <select id="speaker-count"></select></label>
+              <button id="find-speakers" class="link" type="button"
+                title="Разделить текст на абзацы по говорящим">Определить говорящих</button>
+              <button id="cancel-speakers" class="link" type="button" hidden>Отменить</button>
+            </p>
           </div>
           <div class="actions">
             <button id="file-cancel" class="danger" type="button" hidden>Отмена</button>
@@ -176,6 +186,14 @@
             самой записи, поэтому там поиск по умолчанию запускается кнопкой под именем файла.</p>
         </fieldset>
         <fieldset>
+          <legend>Говорящие</legend>
+          <label class="check-line"><input id="speakers" type="checkbox"> Определять говорящих после каждого файла</label>
+          <p id="speakers-hint" class="hint">Текст делится на абзацы по говорящим: «Говорящий 1:», «Говорящий 2:»...
+            Щелчок по имени переименовывает говорящего во всём тексте и в сохранённых файлах. Для любого
+            готового файла есть кнопка «Определить говорящих» под его именем; там же можно указать, сколько
+            людей говорит, если это известно. <span id="speakers-size"></span></p>
+        </fieldset>
+        <fieldset>
           <legend>Сохранять рядом с файлом</legend>
           <div id="formats" class="checks"></div>
         </fieldset>
@@ -240,6 +258,17 @@
   <div class="dialog-actions">
     <button id="fix-cancel" type="button">Отмена</button>
     <button id="fix-save" class="primary" type="button">Сохранить</button>
+  </div>
+</dialog>
+
+<!-- A click on "Говорящий N:" (plan 07): a new name for that speaker everywhere. -->
+<dialog id="speaker" class="dialog" aria-labelledby="speaker-title">
+  <h2 id="speaker-title">Имя говорящего</h2>
+  <p class="hint">Новое имя появится во всём тексте и в сохранённых файлах. Пустое поле вернёт номер.</p>
+  <input id="speaker-name" type="text" maxlength="60" spellcheck="false" autocomplete="off">
+  <div class="dialog-actions">
+    <button id="speaker-cancel" type="button">Отмена</button>
+    <button id="speaker-save" class="primary" type="button">Сохранить</button>
   </div>
 </dialog>
 

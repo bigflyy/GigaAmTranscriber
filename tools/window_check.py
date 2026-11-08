@@ -393,6 +393,82 @@ def suggest_steps(js, control, item, shoot):
                   if word.text in own.split()))
 
 
+def speaker_steps(js, control, item, shoot):
+    """Plan 07 on the finished short file: the button with a known count of 2 downloads the
+    speaker models from the models-1 release (the temporary download folder starts empty),
+    finds the speakers, and the text shows coloured "Govoryashchiy N:" labels; a click on one
+    renames that speaker in every label and in the transcript. Then the Settings checkbox."""
+    js("document.querySelectorAll('#files li')[1].click()")
+    wait(lambda: js("$('text').querySelectorAll('.w').length") > 4, 10, "words of the short file")
+    check("speaker button offered", js("!$('file-speakers').hidden && !$('find-speakers').hidden")
+          and js("$('find-speakers').textContent") == "Определить говорящих", js("$('find-speakers').textContent"))
+    check("count choice: auto and 1..20", js("$('speaker-count').options.length") == 21
+          and js("$('speaker-count').value") == "0")
+    js("$('speaker-count').value = '2'; $('find-speakers').click()")
+    wait(lambda: control.speaker_download is not None or control.diarizing is not None, 10, "speaker search starts")
+    seen = set()
+
+    def finished():
+        seen.add(js("$('file-speakers-text').textContent").split(":")[0])
+        return control.diarizing is None and control.speaker_download is None and not control.speaker_queue
+    started = time.perf_counter()
+    wait(finished, 300, "speakers found")
+    seconds = time.perf_counter() - started
+    names = item.result.speakers or []
+    status = js("$('file-speakers-text').textContent")
+    check("speakers found", names and status.startswith("Найдено"), f"{status!r}, {names}, {seconds:.1f} s, seen {seen}")
+    check("models were downloaded", catalog.installed_folder(catalog.SPEAKER_MODEL) is not None)
+    wait(lambda: js("$('text').querySelectorAll('.spk').length") > 0, 10, "speaker labels")
+    labels = js("[...$('text').querySelectorAll('.spk')].map(b => b.textContent)")
+    check("labels start the turns", labels and labels[0] == "Говорящий 1:"
+          and js("$('text').querySelector('p').querySelector('.spk') !== null"), labels[:6])
+    colour = js("(() => { const b = $('text').querySelector('.spk'); const probe = document.createElement('span');"
+                " probe.style.color = 'var(--spk-0)'; document.body.appendChild(probe);"
+                " const out = [getComputedStyle(b).color, getComputedStyle(probe).color];"
+                " probe.remove(); return out; })()")
+    check("the first speaker has its colour", colour[0] == colour[1], colour)
+    words_shown = js("$('text').querySelectorAll('.w').length")
+    check("every word still shown once", words_shown == sum(len(s.words) for s in item.segments), words_shown)
+    check("button now searches again", js("$('find-speakers').textContent") == "Определить заново")
+    shoot("04i-speakers")
+    js("$('text').querySelector('.spk').click()")
+    wait(lambda: js("$('speaker').open"), 5, "rename dialog")
+    check("rename dialog has the name", js("$('speaker-name').value") == "Говорящий 1", js("$('speaker-name').value"))
+    shoot("04j-speaker-rename")
+    js("$('speaker-name').value = 'Anna'; $('speaker-save').click()")
+    wait(lambda: item.result.speakers[0] == "Anna", 10, "renamed in Python")
+    wait(lambda: js("$('text').querySelector('.spk').textContent") == "Anna:", 10, "renamed on the page")
+    first_labels = js("[...$('text').querySelectorAll('.spk[data-speaker=\"0\"]')].map(b => b.textContent)")
+    check("rename reaches every label of that speaker", first_labels and set(first_labels) == {"Anna:"},
+          first_labels[:4])
+    check("rename closes the dialog", not js("$('speaker').open"))
+    # The clip has one voice: give the second half of its first line to a second speaker, as a
+    # search would, to see a line drawn in two parts (one time, two labels, every word once).
+    with control.lock:
+        words = item.segments[0].words
+        for word in words[len(words) // 2:]:
+            word.speaker = 1
+        item.result.speakers = ["Anna", "Говорящий 2"]
+    control._write_again(item)
+    wait(lambda: js("$('text').querySelectorAll('.spk').length") >= 2, 10, "second speaker drawn")
+    labels = js("[...$('text').querySelectorAll('.spk')].map(b => b.textContent)")
+    check("a change of speaker inside a line starts a paragraph", labels[:2] == ["Anna:", "Говорящий 2:"]
+          and js("$('text').querySelectorAll('p[data-seg=\"0\"]').length") == 2
+          and js("$('text').querySelectorAll('p[data-seg=\"0\"] time').length") == 1, labels)
+    check("every word still shown once with two speakers",
+          js("$('text').querySelectorAll('.w').length") == sum(len(s.words) for s in item.segments))
+    shoot("04k-two-speakers")
+    # The Settings checkbox is saved at once; switched off again so later steps run as before.
+    js("$('open-settings').click()")
+    check("speakers checkbox off by default", not js("$('speakers').checked"))
+    js("$('speakers').click()")
+    wait(lambda: '"speakers": true' in settings_text(), 10, "speakers setting saved")
+    check("speakers checkbox saved", control.settings.speakers is True)
+    js("$('speakers').click()")
+    wait(lambda: '"speakers": false' in settings_text(), 10, "speakers setting off")
+    js("$('close-settings').click()")
+
+
 def player_steps(js, control, item, shoot):
     """Plan 05 on the finished short file (muted): play, pause, seek, the spoken word is
     highlighted, a timecode plays from its line."""
@@ -518,6 +594,7 @@ def scenario(window, control, long_audio, short_audio, shoot, whisper=False):
         shoot("04-done")
         doubt_steps(js, control, control.files[1], shoot)
         suggest_steps(js, control, control.files[1], shoot)
+        speaker_steps(js, control, control.files[1], shoot)
         player_steps(js, control, control.files[1], shoot)
         fix_steps(js, control, control.files[1], short_audio, shoot)
 

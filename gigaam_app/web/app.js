@@ -145,6 +145,8 @@ function updateOneFile(file) {
   if (index < 0) return;
   const before = state.files[index];
   state.files[index] = file;
+  const namesOf = (item) => JSON.stringify((item.speakers && item.speakers.names) || []);
+  if (file.id === state.selected && namesOf(before) !== namesOf(file)) relabelSpeakers(file.id);
   const node = $('files').querySelector(`[data-id="${CSS.escape(file.id)}"]`);
   if (node) updateFileItem(node, file);
   if (file.state === 'running' && before.state !== 'running') onStarted(file);
@@ -211,6 +213,7 @@ function renderMain() {
   bar.firstElementChild.style.width = `${Math.round((file.progress || 0) * 100)}%`;
   renderSaved(file);
   renderSuggest(file);
+  renderSpeakers(file);
   $('text-label').textContent = file.state === 'running' ? 'Текст появляется по ходу' : 'Текст';
   $('copy').disabled = !file.segments;
   renderAudioBar(file);
@@ -269,7 +272,9 @@ function drawLines(id) {
   text.textContent = '';
   const lines = state.lines.get(id) || [];
   const fragment = document.createDocumentFragment();
-  for (const line of lines) fragment.appendChild(lineNode(line));
+  const names = speakerNames(id);
+  if (names.length) appendTurns(fragment, lines, names);
+  else for (const line of lines) fragment.appendChild(lineNode(line));
   closeCard();
   text.appendChild(fragment);
   markOffers();
@@ -320,22 +325,33 @@ function markAllWords() {
   for (const span of $('text').querySelectorAll('.w[data-c]')) markWord(span);
 }
 
-function lineNode(line) {
+function lineNode(line, from, to, speaker, names) {
   // Each word is its own span (data-w = its index in the line, the line's data-seg = its index
   // in the file), so a selection maps back to word times (plan 03).
+  // With speakers (plan 07) a line may be drawn in parts, words from..to-1: only the first
+  // part has the time, and a part where the speaker changes starts with the speaker's name.
   const p = el('p');
   p.dataset.seg = line.index;
-  const time = el('time', 'playable', clock(line.start));
-  time.dateTime = `PT${line.start.toFixed(1)}S`;
-  time.title = 'Прослушать эту строку';
-  p.appendChild(time);
   const words = line.words || [];
+  from = from || 0;
+  if (to === undefined) to = words.length;
+  if (!from) {
+    const time = el('time', 'playable', clock(line.start));
+    time.dateTime = `PT${line.start.toFixed(1)}S`;
+    time.title = 'Прослушать эту строку';
+    p.appendChild(time);
+  }
+  if (speaker !== null && speaker !== undefined) {
+    p.classList.add('turn-start');
+    p.appendChild(speakerLabel(speaker, names));
+  }
   if (!words.length) {
     p.appendChild(document.createTextNode(line.text));
     return p;
   }
-  words.forEach((word, index) => {
-    if (index) p.appendChild(document.createTextNode(' '));
+  for (let index = from; index < to; index += 1) {
+    const word = words[index];
+    if (index > from) p.appendChild(document.createTextNode(' '));
     const span = el('span', 'w', word[2]);
     span.dataset.w = index;
     const confidence = word[3];
@@ -344,8 +360,87 @@ function lineNode(line) {
       markWord(span);
     }
     p.appendChild(span);
-  });
+  }
   return p;
+}
+
+// ------------------------------------------------------------------ speaker labels (plan 07)
+// A word's speaker is word[5], an index into the file's speaker names (file.speakers.names).
+// The names come with the file, so a rename only changes the labels, not the lines.
+
+function speakerNames(id) {
+  const file = fileById(id);
+  return (file && file.speakers && file.speakers.names) || [];
+}
+
+function speakerLabel(speaker, names) {
+  const label = el('button', 'spk', `${(names || [])[speaker] || `Говорящий ${speaker + 1}`}:`);
+  label.type = 'button';
+  label.dataset.speaker = speaker;
+  label.title = 'Переименовать говорящего';
+  label.style.setProperty('--spk', `var(--spk-${speaker % 8})`);
+  return label;
+}
+
+function appendTurns(fragment, lines, names) {
+  // A new paragraph at each change of speaker; a word without a speaker (typed by hand where
+  // there was no neighbour) stays with the speaker before it.
+  let current = null;
+  for (const line of lines) {
+    const words = line.words || [];
+    let from = 0;
+    let label = null;
+    for (let index = 0; index < words.length; index += 1) {
+      const speaker = words[index][5];
+      if (speaker === null || speaker === undefined || speaker === current) continue;
+      if (index > from) fragment.appendChild(lineNode(line, from, index, label, names));
+      from = index;
+      label = speaker;
+      current = speaker;
+    }
+    fragment.appendChild(lineNode(line, from, words.length, label, names));
+  }
+}
+
+function relabelSpeakers(id) {
+  // The names changed (a rename): write them into the labels already drawn.
+  const names = speakerNames(id);
+  for (const label of $('text').querySelectorAll('.spk')) {
+    const speaker = Number(label.dataset.speaker);
+    label.textContent = `${names[speaker] || `Говорящий ${speaker + 1}`}:`;
+  }
+}
+
+function renderSpeakers(file) {
+  // The line under the file name: how the search goes, how many were found, and the button.
+  const info = file.speakers || {};
+  $('file-speakers').hidden = !info.text && !info.can_find;
+  $('file-speakers-text').textContent = info.text || '';
+  $('find-speakers').hidden = !info.can_find;
+  $('speaker-count-box').hidden = !info.can_find;
+  $('find-speakers').textContent = (info.names || []).length ? 'Определить заново' : 'Определить говорящих';
+  $('cancel-speakers').hidden = !info.can_cancel;
+}
+
+let renaming = null;  // {fileId, speaker} while the name dialog is open
+
+function openRename(speaker) {
+  const file = fixableFile();
+  if (!file) return;
+  renaming = { fileId: file.id, speaker };
+  const input = $('speaker-name');
+  input.value = speakerNames(file.id)[speaker] || '';
+  $('speaker').showModal();
+  input.focus();
+  input.select();
+}
+
+async function saveRename() {
+  if (!renaming) return;
+  const { fileId, speaker } = renaming;
+  renaming = null;
+  $('speaker').close();
+  await call('rename_speaker', fileId, speaker, $('speaker-name').value);
 }
 
 async function refreshLines(id) {
@@ -580,6 +675,13 @@ function onLine(data) {
   if (!lines || !lines[data.index]) return;
   lines[data.index] = data;
   if (state.selected !== data.id) return;
+  if (speakerNames(data.id).length) {
+    // A line may be drawn in several parts (speaker turns): draw the whole text again in place.
+    const top = $('text').scrollTop;
+    drawLines(data.id);
+    $('text').scrollTop = top;
+    return;
+  }
   const old = $('text').querySelector(`p[data-seg="${data.index}"]`);
   if (!old) return;
   if (card && old.contains(card.span)) closeCard();
@@ -1115,6 +1217,20 @@ function renderSettings() {
   $('doubt-light').value = Math.round((settings.doubt_light || 0.97) * 100);
   $('doubt-strong').value = Math.round((settings.doubt_strong || 0.80) * 100);
   $('suggest').value = settings.suggest || 'gpu';
+  $('speakers').checked = !!settings.speakers;
+  $('speakers-size').textContent = options.speaker_download
+    ? `Модели для этого (${options.speaker_download}) скачиваются при первом использовании.` : '';
+  const count = $('speaker-count');
+  if (!count.options.length) {  // filled once, so the chosen number stays
+    const auto = el('option', '', 'авто');
+    auto.value = '0';
+    count.appendChild(auto);
+    for (let number = 1; number <= (options.max_speakers || 20); number += 1) {
+      const option = el('option', '', String(number));
+      option.value = String(number);
+      count.appendChild(option);
+    }
+  }
   markAllWords();
 }
 
@@ -1246,6 +1362,16 @@ for (const input of document.querySelectorAll('input[name="doubt-style"]')) {
 $('text').addEventListener('mouseover', showConfidence);
 $('suggest').addEventListener('change', () => changeSetting({ suggest: $('suggest').value }));
 $('find-suggest').addEventListener('click', () => state.selected && call('find_suggestions', state.selected));
+$('speakers').addEventListener('change', () => changeSetting({ speakers: $('speakers').checked }));
+$('find-speakers').addEventListener('click', () => state.selected
+  && call('find_speakers', state.selected, Number($('speaker-count').value) || null));
+$('cancel-speakers').addEventListener('click', () => state.selected && call('cancel_speakers', state.selected));
+$('speaker-save').addEventListener('click', saveRename);
+$('speaker-cancel').addEventListener('click', () => { renaming = null; $('speaker').close(); });
+$('speaker-name').addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') { event.preventDefault(); saveRename(); }
+});
+$('speaker').addEventListener('close', () => { renaming = null; });
 $('sg-play').addEventListener('click', playCard);
 $('sg-edit').addEventListener('click', editCard);
 $('sg-leave').addEventListener('click', leaveOffers);
@@ -1306,6 +1432,8 @@ $('text').addEventListener('scroll', () => {
 });
 window.addEventListener('resize', () => { if (selection) updateBar(); });
 $('text').addEventListener('click', (event) => {
+  const label = event.target.closest('.spk');
+  if (label) { openRename(Number(label.dataset.speaker)); return; }
   const time = event.target.closest('time.playable');
   if (time && fixableFile()) playLine(Number(time.parentNode.dataset.seg));
   else if (event.altKey) {

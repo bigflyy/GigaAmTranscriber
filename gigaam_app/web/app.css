@@ -33,6 +33,9 @@
   --conf-2: #a86100;
   --conf-3: #c8410e;
   --conf-4: #c01818;
+  /* Speaker names (plan 07): one colour per speaker, by number, repeating after eight. */
+  --spk-0: #1f5fd1; --spk-1: #b0421b; --spk-2: #17784a; --spk-3: #8a3fb8;
+  --spk-4: #9a5800; --spk-5: #0b7480; --spk-6: #b8285f; --spk-7: #565e6c;
   color-scheme: light;
 }
 
@@ -67,6 +70,8 @@
     --conf-2: #f0a040;
     --conf-3: #ff7a45;
     --conf-4: #ff6161;
+    --spk-0: #7fb2ff; --spk-1: #ff9a6b; --spk-2: #5fcf96; --spk-3: #c99bff;
+    --spk-4: #f0b04a; --spk-5: #4fd0dc; --spk-6: #ff85b3; --spk-7: #aab2c0;
     color-scheme: dark;
   }
 }
@@ -101,6 +106,8 @@
   --conf-2: #f0a040;
   --conf-3: #ff7a45;
   --conf-4: #ff6161;
+  --spk-0: #7fb2ff; --spk-1: #ff9a6b; --spk-2: #5fcf96; --spk-3: #c99bff;
+  --spk-4: #f0b04a; --spk-5: #4fd0dc; --spk-6: #ff85b3; --spk-7: #aab2c0;
   color-scheme: dark;
 }
 
@@ -293,6 +300,22 @@ button.icon:hover { color: var(--text); background: var(--card); }
 .text .w.sg.open { background: var(--accent-soft); border-radius: 3px; }
 .suggest-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
 .suggest-line button.link { font-size: inherit; }
+
+/* Speaker labels (plan 07): a change of speaker starts a new paragraph (turn-start) with the
+   speaker's name in their colour (--spk, set per label); a line split by a change keeps its
+   time only on its first part. Lines of one long turn stay paragraphs of their own. */
+.text p.turn-start:not(:first-child) { margin-top: 20px; }
+.text .spk {
+  font: inherit; font-weight: 600; color: var(--spk); background: none; border: none; padding: 0 2px 0 0;
+  margin-right: 4px; cursor: pointer; user-select: none; border-radius: 3px;
+}
+.text .spk:hover { text-decoration: underline; }
+.text .spk:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+#speaker-count { min-width: 0; width: auto; height: 24px; padding: 0 4px; border-radius: 6px; font-size: inherit; }
+.speaker-count { display: inline-flex; gap: 6px; align-items: center; }
+#speaker-name { width: 100%; margin-bottom: 6px; padding: 7px 9px; font: inherit; border: 1px solid var(--card-line);
+  border-radius: 8px; background: var(--card); color: var(--text); }
+#speaker-name:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .check-line { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
 .check-line input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
 .sg-card {
