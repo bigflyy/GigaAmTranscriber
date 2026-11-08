@@ -36,4 +36,4 @@ Findings (2026-11-08):
 
 - [x] **C1** Tests: the server (Range, token, unknown paths refused), controller.audio (original or converted), clean-up at close
 - [x] **C2** window_check.py steps (muted): play, pause, seek, the highlighted word moves; screenshots
-- [ ] **C3** Linux: the player under WebKitGTK at the next Linux build (formats it plays without extra GStreamer plugins)
+- [x] **C3** Linux: the player under WebKitGTK at the next Linux build (formats it plays without extra GStreamer plugins). Done 2026-11-08 (v0.5.0): window_check 90/90 in WSL Ubuntu 24.04 under Xvfb (WAV and MP3 play, time, word highlight, volume, selection end), with sound sent to GStreamer's silent fallback because the WSLg PulseAudio bridge never starts playing there; not tried on a real Linux desktop with speakers

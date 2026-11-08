@@ -43,6 +43,26 @@ Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
   the way: with the model process the finished result is a copy of the lines shown, so
   offers found after it missed the history; _finish now sets item.segments = result.segments
   (tests' finish() now passes deep copies, as the process does). 8ff01f3; tests 465 passed.
+- Owner: the note for an AI also says unmarked words may be wrong (336eaa7). New idea (IDEAS,
+  plan 01 F5): try Parakeet, Qwen3-ASR and similar, also as readers for suggested fixes.
+- v0.5.0 builds (owner: "it can"; publishing still needs a separate go-ahead). Version 88b0532,
+  notes and README 8fcc2d5. Assets in `C:\MyProjects\GigaAmTranscriber\build\v0.5.0\release`
+  (Windows zip 933.6 MiB / 978,910,985 bytes, Linux tar.gz 843.0 MiB, licences zip with
+  windows/ and linux/, FFmpeg source, SHA256SUMS; `sha256sum -c` OK). Windows app folder
+  build/v0.5.0/app/GigaAmTranscriber (1234 MiB): all build smoke tests pass (CLI CPU and
+  DirectML, Whisper Vulkan 3.3 s and CPU 18 s, window); gui_smoke_test --audio on the 455 s
+  lecture: window 1.9 s, transcript after 11.3 s, no GigaAmTranscriber.exe left after close
+  (so the model process works frozen). Linux ~/gigaam-build-050 in WSL (1026 MiB): CLI, Whisper
+  CPU 22 s, missing-WebKit message, window wrote the file (the frozen model process works).
+  Scripts in this session's scratchpad wsl/ (build.sh, wcheck.sh, gst_probe.py).
+- Linux window_check from source (plan 05 C3): first run 76/90. Not app bugs: (1) the WSLg
+  PulseAudio bridge never starts playing (GStreamer probe: position None with the default sink,
+  real time with fakesink), so time stood still, volume read back 1 and a selection stopped
+  early; with PULSE_SERVER=unix:/nonexistent autoaudiosink falls back to a silent sink at real
+  time; (2) suggest_steps expected a search by itself, but on the CPU only the button searches
+  (B5): window_check now checks that case and clicks the button. Rerun with --whisper: 90/90
+  (offers "fine tuning", "prompt инжиниринга" from Whisper on the CPU). Not tried: a real Linux
+  desktop with speakers.
 
 ## Session 16 (2026-11-08): plan 06, suggested fixes for doubtful words
 
