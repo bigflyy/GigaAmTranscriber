@@ -60,6 +60,7 @@ Whisper moved to its own plan, [04-whisper.md](04-whisper.md) (2026-11-07); Para
 - [ ] **F2** Compare candidates on WER and speed: NVIDIA Parakeet TDT 0.6B v3 (25 European languages incl. Russian, a transducer like RNNT), Whisper large-v3-turbo (99 languages, slower), Qwen3-ASR (top of the Open ASR leaderboard, 1.7B, LLM decoder)
 - [ ] **F3** Export the chosen model to ONNX with a numpy decoder; check DirectML and CPU
 - [ ] **F4** Offer it as a download through the catalog; language or model choice in the window and the CLI
+- [ ] **F5** Owner 2026-11-08: also try the candidates (and similar new models) as readers for the suggested fixes of doubtful words (plan 06): measure right / wrong offers with experiments/suggest/suggest_check.py on the 455 s lecture, as in plan 06 A5
 
 ### Stage E: Speaker diarization
 
