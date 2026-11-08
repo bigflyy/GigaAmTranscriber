@@ -31,10 +31,12 @@ Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
 - Test sets in build/diar-data (gitignored; scripts in experiments/diarization, README there):
   AMI test ES2004a, IS1009a, TS3003a, EN2002a (Mix-Headset, only_words RTTM + UEM; pyannote
   trains on other AMI meetings, so a setup check only). Unseen Russian set from kremlin.ru
-  (CC BY 4.0): 5 events, 3.9 h, 2-13 speakers (81185 government meeting, 80874 party leaders,
+  (CC BY 4.0): 5 events, 3.9 h, 2-16 speakers (81185 government meeting, 80874 party leaders,
   80929 teachers, 80788 gas ceremony with video links, 81071 interview); labels from the
-  transcript's bold speaker names lined up (difflib) with GigaAM RNNT word times: 99.3-100% of
-  words labelled, text match 92-95%. Audio kept as 16 kHz FLAC only (disk below 20 GB free);
+  transcript's bold speaker names lined up (difflib) with GigaAM RNNT word times: 99.2-100% of
+  words labelled, text match 92-95%. An official's first turn is a linked name with a photo
+  tooltip; the first parser missed those (81185 had 10 speakers instead of 16, whole reports
+  given to Putin, 63% "wrong" for every system); fixed in ae84be5. Audio kept as 16 kHz FLAC only (disk below 20 GB free);
   review page build/diar-data/kremlin/review.html plays the video from kremlin.ru.
 - AMI results (DER %, collar 0, overlap scored; 4 meetings, 92 min):
   | system | DER | confusion part |
@@ -53,6 +55,27 @@ Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
   DirectML: segmentation 10 s, ResNet34 embeddings once per window 21 s (x3 per local speaker
   62 s); CPU 8 threads: 36 s, 6 min (x3 18 min). Plan for B1: run the ResNet trunk once per
   window and pool per speaker (pyannote's forward_frames / forward_embedding split), on DirectML.
+- Russian results on the fixed labels (build/diar-data/out/rescore.txt), words with the wrong
+  speaker (all words, exclusive version) and DER (collar 0.25, from the labels' loose edges):
+  | system | words wrong | DER | speakers found (true 14, 7, 7, 2, 16) |
+  | --- | --- | --- | --- |
+  | community-1, auto count | 0.3% | 10.5 | all exact |
+  | community-1, 2 s step | 0.3% | 10.3 | all exact |
+  | community-1, true count | 0.3% | 10.5 | |
+  | pyannote 3.1, auto | 0.1% | 10.3 | all exact |
+  | sherpa-onnx + CAM++ zh_en, true count | 17.7% | 24.6 | 11, 6, 5, 2, 14 |
+  | sherpa-onnx + ResNet34, true count | 29.4% | 36.2 | 11, 6, 5, 2, 13 |
+  Official events are easy (clean microphones, long turns); AMI and the owner's files are the hard
+  cases. AMI with the 2 s step: DER 20.6 (1 s: 19.9; TS3003a 2 of 4 speakers). So 2 s is a fair
+  CPU setting, 1 s stays for the GPU.
+- int8 (dynamic, unsigned weights; signed fails: no ConvInteger on the CPU) ResNet34: 6.7 MB,
+  cosine 0.99 to float, but 4.7x slower on the CPU (1496 s per hour vs 320 s). Dead end; the
+  faster CPU path is OpenVINO (IDEAS) or less work (2 s step, skip silent windows).
+- Owner's files (GigaAM transcripts in build/diar-data/owner/asr), speakers found: community-1
+  auto 4 / 5 / 7 (Аудиозапись, 20260401_110502, 2023 06 10 10 34 50), pyannote 3.1 10 / 5 / 7,
+  sherpa t0.5 37 / 17 / 17. Owner review page: build/diar-data/owner/review.html (local audio,
+  words coloured by community-1 exclusive speakers). File ids with spaces broke the RTTM columns
+  (09ae450).
 
 ## Session 17 (2026-11-08): plan 06 Stage C, models in their own process
 
