@@ -773,7 +773,9 @@ async function loadAudio(convert) {
   if (!file) return false;
   if (audio.fileId === file.id && audio.url && !convert) return true;
   const answer = await call('audio', file.id, !!convert);
-  if (!answer || playerFile() !== file) return false;
+  // By id: each update of the file (a suggestion search reports every line) replaces its object.
+  const shown = playerFile();
+  if (!answer || !shown || shown.id !== file.id) return false;
   Object.assign(audio, { fileId: file.id, converted: !!convert });
   let url = answer.url;
   if (answer.preparing) {
