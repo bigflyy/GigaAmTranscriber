@@ -8,7 +8,7 @@ from urllib.request import urlopen
 
 import pytest
 
-from gigaam_app import catalog, config
+from gigaam_app import catalog, config, fix
 from gigaam_app import controller as controller_module
 from gigaam_app.catalog import ModelInfo, RemoteFile
 from gigaam_app.controller import Controller, about_text, duration_text, times_text
@@ -90,11 +90,11 @@ def segment(start, end, text):
     return Segment(start=start, end=end, text=text, words=[Word(text=text, start=start, end=end)])
 
 
-def finish(control, item_path, segments, cancelled=False, formats=("txt", "timestamps")):
+def finish(control, item_path, segments, cancelled=False, formats=("txt", "timestamps"), model="RNNT"):
     """Play a whole transcription of the running file and write real outputs."""
     for seg in segments:
         control.handle(("segment", seg))
-    result = Transcript(source=str(item_path), model="RNNT", device="CPU", audio_seconds=61.0,
+    result = Transcript(source=str(item_path), model=model, device="CPU", audio_seconds=61.0,
                         segments=list(segments), cancelled=cancelled)
     from gigaam_app.outputs import write_outputs
     written = write_outputs(result, list(formats)) if segments else []
@@ -798,24 +798,25 @@ def suggest_jobs(app):
     return [job for job in app.fake_worker.take() if job[0] == "suggest"]
 
 
-def test_doubtful_words_are_read_again_by_the_other_models(app, searching):
+def test_doubtful_words_are_read_again_by_whisper(app, searching):
     [job] = suggest_jobs(app)
     kind, request, path, windows, models, device, threads, language, terms = job
-    assert (path, models) == (searching.path, ["CTC", "Whisper"])  # not RNNT, which made the text
+    assert (path, models) == (searching.path, ["Whisper"])  # not CTC (plan 06 A5), not RNNT (made the text)
+    # The whole first line is read: the cuts lie before "наш" and after "и".
+    (left_lo, left_hi), (right_lo, right_hi) = windows
+    assert left_hi <= 1.0 and right_lo >= 3.7
     assert app._file_view(searching)["suggest"]["text"] == "Ищу варианты для сомнительных слов: 0 из 2"
     app.handle(("suggest_loading", request, "Whisper"))
     assert "загрузка Whisper" in app._file_view(searching)["suggest"]["text"]
-    app.handle(("suggest_result", request, "CTC", heard_words(("любимый", 1.4, 1.9), ("механизм", 2.0, 2.6),
-                                                               ("Tullz", 2.7, 3.0), ("Colling", 3.0, 3.5),
-                                                               ("и", 3.6, 3.7)), None))
-    app.handle(("suggest_result", request, "Whisper", TOOLS_READING, None))
+    app.handle(("suggest_result", request, "Whisper", [Word(text="наш", start=1.0, end=1.3)] + TOOLS_READING, None))
     word = searching.segments[0].words[3]
     assert word.suggestions == [{"models": ["Whisper"], "count": 2,
                                  "words": [[2.72, 3.0, "Tools", None], [3.02, 3.5, "Calling,", None]]}]
     line_message = last(app.sent, "line")
     assert line_message["index"] == 0 and line_message["words"][3][4] == word.suggestions
     app.handle(("suggest_done", request))
-    [second] = suggest_jobs(app)  # the next group: "мозаика."
+    assert app._file_view(searching)["suggest"]["text"] == "Ищу варианты для сомнительных слов: 1 из 2"
+    [second] = suggest_jobs(app)  # the next line: "мозаика."
     app.handle(("suggest_result", second[1], "Whisper", heard_words(("вся", 5.0, 5.3), ("мозаика", 5.4, 6.0)), None))
     app.handle(("suggest_done", second[1]))
     assert suggest_jobs(app) == [] and app.suggesting is None
@@ -880,7 +881,7 @@ def test_recognising_again_ends_the_search(app, searching):
 
 
 def test_search_off_in_settings_and_the_button(app, media, monkeypatch):
-    monkeypatch.setattr(app, "_model_installed", lambda key: key in ("RNNT", "CTC"))
+    monkeypatch.setattr(app, "_model_installed", lambda key: key in ("RNNT", "CTC", "Whisper"))
     app.set_settings({"suggest": False})
     app.add_files([str(media[0])])
     item = app.files[0]
@@ -889,7 +890,59 @@ def test_search_off_in_settings_and_the_button(app, media, monkeypatch):
     assert app._file_view(item)["suggest"] == {"text": "", "can_find": True, "busy": False, "searched": False}
     assert app.find_suggestions(item.id)
     [job] = suggest_jobs(app)
-    assert job[4] == ["CTC"]  # Whisper is not downloaded
+    assert job[4] == ["Whisper"]
+
+
+def test_without_whisper_there_is_no_search_and_a_hint(app, media, monkeypatch):
+    monkeypatch.setattr(app, "_model_installed", lambda key: key in ("RNNT", "CTC"))
+    app.add_files([str(media[0])])
+    item = app.files[0]
+    finish(app, media[0], doubtful_lines())
+    assert suggest_jobs(app) == [] and app.suggesting is None
+    view = app._file_view(item)["suggest"]
+    assert view["can_find"] is False and "Whisper" in view["text"] and "Настройках" in view["text"]
+    with pytest.raises(ValueError):
+        app.find_suggestions(item.id)
+
+
+def test_whisper_text_is_checked_by_rnnt(app, media, monkeypatch):
+    monkeypatch.setattr(app, "_model_installed", lambda key: key in ("RNNT", "CTC", "Whisper"))
+    app.add_files([str(media[0])])
+    finish(app, media[0], doubtful_lines(), model="Whisper")
+    [job] = suggest_jobs(app)
+    assert job[4] == ["RNNT"]
+
+
+def test_groups_of_one_line_are_read_once(app, media, monkeypatch):
+    monkeypatch.setattr(app, "_model_installed", lambda key: key in ("RNNT", "Whisper"))
+    app.add_files([str(media[0])])
+    item = app.files[0]
+    finish(app, media[0], [doubtful_line(("Tullz", 1.0, 1.4, 0.5), ("Colling", 1.4, 1.9, 0.99), ("и", 2.0, 2.1, 0.99),
+                                         ("это", 2.2, 2.4, 0.99), ("DepS,", 2.5, 3.0, 0.4), ("ok", 3.1, 3.3, 0.99))])
+    [job] = suggest_jobs(app)
+    app.handle(("suggest_result", job[1], "Whisper",
+                heard_words(("Tools", 1.0, 1.4), ("Calling", 1.4, 1.9), ("и", 2.0, 2.1), ("это", 2.2, 2.4),
+                            ("DeepSeek.", 2.5, 3.0), ("ok", 3.1, 3.3)), None))
+    words = item.segments[0].words
+    assert [w.text for w in fix.suggestion_words(words[0].suggestions[0])] == ["Tools", "Calling"]
+    assert [w.text for w in fix.suggestion_words(words[4].suggestions[0])] == ["DeepSeek,"]  # the text's comma
+    app.handle(("suggest_done", job[1]))
+    assert suggest_jobs(app) == [] and item.result.suggestions_searched
+    assert app._file_view(item)["suggest"]["text"] == "Другие модели предлагают варианты: 2 места"
+
+
+def test_a_line_longer_than_whisper_hears_is_read_by_groups(app, media, monkeypatch):
+    monkeypatch.setattr(app, "_model_installed", lambda key: key in ("RNNT", "Whisper"))
+    app.add_files([str(media[0])])
+    item = app.files[0]
+    long_line = [(f"w{i}", i * 2.0, i * 2.0 + 1.0, 0.5 if i in (1, 12) else 0.99) for i in range(16)]
+    finish(app, media[0], [doubtful_line(*long_line)])  # 31 s, two groups far apart
+    [job] = suggest_jobs(app)
+    (left_lo, left_hi), (right_lo, right_hi) = job[3]
+    assert right_hi - left_lo < 20  # the first group with its own context, not the line
+    app.handle(("suggest_done", job[1]))
+    [second] = suggest_jobs(app)
+    assert second[3][0][0] > 15
 
 
 def test_a_failed_search_says_so_and_ends(app, searching):

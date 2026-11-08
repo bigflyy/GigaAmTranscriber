@@ -772,10 +772,16 @@ class Controller:
 
     # ------------------------------------------------------------------ suggested fixes (plan 06)
 
+    def _own_model(self, item):
+        return item.result.model if item.result is not None and item.result.model else item.model
+
     def _suggest_models(self, item):
-        """The installed models that read the doubtful words again: all but the transcript's own."""
-        own = item.result.model if item.result is not None and item.result.model else item.model
-        return [key for key in REREAD_MODELS if key != own and self._model_installed(key)]
+        """The installed model that reads the doubtful words again: Whisper for GigaAM's text,
+        GigaAM RNNT for Whisper's. Measured on the 455 s lecture (plan 06 A5, 2026-11-08):
+        Whisper's offers were right in about half the places (the English terms), CTC's in 1
+        of 11 (half-Latin words like "Lнt 4."), so CTC is not asked."""
+        wanted = "RNNT" if self._own_model(item) == "Whisper" else "Whisper"
+        return [wanted] if self._model_installed(wanted) else []
 
     def _suggest_view(self, item):
         """The line about suggested fixes under a finished file, and whether the
@@ -783,6 +789,9 @@ class Controller:
         searched = item.result is not None and item.result.suggestions_searched
         if item.state not in (DONE, CANCELLED) or item.result is None or not item.segments:
             return {"text": "", "can_find": False, "busy": False, "searched": False}
+        words = [word for segment in item.segments for word in segment.words]
+        doubtful = any(word.confidence is not None and word.confidence < self.settings.doubt_light for word in words)
+        can_find = bool(self._suggest_models(item))
         search = self.suggesting
         if search is not None and search["id"] == item.id:
             text = f"Ищу варианты для сомнительных слов: {search['done']} из {search['total']}"
@@ -792,24 +801,24 @@ class Controller:
         if item.id in self.suggest_queue:
             return {"text": "Варианты для сомнительных слов: в очереди", "can_find": False, "busy": True,
                     "searched": searched}
-        if not searched:
-            return {"text": "", "can_find": True, "busy": False, "searched": False}
-        words = [word for segment in item.segments for word in segment.words]
         places = sum(1 for word in words if word.suggestions)
         if places:
             text = f"Другие модели предлагают варианты: {places} {places_word(places)}"
-        elif any(word.confidence is not None and word.confidence < self.settings.doubt_light for word in words):
+        elif not can_find and doubtful and self._own_model(item) != "Whisper":
+            text = "Варианты для сомнительных слов предлагает Whisper: его можно скачать в Настройках"
+        elif searched and doubtful:
             text = "Другие модели не предлагают других вариантов"
         else:
-            text = ""  # nothing doubtful, nothing to say
-        return {"text": text, "can_find": True, "busy": False, "searched": True}
+            text = ""  # not searched yet, or nothing doubtful
+        return {"text": text, "can_find": can_find, "busy": False, "searched": searched}
 
     def find_suggestions(self, file_id):
         """The "Найти варианты" button: read the file's doubtful words again with the other models."""
         with self.lock:
             item = self._fixable(file_id)
             if not self._suggest_models(item):
-                raise ValueError("Нет другой модели, чтобы сравнить")
+                raise ValueError("Варианты предлагает Whisper: скачайте его в Настройках"
+                                 if self._own_model(item) != "Whisper" else "Нет модели GigaAM RNNT, чтобы сравнить")
             self._queue_suggestions(item)
             self._emit_file(item)
             self._pump()
@@ -843,13 +852,20 @@ class Controller:
         return positions
 
     def _pump_suggestions(self):
-        """Send the next group of doubtful words to the worker. Called only when no file waits
-        to be recognised, so a new file waits for one group at most (about a second).
+        """Send the next line with doubtful words to the worker. Called only when no file waits
+        to be recognised, so a new file waits for one line at most (about a second).
+
+        A whole line (one VAD chunk, at most 25 s) is read at once: Whisper hears the full
+        sentence, and each line costs one 30 s Whisper window however many groups it holds
+        (plan 06 A5: fewer wrong offers and "Tools Calling" right, against 1.5 s of
+        context per group). A longer line (an old transcript, longer chunks in Settings)
+        is read group by group with the context of plan 03's reread.
 
         self.suggesting: {"id", "transcript" (the search ends if the file is recognised
-        again), "groups" (word objects (first, last) still to do), "total", "done",
-        "models", "request" (the group on the worker, None between groups), "context"
-        and "selected" (that group's piece, as for plan 03's reread), "loading"}."""
+        again), "pieces" (still to do: {"groups": word objects (first, last), "line": read
+        the whole line}), "total" and "done" (groups), "models", "request" (the piece on the
+        worker, None between pieces), "context" (that piece's words), "selected" (each
+        group's (first, last) index in context), "size" (groups in the request), "loading"}."""
         while self.suggesting is None or self.suggesting["request"] is None:
             search = self.suggesting
             if search is None:
@@ -858,36 +874,60 @@ class Controller:
                 item = self._find(self.suggest_queue.pop(0))
                 if item is None or item.result is None or not item.segments:
                     continue
-                groups = [(fix.word_at(item.segments, first), fix.word_at(item.segments, last))
-                          for first, last in fix.doubt_groups(item.segments, self.settings.doubt_light)]
-                search = self.suggesting = {"id": item.id, "transcript": item.result, "groups": groups,
+                groups = fix.doubt_groups(item.segments, self.settings.doubt_light)
+                search = self.suggesting = {"id": item.id, "transcript": item.result,
+                                            "pieces": self._suggest_pieces(item.segments, groups),
                                             "total": len(groups), "done": 0, "request": None,
                                             "models": self._suggest_models(item)}
             item = self._find(search["id"])
             if item is None or item.result is not search["transcript"]:  # removed or recognised again
                 self.suggesting = None
                 continue
-            if not search["groups"] or not search["models"]:
+            if not search["pieces"] or not search["models"]:
                 self._end_search(item)
                 continue
-            first_word, last_word = search["groups"].pop(0)
-            first_located = self._locate(item, search, [first_word])
-            last_located = self._locate(item, search, [last_word])
-            if first_located is None or last_located is None:  # the words were changed meanwhile
-                search["done"] += 1
-                continue
+            piece = search["pieces"].pop(0)
+            located = []
+            for first_word, last_word in piece["groups"]:
+                first_located = self._locate(item, search, [first_word])
+                last_located = self._locate(item, search, [last_word])
+                if first_located is not None and last_located is not None:  # else changed meanwhile
+                    located.append((first_located[0], last_located[0]))
             segments = item.segments
-            first, last = first_located[0], last_located[0]
-            context_first, context_last = fix.context_bounds(segments, first, last)
+            line = located[0][0][0] if located else None
+            located = [(first, last) for first, last in located if first[0] == last[0] == line]
+            search["done"] += len(piece["groups"]) - len(located)
+            if not located:
+                continue
+            if piece["line"]:
+                context_first, context_last = (line, 0), (line, len(segments[line].words) - 1)
+            else:
+                context_first, context_last = fix.context_bounds(segments, *located[0])
             context = fix.positions_between(segments, context_first, context_last)
             search["context"] = [fix.word_at(segments, position) for position in context]
-            search["selected"] = (context.index(first), context.index(last))
+            search["selected"] = [(context.index(first), context.index(last)) for first, last in located]
+            search["size"] = len(located)
             windows = fix.search_windows(segments, context_first, context_last, item.result.audio_seconds)
             search["request"] = next(self.suggest_ids)
             self.worker.jobs.put(("suggest", search["request"], item.path, windows, search["models"],
                                   self.settings.engine_device, self.settings.cpu_threads,
                                   self.settings.language, self.settings.terms or None))
             self._emit_file(item)
+
+    @staticmethod
+    def _suggest_pieces(segments, groups):
+        """Doubtful groups (positions) -> pieces to read: one per line, or one per group on a
+        line longer than fix.MAX_SECONDS. Groups are kept as word objects, which survive edits."""
+        pieces = []
+        for first, last in groups:
+            words = segments[first[0]].words
+            whole = words[-1].end - words[0].start <= fix.MAX_SECONDS
+            group = (fix.word_at(segments, first), fix.word_at(segments, last))
+            if whole and pieces and pieces[-1]["line"] and pieces[-1]["index"] == first[0]:
+                pieces[-1]["groups"].append(group)
+            else:
+                pieces.append({"groups": [group], "line": whole, "index": first[0]})
+        return pieces
 
     def _end_search(self, item, error=None):
         self.suggesting = None
@@ -910,14 +950,17 @@ class Controller:
         elif kind == "suggest_result":
             search["loading"] = None
             model, words, _error = args  # a model that fails here just offers nothing
-            found = fix.suggestion_from(words, search["context"], *search["selected"]) if words else None
+            found = [fix.suggestion_from(words, search["context"], *selected) for selected in search["selected"]]
+            found = [offer for offer in found if offer is not None] if words else []
             positions = self._locate(item, search, search["context"]) if found and current else None
             if positions is not None:
-                index, count, new_words = found
-                fix.add_suggestion(item.segments, positions[index], count, new_words, model)
-                segment_index = positions[index][0]
-                self._emit("line", {"id": item.id,
-                                    **self._segment_view(segment_index, item.segments[segment_index])})
+                changed = set()
+                for index, count, new_words in found:
+                    fix.add_suggestion(item.segments, positions[index], count, new_words, model)
+                    changed.add(positions[index][0])
+                for segment_index in sorted(changed):
+                    self._emit("line", {"id": item.id,
+                                        **self._segment_view(segment_index, item.segments[segment_index])})
         elif kind == "suggest_failed":
             search["request"] = None
             if current:
@@ -928,7 +971,7 @@ class Controller:
             return
         elif kind == "suggest_done":
             search["request"] = None
-            search["done"] += 1
+            search["done"] += search["size"]
             if not current:  # removed or recognised again meanwhile
                 self.suggesting = None
             self._pump()
@@ -1291,7 +1334,7 @@ class Controller:
         # write_outputs returns the paths in the order of the formats it was given.
         item.written = dict(zip(item.formats, written))
         self.running = None
-        if item.state == DONE and item.segments and self.settings.suggest:
+        if item.state == DONE and item.segments and self.settings.suggest and self._suggest_models(item):
             self._queue_suggestions(item)
         self._remember(item)
         self._emit_file(item)
