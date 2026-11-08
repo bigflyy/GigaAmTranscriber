@@ -20,6 +20,8 @@ models, Stage E speaker diarization) and plan 02 (D1-D3).
 
 - 2026-11-08: train or fine-tune the speaker models on Russian data with known speakers, "in some wild future dreams? there is so much annotated data, no?" (kremlin.ru transcripts name every speaker, CC BY 4.0; also government.ru and similar). Cheapest first: refit community-1's PLDA on Russian voice prints; then fine-tune the voice-print model (the same named people appear in many events); the segmentation model last (the labels have no overlaps and loose turn edges). Keep the session 18 test events out of any training data.
 
+- 2026-11-08: other speaker-labelling engines after v0.6.0: "lets try this approach in v1 and try others in future". Candidates from session 18 (HANDOFF.md): Nemotron-3-Diarization (needs a newer NeMo or own ONNX code), newer pyannote releases, DiariZen if its licence changes; measure them with experiments/diarization on the kremlin.ru set and AMI.
+
 ## Links and summaries
 
 - 2026-11-07: send a video by link (YouTube for example) and get it transcribed, then summarised automatically: "an addon to firefox / chrome / just some kind of service, maybe even in our app idk". Summary with Claude / Codex / an API; a local model as experimental, for the future ("i dont have a good one").

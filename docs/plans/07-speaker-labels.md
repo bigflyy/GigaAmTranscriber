@@ -23,9 +23,9 @@ Earlier findings (HANDOFF.md, "Diarization findings"): sherpa-onnx 2.0.1 with py
 ### Stage A: Measure and decide
 
 - [x] **A1** A public labelled set with known turns (Russian if one exists, else VoxConverse / AMI), a few recordings of 2-6 speakers, and a scoring script (DER with a 0.25 s collar, speaker count error, time per audio minute)
-- [ ] **A2** The owner's three files: run every candidate, compare speaker counts and turns against the transcript (who answers whom); the owner checks a few turns by ear
+- [x] **A2** The owner's three files: run every candidate, compare speaker counts and turns against the transcript (who answers whom); the owner checks a few turns by ear. Owner 2026-11-08 on build/diar-data/owner/review.html (community-1: 4, 5, 7 speakers): "seems fine i guess"
 - [x] **A3** Candidates: sherpa-onnx (pyannote segmentation 3.0 and newer, several embedding models, threshold sweep), a lighter own pipeline (embeddings per VAD region on the app's ORT provider, clustering), and newer models if they run on ONNX Runtime without torch (for example pyannote community-1, DiariZen, Sortformer); CPU and DirectML speed. Done 2026-11-08: community-1 and pyannote 3.1 (torch references), sherpa-onnx with 3 embeddings, ONNX speed on DirectML and CPU, int8, 2 s step; DiariZen and Rev not shippable, Sortformer 4 speakers, Nemotron needs a newer NeMo (results in HANDOFF.md, session 18). The lighter own pipeline was dropped: sherpa's simple clustering already loses 17-29% of words on the Russian set, VBx + PLDA is what wins
-- [ ] **A4** Choose the pipeline, the default threshold and the download size; write the results to HANDOFF.md and ask the owner
+- [x] **A4** Choose the pipeline, the default threshold and the download size; write the results to HANDOFF.md and ask the owner. Owner 2026-11-08: "ok lets try this approach in v1 and try others in future": community-1 (segmentation-3.0 + WeSpeaker ResNet34-LM + PLDA, VBx clustering with pyannote's defaults: threshold 0.6, Fa 0.07, Fb 0.8) rebuilt on ONNX Runtime, DirectML with a CPU fallback (2 s step on the CPU), about 33 MB download
 
 ### Stage B: Engine
 

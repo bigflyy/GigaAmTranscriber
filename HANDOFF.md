@@ -76,6 +76,9 @@ Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
   sherpa t0.5 37 / 17 / 17. Owner review page: build/diar-data/owner/review.html (local audio,
   words coloured by community-1 exclusive speakers). File ids with spaces broke the RTTM columns
   (09ae450).
+- Owner checked the review pages ("seems fine i guess", "ok") and decided (A4): "ok lets try this
+  approach in v1 and try others in future". So community-1 on ONNX Runtime for v0.6.0; other
+  engines are an idea for later (IDEAS.md).
 
 ## Session 17 (2026-11-08): plan 06 Stage C, models in their own process
 
