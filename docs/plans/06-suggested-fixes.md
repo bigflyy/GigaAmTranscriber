@@ -26,7 +26,7 @@ Owner's decisions (2026-11-08, AskUserQuestion):
 - [x] **A2** Word.suggestions kept in the transcript and the history (not in the outputs); replace_words drops a suggestion whose words were changed
 - [x] **A3** Worker job "suggest": one range at a time, each other installed model (not the transcript's own), Whisper with the terms; controller queues it after a finished file and on the button, a newly added file goes first; progress and results go to the page
 - [x] **A4** Controller: take a suggestion (words keep their times, files written again, like apply_fix), leave it (the suggestion is dropped); Settings.suggest switch
-- [ ] **A5** Measure on the 455 s lecture: how many suggestions, how many right, how long; decide whether a suggestion needs two models to agree
+- [ ] **A5** Measure on the 455 s lecture: how many suggestions, how many right, how long; decide whether a suggestion needs two models to agree. Compare the 1.5 s / 6 words of context with reading each whole line (VAD chunk, at most 25 s) once (owner 2026-11-08: "yes"); switch the app to whole lines if they win
 
 ### Stage B: Window
 
