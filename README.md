@@ -14,11 +14,11 @@ and about 25 s on the CPU; see [BENCHMARK.md](BENCHMARK.md).
 
 ## Downloads
 
-- **Windows:** [`GigaAmTranscriber-v0.4.0-windows-x64.zip`](https://github.com/bigflyy/GigaAmTranscriber/releases/latest)
+- **Windows:** [`GigaAmTranscriber-v0.5.0-windows-x64.zip`](https://github.com/bigflyy/GigaAmTranscriber/releases/latest)
   (about 930 MB, 1.2 GB unpacked). Unzip it anywhere and run `GigaAmTranscriber.exe`.
   No Python, CUDA or FFmpeg is needed; both GigaAM models are inside (Whisper is a
   547 MB download the first time it is chosen).
-- **Linux:** [`GigaAmTranscriber-v0.4.0-linux-x64.tar.gz`](https://github.com/bigflyy/GigaAmTranscriber/releases/latest)
+- **Linux:** [`GigaAmTranscriber-v0.5.0-linux-x64.tar.gz`](https://github.com/bigflyy/GigaAmTranscriber/releases/latest)
   (about 840 MB, 1 GB unpacked). Unpack it and run `./GigaAmTranscriber/GigaAmTranscriber`.
   Recognition runs on the CPU. The system must have glibc 2.39 or newer (Ubuntu 24.04,
   Debian 13, Fedora 40 and later), FFmpeg and, for the window, WebKitGTK 4.1:
@@ -53,7 +53,7 @@ Results are saved beside the source file:
 | `md` | `name-transcript.md` | Markdown: file name, date, length and model, then the text in sections of about a minute under their start times |
 | `srt` | `name-transcript.srt` | subtitles, short cues built from word times |
 | `json` | `name-transcript.json` | segments and every word with its start and end time and the model's confidence (0 to 1) |
-| `llm` | `name-transcript-llm.txt` | text to paste into a chat with an AI: a note on the marks, then the text with doubtful words marked as `word[?66%]` (below the dotted threshold) |
+| `llm` | `name-transcript-llm.txt` | text to paste into a chat with an AI: a note on the marks, then the text with doubtful words marked as `word[?66%]` (below the dotted threshold), and both versions `{GigaAM v3 RNNT: ... \| Whisper ...: ...}` where another model heard otherwise |
 
 TXT and timestamped TXT are on by default; a finished file also offers the
 other formats, made from the text already recognised. **Настройки** (bottom left)
@@ -66,7 +66,21 @@ wavy: likely wrong; hover a word for the number); the **Сомнения** switc
 the text hides the marks, and **Настройки** can colour every word from green to
 red by confidence instead. **Копировать для ИИ** copies the text in the `llm`
 format, ready to paste into a chat with an AI model.
-Changes are saved at once to `gigaam-config.json` beside the app (the command
+
+A bar under the text plays the whole file (play / pause, seeking, speed, volume;
+Space plays and pauses) and highlights the word being spoken; a click on a line's
+time plays from there, Alt+click from a word. Select words to get **▶ Слушать**,
+**Распознать заново** (that part read again by RNNT, CTC and Whisper, shown side by
+side; **Термины** gives Whisper names and terms as a hint) and **Исправить...** (type
+the text by hand); the saved files are written again at once. After a file is
+recognised on the GPU, each line with doubtful words is also read by another model
+(Whisper checks GigaAM, RNNT checks Whisper): where it heard something else, the
+underline turns blue and a click shows the offer with **Взять** and **Оставить как
+есть**. **Настройки** -> **Варианты для сомнительных слов** chooses when to look
+(after GPU files, always, or only with the **Найти варианты** button). The models
+run in a separate process, so the window stays responsive while they load.
+
+Settings are saved at once to `gigaam-config.json` beside the app (the command
 line reads the same file); **Сбросить настройки** goes back to the defaults. The window follows the system's light or dark theme.
 
 The window is a web page shown by Microsoft Edge WebView2, which Windows 10 and
