@@ -20,13 +20,18 @@ Owner's decisions (2026-11-08, AskUserQuestion):
 - A doubtful word with a suggestion keeps its dotted / wavy underline, but in blue (like Google
   Docs' suggestions); in the all-colours mode a blue underline is added. A click opens the card.
 
+Changed after the A5 measurement (2026-11-08): each line with doubtful words (one VAD chunk, at
+most 25 s) is read once as a whole instead of each group with 1.5 s of context, and only Whisper
+checks GigaAM's text (RNNT checks Whisper's); CTC's offers were nearly all wrong. An offer keeps
+the punctuation of the words it replaces. Numbers in HANDOFF.md, session 16.
+
 ### Stage A: Suggestions in the backend
 
 - [x] **A1** fix.py: group the doubtful words of a transcript into ranges (one line each, neighbours joined, at most MAX_SECONDS); turn a reading of the piece into suggestions (the differing runs that touch the group, as words with times)
 - [x] **A2** Word.suggestions kept in the transcript and the history (not in the outputs); replace_words drops a suggestion whose words were changed
 - [x] **A3** Worker job "suggest": one range at a time, each other installed model (not the transcript's own), Whisper with the terms; controller queues it after a finished file and on the button, a newly added file goes first; progress and results go to the page
 - [x] **A4** Controller: take a suggestion (words keep their times, files written again, like apply_fix), leave it (the suggestion is dropped); Settings.suggest switch
-- [ ] **A5** Measure on the 455 s lecture: how many suggestions, how many right, how long; decide whether a suggestion needs two models to agree. Compare the 1.5 s / 6 words of context with reading each whole line (VAD chunk, at most 25 s) once (owner 2026-11-08: "yes"); switch the app to whole lines if they win
+- [x] **A5** Measure on the 455 s lecture: how many suggestions, how many right, how long; decide whether a suggestion needs two models to agree. Compare the 1.5 s / 6 words of context with reading each whole line (VAD chunk, at most 25 s) once (owner 2026-11-08: "yes"); switch the app to whole lines if they win
 
 ### Stage B: Window
 

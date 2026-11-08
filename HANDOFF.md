@@ -31,17 +31,27 @@ Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
   "Оставить как есть"; Esc, a click away or scrolling closes / moves it); #file-suggest status line
   with "Найти варианты" / "Искать заново"; Settings checkbox #suggest. Unit tests pass (209); NOT yet
   seen in a real window.
-- window_check.suggest_steps (f7f27a4) and experiments/suggest/suggest_check.py (8838150) are
-  written but have not run: both waited 6 h 47 min in agg-queue behind another session's emulator
-  and were then stopped by Claude Code for low memory, before they started. Left to do: run them
-  (only when the owner says), judge plan 06 A5 (offers on the 455 s lecture: Tullz -> Tools, DepS,
-  Umail, пром-инжиниринга, файндтюнинг, Линт-4 should get right offers; сотней, Подключим,
-  детекции are known false alarms), then tick A5 and B1-B3.
-  Commands (Git Bash, repo root, MSYS_NO_PATHCONV=1): agg-queue run --kind gpu --what "GigaAM
-  suggested-fixes measurement on 455 s lecture" -- python experiments/suggest/suggest_check.py
-  build/whisper-test/audio/lecture-455s.wav --out build/suggest-test/lecture-noterms.json; and
-  agg-queue run --kind gpu --ram-gb 4 --gpu-gb 3 --cores 4 --what "GigaAM window_check with
-  suggested fixes (off screen)" -- python tools/window_check.py <long.wav> <short.mp3> --out <dir>.
+- First queued runs never started (6 h 47 min behind another session's emulator, then stopped
+  for low memory); owner: "you can always queue it" (stopped heavy runs go back to the queue).
+  A quick CPU model check run outside the queue was part of the load that froze the PC once
+  (global heavy-work rule now: anything that loads a model goes through agg-queue).
+- window_check with suggest_steps: 84/84 (the card screenshot is 04g-suggestion-card.png, was 04f).
+- Plan 06 A5, experiments/suggest/suggest_check.py on the 455 s lecture, RNNT text, no terms,
+  29 doubtful groups (outputs build/suggest-test/lecture-words.* and lecture-chunk.*):
+  | context | readings | search | offers | Whisper right | CTC right |
+  | --- | --- | --- | --- | --- | --- |
+  | 1.5 s / 6 words per group | 29 | 25.5 s | 34 | ~9 of 20 | ~1-2 of 16 |
+  | whole line (VAD chunk) | 18 | 22.5 s | 27 | ~9 of 17 | ~1 of 11 |
+  Whisper right: LLM-агентов, fine tuning, промпт-инжиниринга, BIM-моделей, промпта, UML-промптинга,
+  принятие (also from CTC), Prompt Engineering; whole lines also "Tools Calling" (short context
+  gave "Tool Scrolling"); short context also Lean (once). Whisper wrong: стандартные идеи,
+  объяснение, LIND-4 / LIN-4, Lin, найдены (dropped "и"), Baylor Plate (short only), пронамерение
+  (short only). CTC: half-Latin words ("Lнt 4.", "иngnринга") and wrong endings. Two models
+  agreed only 1-2 times (one right), so agreement is not required.
+  Decisions: whole lines; GigaAM text checked by Whisper only (Whisper text by RNNT); offers keep
+  the text's punctuation (Whisper put "?" and "«»" in). Commits 6cc2e57, 2be2351. With the
+  user's terms Whisper gets most of the remaining terms right (session 14: Lean, DeepSeek,
+  boilerplate).
 
 ## Session 15 (2026-11-08): plan 03 B2, word confidence in the window
 
