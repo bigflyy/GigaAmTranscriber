@@ -12,6 +12,8 @@ models, Stage E speaker diarization) and plan 02 (D1-D3).
 
 - 2026-11-08: fine-tune GigaAM itself on videos that come with transcripts (kremlin.ru and similar): "would giga am transcription become better? ... i am just asking as an idea right now". Needs filtering, since the transcripts are edited (keep only stretches where GigaAM and the text agree closely); the gain may be small outside official speech, and the weak spot users hit (English terms in Russian lectures) needs lecture-style data instead. The fine-tuned model goes through experiments/onnx_runtime/export_onnx.py again; measure WER on held-out events.
 
+- 2026-11-08: OpenVINO as a faster CPU engine (an ONNX Runtime execution provider for Intel CPUs and Intel GPUs): owner: "we need to remember the openvino idea". For the speaker models' CPU fallback (plan 07) and maybe GigaAM's CPU mode too; weigh the extra download size, and check AMD CPUs.
+
 ## Languages and speakers
 
 - 2026-11-06: detect the language (there, in the selected part or the file).
