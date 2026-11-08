@@ -30,9 +30,9 @@ Owner's decisions (2026-11-08, AskUserQuestion):
 
 ### Stage B: Window
 
-- [ ] **B1** Blue underline for words with a suggestion; hover text names the suggestion; a click opens the card under the word (each model's reading, "Взять", "Оставить"), Esc and a click away close it
-- [ ] **B2** File status shows the search ("Ищу варианты: 5 / 35"); "Найти варианты" for files without suggestions; Settings switch "Предлагать исправления"
-- [ ] **B3** Tests (fix.py, controller with a fake model) and window_check.py steps
+- [x] **B1** Blue underline for words with a suggestion; hover text names the suggestion; a click opens the card under the word (each model's reading, "Взять", "Оставить"), Esc and a click away close it
+- [x] **B2** File status shows the search ("Ищу варианты: 5 / 35"); "Найти варианты" for files without suggestions; Settings switch "Предлагать исправления"
+- [x] **B3** Tests (fix.py, controller with a fake model) and window_check.py steps
 
 ### Stage C: Release v0.5.0
 
