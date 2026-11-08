@@ -25,7 +25,7 @@ import tempfile
 import threading
 import time
 
-from . import audio as audio_module, catalog, config, fix
+from . import audio as audio_module, catalog, config, diarize, fix
 from .audio import wav_clip
 from .audio_server import AudioServer
 from .engine import MODELS, Transcript
@@ -67,6 +67,8 @@ WAITING, RUNNING, DONE, CANCELLED, FAILED = "waiting", "running", "done", "cance
 # Models that give a reading when a selected part is recognised again (plan 03), in this order.
 # Whisper only when it is downloaded.
 REREAD_MODELS = ("RNNT", "CTC", "Whisper")
+# The most speakers the window lets the user name as the known count (plan 07 C3).
+MAX_SPEAKERS = 20
 
 
 # ---------------------------------------------------------------------- texts
@@ -102,6 +104,12 @@ def places_word(number):
     if 2 <= number % 10 <= 4 and not 12 <= number % 100 <= 14:
         return "места"
     return "мест"
+
+
+def speakers_text(number):
+    """'1 говорящий', '3 говорящих': the Russian word after a number (2-4 take the same form as 5)."""
+    word = "говорящий" if number % 10 == 1 and number % 100 != 11 else "говорящих"
+    return f"{number} {word}"
 
 
 def size_text(size):
@@ -198,6 +206,7 @@ class QueuedFile:
     saved_at: float = 0.0        # when it was first remembered (keeps its place in the list)
     model: str = ""              # model key ("RNNT", "Whisper") that recognises or recognised it
     edits: int = 0               # how many times its text was changed in the window (plan 03, 06)
+    speaker_error: str = ""      # why the last speaker search failed (plan 07), shown under the text
 
 
 class Controller:
@@ -236,6 +245,13 @@ class Controller:
         self.suggest_queue = []      # file ids
         self.suggesting = None       # dict, see _pump_suggestions
         self.suggest_ids = itertools.count(1)
+        # Speaker labels (plan 07): files waiting for a speaker search, the search on the worker
+        # (one whole file, so no file is started meanwhile), and the speaker models' download,
+        # made the first time speakers are looked for.
+        self.speaker_queue = []      # {"id", "transcript", "count" (None: find the number)}
+        self.diarizing = None        # dict, see _pump_speakers
+        self.diarize_ids = itertools.count(1)
+        self.speaker_download = None  # {"done", "total"} bytes while the speaker models download
         self.engine = {"state": "idle", "text": "Запуск...", "detail": ""}
         # The player (plan 05): files reach the page through a local server; formats the
         # page cannot play get a temporary copy, made once per file.
@@ -307,6 +323,7 @@ class Controller:
             "cancelling": item.cancelling, "can_cancel": item.state == RUNNING and not item.cancelling,
             "can_retry": item.state in (DONE, CANCELLED, FAILED), "can_remove": item.state != RUNNING,
             "suggest": self._suggest_view(item),
+            "speakers": self._speakers_view(item),
         }
 
     def _model_name(self, item):
@@ -336,7 +353,11 @@ class Controller:
             model = self.settings.model
             if self._blocked_model() == model and self.running is None:
                 return f"Ждёт модель {model}: она ещё не скачана. Скачайте её в настройках или выберите другую."
-            return "В очереди. Распознавание начнётся после текущего файла." if self.running else "В очереди."
+            if self.running:
+                return "В очереди. Распознавание начнётся после текущего файла."
+            if self.diarizing is not None or self.speaker_download is not None:
+                return "В очереди. Распознавание начнётся, когда закончится определение говорящих."
+            return "В очереди."
         if item.state == RUNNING:
             if item.cancelling:
                 return "Отмена... готовые фрагменты будут сохранены."
@@ -388,6 +409,8 @@ class Controller:
             "devices": [{"key": key, "label": label} for key, label in DEVICES],
             "formats": [{"key": fmt, "label": FORMAT_LABELS[fmt]} for fmt in FORMATS],
             "cpu_count": os.cpu_count() or 8,
+            "max_speakers": MAX_SPEAKERS,
+            "speaker_download": size_text(catalog.SPEAKER_MODEL.download_size),
             "config_note": f"Параметры поиска речи (порог, длина фрагментов) задаются в файле "
                            f"{self.settings_path or config.default_path()}.",
         }
@@ -398,7 +421,7 @@ class Controller:
                 "outputs": list(s.outputs), "include_timestamps": s.include_timestamps,
                 "terms": s.terms, "doubt_marks": s.doubt_marks, "doubt_style": s.doubt_style,
                 "doubt_light": s.doubt_light, "doubt_strong": s.doubt_strong, "player_volume": s.player_volume,
-                "suggest": s.suggest}
+                "suggest": s.suggest, "speakers": s.speakers}
 
     # ------------------------------------------------------------------ page calls
 
@@ -518,10 +541,11 @@ class Controller:
     @staticmethod
     def _segment_view(index, segment):
         """One line of text for the page, with its words, so a selection maps to word times.
-        A word is [start, end, text, confidence, suggestions]; confidence is None when not
-        known, suggestions None or the offers kept on the word (Word.suggestions, plan 06)."""
+        A word is [start, end, text, confidence, suggestions, speaker]; confidence is None when
+        not known, suggestions None or the offers kept on the word (Word.suggestions, plan 06),
+        speaker None or an index into the file's speaker names (plan 07)."""
         return {"index": index, "start": segment.start, "end": segment.end, "text": segment.text,
-                "words": [[word.start, word.end, word.text, word.confidence, word.suggestions]
+                "words": [[word.start, word.end, word.text, word.confidence, word.suggestions, word.speaker]
                           for word in segment.words]}
 
     def copy_text(self, file_id, with_times, for_llm=False):
@@ -694,7 +718,8 @@ class Controller:
                                   self.settings.cpu_threads, self.settings.language, terms or None))
             return {"request": request, "current": self.rereading["current"],
                     "models": [{"key": key, "title": catalog.model_title(key)} for key in models],
-                    "whisper_missing": "Whisper" not in models, "waiting": self.running is not None}
+                    "whisper_missing": "Whisper" not in models,
+                    "waiting": self.running is not None or self.diarizing is not None}
 
     def apply_fix(self, file_id, first, last, text, model=None):
         """Put text in place of the selected words; the saved files and the history follow.
@@ -738,8 +763,9 @@ class Controller:
             return
         item.written["llm"] = path
 
-    def _write_again(self, item):
-        """After the text changed: write the saved files again, remember the file, redraw it."""
+    def _write_again(self, item, lines=True):
+        """After the text or the speakers changed: write the saved files again, remember the
+        file, redraw it (lines: its text too, else only the file, as after a speaker's rename)."""
         with self.lock:
             formats = list(item.written)
         error = None
@@ -753,7 +779,8 @@ class Controller:
             else:
                 self._error(f"Текст исправлен, но файлы не перезаписаны: {error}")
             self._remember(item)
-            self._emit("lines_changed", {"id": item.id})
+            if lines:
+                self._emit("lines_changed", {"id": item.id})
             self._emit_file(item)
 
     def _reread_event(self, kind, request, *args):
@@ -1040,6 +1067,208 @@ class Controller:
             self._emit_file(item)
             return True
 
+    # ------------------------------------------------------------------ speaker labels (plan 07)
+
+    def _speakers_view(self, item):
+        """The speaker line under a finished file: {"names" (Transcript.speakers, [] when not
+        looked for), "text" (how the search goes, or how many were found), "can_find" (the
+        "Определить говорящих" button), "busy", "can_cancel"}."""
+        names = list(item.result.speakers or []) if item.result is not None else []
+        view = {"names": names, "text": "", "can_find": False, "busy": False, "can_cancel": False}
+        if item.state not in (DONE, CANCELLED) or item.result is None or not item.segments:
+            return view
+        search = self.diarizing
+        if search is not None and search["id"] == item.id and search["transcript"] is item.result:
+            if search["cancelling"]:
+                text = "Определение говорящих: отмена..."
+            elif search["total"]:
+                fraction = search["done"] / search["total"]
+                text = f"Определяю говорящих: {fraction * 100:.0f}%"
+                if search["since"] is not None and fraction < 1:
+                    # Counted from the first progress report, so the model load is left out.
+                    started, first = search["since"]
+                    spent = self.clock() - started
+                    if fraction - first > 0.05 and spent > 2:
+                        text += ", осталось " + about_text(spent / (fraction - first) * (1 - fraction))
+            elif search["loading"]:
+                text = "Определяю говорящих: загрузка моделей..."
+            else:
+                text = "Определяю говорящих..."
+            return {**view, "text": text, "busy": True, "can_cancel": not search["cancelling"]}
+        queued = [entry for entry in self.speaker_queue if entry["id"] == item.id]
+        if queued:
+            text = "Определение говорящих: в очереди"
+            if self.speaker_download is not None and self.speaker_queue[0] is queued[0]:
+                download = self.speaker_download
+                text = (f"Скачиваю модели для определения говорящих: {download['done'] / 1024 ** 2:.0f} "
+                        f"из {download['total'] / 1024 ** 2:.0f} МБ")
+            return {**view, "text": text, "busy": True, "can_cancel": self.speaker_download is None}
+        if item.speaker_error:
+            text = "Не удалось определить говорящих: " + item.speaker_error
+        elif names:
+            text = "Найдено: " + speakers_text(len(names))
+        else:
+            text = ""
+        return {**view, "text": text, "can_find": True}
+
+    def find_speakers(self, file_id, count=None):
+        """The "Определить говорящих" button: find who speaks when in a finished file.
+        count: the number of speakers when the user knows it, None (or 0) to find it."""
+        with self.lock:
+            item = self._fixable(file_id)
+            count = int(count) if count else None
+            if count is not None and not 1 <= count <= MAX_SPEAKERS:
+                raise ValueError(f"Число говорящих: от 1 до {MAX_SPEAKERS}")
+            search = self.diarizing
+            if search is not None and search["id"] == item.id and search["transcript"] is item.result:
+                raise ValueError("Говорящие в этом файле уже определяются")
+            self._queue_speakers(item, count)
+            self._emit_file(item)
+            self._pump()
+            return True
+
+    def _queue_speakers(self, item, count=None):
+        """Put a file in line for a speaker search; a file already waiting gets the new count."""
+        item.speaker_error = ""
+        for entry in self.speaker_queue:
+            if entry["id"] == item.id:
+                entry.update(transcript=item.result, count=count)
+                return
+        self.speaker_queue.append({"id": item.id, "transcript": item.result, "count": count})
+
+    def cancel_speakers(self, file_id):
+        """Stop the speaker search of a file, or take it out of the line."""
+        with self.lock:
+            item = self._find(file_id)
+            if item is None:
+                return False
+            search = self.diarizing
+            if search is not None and search["id"] == item.id:
+                if search["cancelling"]:
+                    return False
+                search["cancelling"] = True
+                self.worker.cancel.set()
+            else:
+                before = len(self.speaker_queue)
+                self.speaker_queue = [entry for entry in self.speaker_queue if entry["id"] != item.id]
+                if len(self.speaker_queue) == before:
+                    return False
+            self._emit_file(item)
+            return True
+
+    def rename_speaker(self, file_id, index, name):
+        """A new name for one speaker of a file; every paragraph and every saved file follows.
+        An empty name gives the speaker back its number ("Говорящий 2")."""
+        with self.lock:
+            item = self._fixable(file_id)
+            names = item.result.speakers
+            if not names or not 0 <= int(index) < len(names):
+                raise ValueError("Этого говорящего уже нет")
+            index = int(index)
+            name = " ".join(str(name or "").split())[:60] or diarize.default_name(index)
+            if names[index] == name:
+                return True
+            names[index] = name
+        self._write_again(item, lines=False)
+        return True
+
+    def _pump_speakers(self):
+        """Start the next speaker search, or the speaker models' download it needs. Called when
+        no file waits to be recognised and nothing else runs on the worker. True when the
+        worker got a job.
+
+        self.diarizing: {"id", "transcript" (the result the speakers are for; a file recognised
+        again meanwhile ignores them), "request", "count", "done" and "total" (windows),
+        "since" ((clock, fraction) at the first progress), "loading", "cancelling"}."""
+        if self.diarizing is not None or self.speaker_download is not None:
+            return True
+        if self.suggesting is not None and self.suggesting["request"] is not None:
+            return False  # one group of doubtful words on the worker: start after it
+        while self.speaker_queue:
+            entry = self.speaker_queue[0]
+            item = self._find(entry["id"])
+            if item is None or item.result is not entry["transcript"] or not item.segments:
+                self.speaker_queue.pop(0)  # removed or recognised again meanwhile
+                continue
+            if catalog.installed_folder(catalog.SPEAKER_MODEL) is None:
+                info = catalog.SPEAKER_MODEL
+                self.speaker_download = {"done": 0, "total": info.download_size}
+                self.worker.cancel.clear()
+                self.worker.jobs.put(("download", info))
+                self._emit_file(item)
+                return True
+            self.speaker_queue.pop(0)
+            request = next(self.diarize_ids)
+            self.diarizing = {"id": item.id, "transcript": item.result, "request": request,
+                              "count": entry["count"], "done": 0, "total": 0, "since": None,
+                              "loading": False, "cancelling": False}
+            self.worker.cancel.clear()
+            self.worker.jobs.put(("diarize", request, item.path, self.settings.engine_device,
+                                  self.settings.cpu_threads, entry["count"]))
+            self._emit_file(item)
+            self._emit_files()  # waiting files now say they wait for the speakers
+            return True
+        return False
+
+    def _diarize_event(self, kind, request, *args):
+        """Worker events of a speaker search; old requests are ignored."""
+        search = self.diarizing
+        if search is None or search["request"] != request:
+            return
+        item = self._find(search["id"])
+        current = item is not None and item.result is search["transcript"]
+        if kind == "diarize_loading":
+            search["loading"] = True
+        elif kind == "diarize_progress":
+            search["done"], search["total"] = args
+            search["loading"] = False
+            if search["since"] is None and search["total"]:
+                search["since"] = (self.clock(), search["done"] / search["total"])
+        elif kind == "diarize_result":
+            turns, error = args
+            self.diarizing = None
+            if current and turns is not None:
+                turns = [diarize.Turn(start, end, speaker) for start, end, speaker in turns]  # tuples from the worker
+                item.result.speakers = diarize.assign_speakers(item.segments, turns, item.result.speakers)
+                self._write_again(item)
+            elif current and error:
+                item.speaker_error = error
+                self._notice(f"Не удалось определить говорящих в {item.path.name}: {error}")
+            if current:
+                self._emit_file(item)
+            self._emit_files()
+            self._pump()
+            return
+        if current:
+            self._emit_file(item)
+
+    def _speaker_download_progress(self, done, total):
+        self.speaker_download = {"done": done, "total": total or catalog.SPEAKER_MODEL.download_size}
+        if self.speaker_queue:
+            item = self._find(self.speaker_queue[0]["id"])
+            if item is not None:
+                self._emit_file(item)
+
+    def _speaker_download_done(self, folder):
+        self.speaker_download = None
+        if folder is None:  # stopped: the window is closing
+            self.speaker_queue = []
+            self._emit_files()
+            return
+        self._pump()
+
+    def _speaker_download_failed(self, text):
+        """The speaker models could not be downloaded: the files that waited for them say why."""
+        self.speaker_download = None
+        for entry in self.speaker_queue:
+            item = self._find(entry["id"])
+            if item is not None:
+                item.speaker_error = f"модели не скачались ({text})"
+        self.speaker_queue = []
+        self._error(f"Не удалось скачать модели для определения говорящих: {text}")
+        self._emit_files()
+        self._pump()
+
     def show_folder(self, file_id):
         with self.lock:
             item = self._find(file_id)
@@ -1077,6 +1306,8 @@ class Controller:
                 if change["suggest"] not in config.SUGGEST_MODES:
                     raise ValueError(f"Unknown suggest mode {change['suggest']!r}")
                 s.suggest = change["suggest"]
+            if "speakers" in change:
+                s.speakers = bool(change["speakers"])
             if "doubt_style" in change:
                 if change["doubt_style"] not in config.DOUBT_STYLES:
                     raise ValueError(f"Unknown doubt style {change['doubt_style']!r}")
@@ -1107,7 +1338,7 @@ class Controller:
                                   "cpu_threads": defaults.cpu_threads, "outputs": list(defaults.outputs),
                                   "include_timestamps": defaults.include_timestamps,
                                   "doubt_marks": defaults.doubt_marks, "doubt_style": defaults.doubt_style,
-                                  "suggest": defaults.suggest,
+                                  "suggest": defaults.suggest, "speakers": defaults.speakers,
                                   "doubt_light": defaults.doubt_light, "doubt_strong": defaults.doubt_strong})
 
     def _save_settings(self):
@@ -1160,6 +1391,11 @@ class Controller:
             if self.downloading:
                 parts.append(f"Идёт скачивание модели {self.downloading}. "
                              "Скачанная часть останется, в следующий раз скачивание продолжится.")
+            if self.diarizing is not None:
+                item = self._find(self.diarizing["id"])
+                name = item.path.name if item is not None else ""
+                parts.append(f"Идёт определение говорящих в файле {name}. Оно остановится, "
+                             "текст останется без говорящих.")
             if not parts:
                 return None
             if waiting:
@@ -1268,19 +1504,22 @@ class Controller:
         self._emit("download", {"phase": "ask", "model": model, "text": text, "folder": f"Папка: {downloads_dir()}"})
 
     def _pump(self):
-        """Start the next waiting file if nothing runs."""
+        """Start the next waiting file if nothing runs; with no file to start, the speaker
+        searches go first, then the suggested fixes (both run on the same worker)."""
         if not self.ready_called or self.running is not None or self.downloading is not None:
             return
+        if self.diarizing is not None or self.speaker_download is not None:
+            return  # a whole-file job on the worker; its end calls _pump again
         item = next((item for item in self.files if item.state == WAITING), None)
         if item is None:
-            self._pump_suggestions()
+            self._pump_background()
             return
         model = self.settings.model
         if not self._model_installed(model):
             if model not in self.declined:
                 self._ask_download(model)
             self._emit_file(item)
-            self._pump_suggestions()
+            self._pump_background()
             return
         formats = list(self.settings.outputs) or ["txt"]
         item.state = RUNNING
@@ -1292,6 +1531,10 @@ class Controller:
         self.worker.jobs.put(("transcribe", item.path, self._engine_key(), self.settings.vad, formats,
                               self.settings.language, self.settings.doubt_light))
         self._emit_file(item)
+
+    def _pump_background(self):
+        if not self._pump_speakers():
+            self._pump_suggestions()
 
     # ------------------------------------------------------------------ worker events
 
@@ -1343,6 +1586,8 @@ class Controller:
             self._reread_event(kind, *args)
         elif kind.startswith("suggest_"):
             self._suggest_event(kind, *args)
+        elif kind.startswith("diarize_"):
+            self._diarize_event(kind, *args)
         elif kind == "download_progress":
             self._download_progress(*args)
         elif kind == "download_done":
@@ -1371,6 +1616,8 @@ class Controller:
         # write_outputs returns the paths in the order of the formats it was given.
         item.written = dict(zip(item.formats, written))
         self.running = None
+        if item.state == DONE and item.segments and self.settings.speakers:
+            self._queue_speakers(item)
         if item.state == DONE and item.segments and self._suggest_by_itself(item) and self._suggest_models(item):
             self._queue_suggestions(item)
         self._remember(item)
@@ -1378,7 +1625,9 @@ class Controller:
         self._pump()
 
     def _worker_error(self, text):
-        if self.downloading:
+        if self.speaker_download is not None and not self.downloading and not self.running:
+            self._speaker_download_failed(text)
+        elif self.downloading:
             model, self.downloading = self.downloading, None
             self.declined.add(model)
             self._set_engine("error", f"{model} - не скачана", text)
@@ -1399,6 +1648,9 @@ class Controller:
             self._error("Ошибка: " + text)
 
     def _download_progress(self, model, done, total):
+        if model == catalog.SPEAKER_MODEL.key:
+            self._speaker_download_progress(done, total)
+            return
         fraction = done / total if total else 0.0
         status = f"{done / 1024 ** 2:.0f} из {total / 1024 ** 2:.0f} МБ"
         elapsed = self.clock() - (self.download_started or self.clock())
@@ -1408,6 +1660,9 @@ class Controller:
         self._emit("download", {"phase": "progress", "model": model, "fraction": fraction, "status": status})
 
     def _download_done(self, model, folder):
+        if model == catalog.SPEAKER_MODEL.key:
+            self._speaker_download_done(folder)
+            return
         self.downloading = None
         if folder is None:
             self.declined.add(model)

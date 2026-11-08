@@ -422,10 +422,16 @@ def replace_words(segments, first, last, new_words):
     segments are removed. Every touched segment gets its text joined again from its
     words, so segment.text and segment.words stay in step. Segment boundaries do
     not move. Offers kept on the replaced words go with them, and offers on earlier
-    words that reach into them are dropped. Returns the indices of the changed segments.
+    words that reach into them are dropped. New words without a speaker take the speaker
+    of the first word they replace (plan 07), so a fixed word stays in its paragraph.
+    Returns the indices of the changed segments.
     """
     check_selection(segments, first, last)
     _drop_reaching(segments, tuple(first))
+    speaker = segments[first[0]].words[first[1]].speaker
+    for word in new_words:
+        if word.speaker is None:
+            word.speaker = speaker
     changed = list(range(first[0], last[0] + 1))
     for segment_index in reversed(changed):
         segment = segments[segment_index]

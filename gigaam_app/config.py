@@ -49,6 +49,7 @@ class Settings:
     doubt_strong: float = 0.80        # and below this likely wrong (wavy); 0 < strong < light <= 1
     player_volume: float = 1.0        # the window's player, 0..1
     suggest: str = "gpu"              # one of SUGGEST_MODES: look for other readings after each file
+    speakers: bool = False            # find who speaks when after each file (plan 07)
     outputs: list = field(default_factory=lambda: list(DEFAULT_FORMATS))
     vad: VadOptions = field(default_factory=VadOptions)
 
@@ -116,6 +117,10 @@ def parse(data):
             if value not in SUGGEST_MODES:
                 raise ValueError(f"suggest: expected one of {', '.join(SUGGEST_MODES)}")
             settings.suggest = value
+        elif key == "speakers":
+            if type(value) is not bool:
+                raise ValueError("speakers: expected true or false")
+            settings.speakers = value
         elif key == "doubt_style":
             if value not in DOUBT_STYLES:
                 raise ValueError(f"doubt_style: expected one of {', '.join(DOUBT_STYLES)}")

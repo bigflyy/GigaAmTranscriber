@@ -1,6 +1,7 @@
 """The window's logic (gigaam_app/controller.py) with a fake worker: no model, no window."""
 
 import copy
+import json
 from pathlib import Path
 import queue
 import threading
@@ -342,7 +343,7 @@ def test_live_segments_and_copy(app, media):
     pushed = [m["data"] for m in app.sent if m["kind"] == "segment"]
     assert [(p["index"], p["text"]) for p in pushed] == [(0, "Первая."), (1, "Вторая.")]
     assert app.segments(item.id)[1] == {"index": 1, "start": 3.0, "end": 4.0, "text": "Вторая.",
-                                         "words": [[3.0, 4.0, "Вторая.", None, None]]}
+                                         "words": [[3.0, 4.0, "Вторая.", None, None, None]]}
     assert app.copy_text(item.id, False) == "Первая.\nВторая.\n"
     assert app.copy_text(item.id, True).startswith("[00:01.000 - 00:02.500] Первая.\n")
     for_llm = app.copy_text(item.id, False, True)
@@ -383,7 +384,7 @@ def test_settings_apply_to_the_next_file_and_reload_the_model(app, media):
                                           "outputs": ["txt", "srt"], "include_timestamps": False, "terms": "",
                                           "doubt_marks": True, "doubt_style": "underline",
                                           "doubt_light": 0.97, "doubt_strong": 0.80, "player_volume": 1.0,
-                                          "suggest": "gpu"}
+                                          "suggest": "gpu", "speakers": False}
     assert app.fake_worker.take() == [("load", ("RNNT", "cpu", 4))]
     app.add_files([str(media[0])])
     job = app.fake_worker.take()[0]
@@ -1006,3 +1007,176 @@ def test_a_failed_search_says_so_and_ends(app, searching):
     assert app.suggesting is None and not searching.result.suggestions_searched
     assert "no such file" in last(app.sent, "notice")["text"]
     assert suggest_jobs(app) == []
+
+
+# ---------------------------------------------------------------------- speaker labels (plan 07)
+
+def two_voices():
+    """Two lines; the second speaker says the last word of the first line."""
+    return [doubtful_line(("Привет,", 0.0, 0.5, 0.99), ("как", 0.6, 0.8, 0.99), ("дела?", 0.9, 1.2, 0.99),
+                          ("Хорошо.", 1.6, 2.0, 0.99)),
+            doubtful_line(("А", 3.0, 3.1, 0.99), ("у", 3.2, 3.3, 0.99), ("тебя?", 3.4, 3.8, 0.99))]
+
+
+TURNS = [(0.0, 1.3, 5), (1.5, 2.1, 2), (2.9, 4.0, 5)]  # raw speaker numbers of the diarization
+
+
+def speaker_jobs(app):
+    return [job for job in app.fake_worker.take() if job[0] in ("diarize", "download")]
+
+
+@pytest.fixture
+def spoken(app, media, monkeypatch, tmp_path):
+    """A finished file; the speaker models count as downloaded."""
+    app.set_settings({"outputs": ["txt", "json"]})
+    monkeypatch.setattr(catalog, "installed_folder", lambda info: tmp_path)
+    app.add_files([str(media[0])])
+    item = app.files[0]
+    finish(app, media[0], two_voices(), formats=("txt", "json"))
+    app.fake_worker.take()
+    return item
+
+
+def test_speakers_are_off_by_default(spoken, app):
+    assert app.settings.speakers is False
+    assert app.speaker_queue == [] and app.diarizing is None
+    view = app._file_view(spoken)["speakers"]
+    assert view == {"names": [], "text": "", "can_find": True, "busy": False, "can_cancel": False}
+
+
+def test_the_setting_downloads_the_models_then_finds_the_speakers(app, media, monkeypatch, tmp_path):
+    app.set_settings({"speakers": True, "outputs": ["txt", "json"]})
+    assert config.load(tmp_path / "settings.json").speakers is True
+    app.add_files([str(media[0])])
+    item = app.files[0]
+    app.fake_worker.take()
+    finish(app, media[0], two_voices(), formats=("txt", "json"))
+    [job] = speaker_jobs(app)
+    assert job == ("download", catalog.SPEAKER_MODEL)
+    assert app._file_view(item)["speakers"]["text"].startswith("Скачиваю модели для определения говорящих: 0 из 3")
+    app.handle(("download_progress", "Speakers", 16 * 1024 ** 2, 32 * 1024 ** 2))
+    assert "16 из 32 МБ" in app._file_view(item)["speakers"]["text"]
+    monkeypatch.setattr(catalog, "installed_folder", lambda info: tmp_path)
+    app.handle(("download_done", "Speakers", tmp_path))
+    [job] = speaker_jobs(app)
+    assert job[0] == "diarize" and job[2] == item.path and job[3:] == ("auto", 0, None)
+    request = job[1]
+    app.handle(("diarize_loading", request))
+    assert app._file_view(item)["speakers"]["text"] == "Определяю говорящих: загрузка моделей..."
+    app.handle(("diarize_progress", request, 1, 4))
+    view = app._file_view(item)["speakers"]
+    assert view["text"] == "Определяю говорящих: 25%" and view["busy"] and view["can_cancel"]
+    app.handle(("diarize_result", request, TURNS, None))
+    assert app.diarizing is None
+    assert [w.speaker for s in item.segments for w in s.words] == [0, 0, 0, 1, 0, 0, 0]
+    assert item.result.speakers == ["Говорящий 1", "Говорящий 2"]
+    assert app._file_view(item)["speakers"]["text"] == "Найдено: 2 говорящих"
+    assert app.segments(item.id)[0]["words"][3][5] == 1
+    assert {"id": item.id} in [m["data"] for m in app.sent if m["kind"] == "lines_changed"]
+    saved = json.loads(item.written["json"].read_text(encoding="utf-8"))
+    assert saved["speakers"] == ["Говорящий 1", "Говорящий 2"]
+
+
+def test_the_button_with_a_known_count_holds_the_next_file(spoken, app, media):
+    assert app.find_speakers(spoken.id, 3)
+    [job] = speaker_jobs(app)
+    assert job[0] == "diarize" and job[5] == 3
+    with pytest.raises(ValueError):
+        app.find_speakers(spoken.id)  # already running
+    app.add_files([str(media[1])])
+    waiting = app.files[1]
+    assert waiting.state == "waiting" and app.fake_worker.take() == []
+    assert "определение говорящих" in app._file_view(waiting)["status"]
+    app.handle(("diarize_result", job[1], TURNS, None))
+    [transcribe] = app.fake_worker.take()
+    assert transcribe[0] == "transcribe" and transcribe[1] == waiting.path
+
+
+def test_a_wrong_count_is_refused(spoken, app):
+    with pytest.raises(ValueError):
+        app.find_speakers(spoken.id, controller_module.MAX_SPEAKERS + 1)
+
+
+def test_rename_reaches_every_file_without_redrawing_the_text(spoken, app):
+    app.find_speakers(spoken.id)
+    [job] = speaker_jobs(app)
+    app.handle(("diarize_result", job[1], TURNS, None))
+    app.sent.clear()
+    assert app.rename_speaker(spoken.id, 1, "  Мария   Ивановна ")
+    assert spoken.result.speakers == ["Говорящий 1", "Мария Ивановна"]
+    assert "lines_changed" not in kinds(app.sent)
+    assert last(app.sent, "file")["speakers"]["names"] == ["Говорящий 1", "Мария Ивановна"]
+    assert json.loads(spoken.written["json"].read_text(encoding="utf-8"))["speakers"][1] == "Мария Ивановна"
+    app.rename_speaker(spoken.id, 1, "")  # an empty name gives the number back
+    assert spoken.result.speakers[1] == "Говорящий 2"
+    with pytest.raises(ValueError):
+        app.rename_speaker(spoken.id, 5, "Кто-то")
+
+
+def test_a_search_again_keeps_the_names(spoken, app):
+    app.find_speakers(spoken.id)
+    app.handle(("diarize_result", speaker_jobs(app)[0][1], TURNS, None))
+    app.rename_speaker(spoken.id, 0, "Анна")
+    app.find_speakers(spoken.id, 2)
+    app.handle(("diarize_result", speaker_jobs(app)[0][1], TURNS, None))
+    assert spoken.result.speakers == ["Анна", "Говорящий 2"]
+
+
+def test_a_fixed_word_takes_the_speaker_of_the_word_it_replaces(spoken, app):
+    app.find_speakers(spoken.id)
+    app.handle(("diarize_result", speaker_jobs(app)[0][1], TURNS, None))
+    app.apply_fix(spoken.id, [0, 3], [0, 3], "Отлично, спасибо.")
+    assert [(w.text, w.speaker) for w in spoken.segments[0].words[3:]] == [("Отлично,", 1), ("спасибо.", 1)]
+
+
+def test_cancel_a_search_or_take_it_out_of_the_line(spoken, app, media):
+    app.find_speakers(spoken.id)
+    [job] = speaker_jobs(app)
+    assert app.cancel_speakers(spoken.id) and app.fake_worker.cancel.is_set()
+    assert app._file_view(spoken)["speakers"]["text"] == "Определение говорящих: отмена..."
+    app.handle(("diarize_result", job[1], None, None))
+    view = app._file_view(spoken)["speakers"]
+    assert spoken.result.speakers is None and view["can_find"] and view["text"] == ""
+    # Waiting behind a file: taken out of the line.
+    app.add_files([str(media[1])])
+    app.fake_worker.take()
+    app.find_speakers(spoken.id)
+    assert app._file_view(spoken)["speakers"]["text"] == "Определение говорящих: в очереди"
+    assert app.cancel_speakers(spoken.id) and app.speaker_queue == []
+
+
+def test_a_failed_search_says_why(spoken, app):
+    app.find_speakers(spoken.id)
+    [job] = speaker_jobs(app)
+    app.handle(("diarize_result", job[1], None, "out of memory"))
+    assert app._file_view(spoken)["speakers"]["text"] == "Не удалось определить говорящих: out of memory"
+    assert "out of memory" in last(app.sent, "notice")["text"]
+    app.find_speakers(spoken.id)  # a new try clears the error
+    assert app._file_view(spoken)["speakers"]["text"] == "Определяю говорящих..."
+
+
+def test_a_failed_download_says_why(app, media):
+    app.add_files([str(media[0])])
+    item = app.files[0]
+    finish(app, media[0], two_voices())
+    app.fake_worker.take()
+    app.find_speakers(item.id)
+    assert speaker_jobs(app) == [("download", catalog.SPEAKER_MODEL)]
+    app.handle(("error", "no network"))
+    assert app.speaker_download is None and app.speaker_queue == []
+    assert "no network" in app._file_view(item)["speakers"]["text"]
+    assert "no network" in last(app.sent, "error")["text"]
+
+
+def test_speakers_found_for_an_older_result_are_ignored(spoken, app):
+    app.find_speakers(spoken.id)
+    [job] = speaker_jobs(app)
+    app.retry(spoken.id)
+    app.handle(("diarize_result", job[1], TURNS, None))
+    assert app.files[0].result is None and app.diarizing is None
+    assert app.fake_worker.take()[0][0] == "transcribe"
+
+
+def test_closing_during_a_search_asks_first(spoken, app):
+    app.find_speakers(spoken.id)
+    assert "определение говорящих" in app.close_question()

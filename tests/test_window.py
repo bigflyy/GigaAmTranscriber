@@ -74,7 +74,8 @@ def test_api_exposes_only_page_methods():
     assert public == {"ready", "pick_files", "add_files", "remove", "cancel", "retry", "segments", "copy_text",
                       "open_output", "create_output", "show_folder", "set_settings", "reset_settings",
                       "download", "decline_download", "cancel_download", "close_anyway", "clip", "audio", "reread", "apply_fix",
-                      "find_suggestions", "take_suggestion", "leave_suggestion"}
+                      "find_suggestions", "take_suggestion", "leave_suggestion",
+                      "find_speakers", "cancel_speakers", "rename_speaker"}
     api = window.Api(controller=object())
     assert all(name.startswith("_") for name in vars(api))
 

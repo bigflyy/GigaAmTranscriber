@@ -224,6 +224,15 @@ class Api:
     def leave_suggestion(self, file_id, position, index):
         return self._controller.leave_suggestion(file_id, position, index)
 
+    def find_speakers(self, file_id, count=None):
+        return self._controller.find_speakers(file_id, count)
+
+    def cancel_speakers(self, file_id):
+        return self._controller.cancel_speakers(file_id)
+
+    def rename_speaker(self, file_id, index, name):
+        return self._controller.rename_speaker(file_id, index, name)
+
     def set_settings(self, change):
         return self._controller.set_settings(change)
 
