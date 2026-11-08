@@ -210,6 +210,7 @@ function renderMain() {
   bar.hidden = file.state !== 'running';
   bar.firstElementChild.style.width = `${Math.round((file.progress || 0) * 100)}%`;
   renderSaved(file);
+  renderSuggest(file);
   $('text-label').textContent = file.state === 'running' ? 'Текст появляется по ходу' : 'Текст';
   $('copy').disabled = !file.segments;
   renderAudioBar(file);
@@ -269,7 +270,9 @@ function drawLines(id) {
   const lines = state.lines.get(id) || [];
   const fragment = document.createDocumentFragment();
   for (const line of lines) fragment.appendChild(lineNode(line));
+  closeCard();
   text.appendChild(fragment);
+  markOffers();
   renderMain();
 }
 
@@ -391,16 +394,23 @@ function applyDoubts(on, style) {
 }
 
 function showConfidence(event) {
-  // The number appears on hover: on marked words, or on every word in the colour style.
+  // The number appears on hover: on marked words, or on every word in the colour style;
+  // a word with an offer (plan 06) also names it.
   const word = event.target.closest && event.target.closest('.w');
-  if (!word || word.dataset.c === undefined) return;
+  if (!word || (word.dataset.c === undefined && !word.classList.contains('sg'))) return;
   const text = $('text');
   const percent = Math.round(Number(word.dataset.c) * 100);
-  if (text.classList.contains('doubts-colors')) word.title = `Уверенность модели: ${percent} %`;
-  else if (!text.classList.contains('doubts-underline')) word.title = '';
+  const shown = text.classList.contains('doubts-colors') || text.classList.contains('doubts-underline');
+  if (word.dataset.c === undefined) word.title = '';
+  else if (text.classList.contains('doubts-colors')) word.title = `Уверенность модели: ${percent} %`;
+  else if (!shown) word.title = '';
   else if (word.classList.contains('d2')) word.title = `Скорее ошибка: уверенность модели ${percent} %`;
   else if (word.classList.contains('d1')) word.title = `Возможно ошибка: уверенность модели ${percent} %`;
   else word.title = '';
+  if (shown && word.classList.contains('sg')) {
+    const offers = offersAt(word).map((found) => wordsText(found.offer.words));
+    if (offers.length) word.title += `${word.title ? '\n' : ''}Другие модели слышат: ${offers.join(' / ')}. Щёлкните, чтобы выбрать.`;
+  }
 }
 
 async function copyText(forLlm) {
@@ -512,6 +522,157 @@ function placeBar(range) {
   const left = Math.max(8, Math.min(firstLine.left - host.left, host.width - bar.offsetWidth - 8));
   bar.style.top = `${top - host.top}px`;
   bar.style.left = `${left}px`;
+}
+
+// ------------------------------------------------------------------ suggested fixes (plan 06)
+// After a file is recognised, other models read its doubtful words again. Where one hears
+// something else, the offer is kept on the first word it would replace (word[4]: a list of
+// {models, count, words}); every word it covers gets the class sg (blue underline), and a
+// click on such a word opens the card with the offers.
+
+let card = null;  // {fileId, span, offers} while the card is open
+
+function spanPosition(span) {
+  return [Number(span.parentNode.dataset.seg), Number(span.dataset.w)];
+}
+
+function wordsText(words) {
+  return words.map((word) => word[2]).join(' ');
+}
+
+function markOffers() {
+  // Mark every word an offer covers; an offer may reach into the next line.
+  const spans = [...$('text').querySelectorAll('.w')];
+  for (const span of spans) span.classList.remove('sg');
+  spans.forEach((span, at) => {
+    const word = wordOf(state.selected, spanPosition(span));
+    if (!word || !word[4]) return;
+    const reach = Math.max(...word[4].map((offer) => offer.count));
+    for (let step = 0; step < reach && at + step < spans.length; step += 1) spans[at + step].classList.add('sg');
+  });
+}
+
+function offersAt(span) {
+  // The offers that cover this word: kept on it, or on an earlier word they reach past.
+  const spans = [...$('text').querySelectorAll('.w')];
+  const at = spans.indexOf(span);
+  const found = [];
+  for (let back = 0; back <= 100 && at - back >= 0; back += 1) {
+    const from = spans[at - back];
+    const position = spanPosition(from);
+    const word = wordOf(state.selected, position);
+    (word && word[4] ? word[4] : []).forEach((offer, index) => {
+      if (offer.count > back) found.push({ position, index, offer, span: from, at: at - back });
+    });
+  }
+  return found;
+}
+
+function coveredSpans(found) {
+  // The current words an offer would replace, as spans.
+  const spans = [...$('text').querySelectorAll('.w')];
+  return spans.slice(found.at, found.at + found.offer.count);
+}
+
+function onLine(data) {
+  // One line changed (an offer added or left): draw it again in place.
+  const lines = state.lines.get(data.id);
+  if (!lines || !lines[data.index]) return;
+  lines[data.index] = data;
+  if (state.selected !== data.id) return;
+  const old = $('text').querySelector(`p[data-seg="${data.index}"]`);
+  if (!old) return;
+  if (card && old.contains(card.span)) closeCard();
+  old.replaceWith(lineNode(data));
+  wordTimes = null;
+  markOffers();
+}
+
+function openCard(span) {
+  const offers = offersAt(span);
+  if (!offers.length) return;
+  closeCard();
+  hideBar();
+  card = { fileId: state.selected, span, offers };
+  span.classList.add('open');
+  const list = $('sg-list');
+  list.textContent = '';
+  for (const found of offers) {
+    const item = el('li', 'sg-item');
+    const body = el('div', 'sg-body');
+    body.appendChild(el('div', 'sg-model', found.offer.models.join(' + ')));
+    const text = el('div', 'sg-text');
+    text.appendChild(el('span', 'sg-now', coveredSpans(found).map((word) => word.textContent).join(' ')));
+    text.appendChild(document.createTextNode(' \u2192 '));
+    text.appendChild(el('strong', '', wordsText(found.offer.words)));
+    body.appendChild(text);
+    const take = el('button', 'primary', 'Взять');
+    take.type = 'button';
+    take.title = 'Поставить этот вариант в текст';
+    take.addEventListener('click', () => takeOffer(found));
+    item.append(body, take);
+    list.appendChild(item);
+  }
+  const box = $('sg-card');
+  box.hidden = false;
+  placeCard();
+  box.querySelector('button.primary').focus({ preventScroll: true });
+}
+
+function placeCard() {
+  // Under the word (above it when there is no room below), inside the file view.
+  if (!card) return;
+  const box = $('sg-card');
+  const host = $('view-file').getBoundingClientRect();
+  const area = $('text').getBoundingClientRect();
+  const word = card.span.getBoundingClientRect();
+  if (word.bottom < area.top || word.top > area.bottom) { closeCard(); return; }
+  let top = word.bottom + 6;
+  if (top + box.offsetHeight > area.bottom) top = word.top - box.offsetHeight - 6;
+  const left = Math.max(8, Math.min(word.left - host.left, host.width - box.offsetWidth - 8));
+  box.style.top = `${top - host.top}px`;
+  box.style.left = `${left}px`;
+}
+
+function closeCard() {
+  if (!card) return;
+  card.span.classList.remove('open');
+  card = null;
+  $('sg-card').hidden = true;
+}
+
+async function takeOffer(found) {
+  const fileId = card ? card.fileId : state.selected;
+  closeCard();
+  await call('take_suggestion', fileId, found.position, found.index);
+}
+
+async function leaveOffers() {
+  // "Оставить как есть": forget every offer of the card, the later ones first so the
+  // indices of the earlier ones stay right.
+  if (!card) return;
+  const { fileId, offers } = card;
+  closeCard();
+  const order = [...offers].sort((a, b) => b.at - a.at || b.index - a.index);
+  for (const found of order) await call('leave_suggestion', fileId, found.position, found.index);
+}
+
+function playCard() {
+  // Listen to the place: from the first to the last word any offer covers.
+  if (!card) return;
+  const spans = card.offers.flatMap(coveredSpans);
+  const times = spans.map((span) => wordOf(card.fileId, spanPosition(span))).filter(Boolean);
+  if (!times.length) return;
+  playFrom(Math.min(...times.map((word) => word[0])), Math.max(...times.map((word) => word[1])));
+}
+
+function renderSuggest(file) {
+  // The line under the file name: how the search goes, and "Найти варианты".
+  const info = file.suggest || {};
+  $('file-suggest').hidden = !info.text && !info.can_find;
+  $('file-suggest-text').textContent = info.text || '';
+  $('find-suggest').hidden = !info.can_find;
+  $('find-suggest').textContent = info.searched ? 'Искать заново' : 'Найти варианты';
 }
 
 // ---- playing a part
@@ -934,6 +1095,7 @@ function renderSettings() {
   if (typeof settings.player_volume === 'number') { filePlayer.volume = settings.player_volume; showVolume(); }
   $('doubt-light').value = Math.round((settings.doubt_light || 0.97) * 100);
   $('doubt-strong').value = Math.round((settings.doubt_strong || 0.80) * 100);
+  $('suggest').checked = settings.suggest !== false;
   markAllWords();
 }
 
@@ -997,6 +1159,7 @@ function apply(message) {
     case 'lines_changed': refreshLines(data.id); break;
     case 'audio_ready': onAudioReady(data); break;
     case 'reading': onReading(data); break;
+    case 'line': onLine(data); break;
     default: break;
   }
 }
@@ -1062,6 +1225,18 @@ for (const input of document.querySelectorAll('input[name="doubt-style"]')) {
   input.addEventListener('change', () => changeSetting({ doubt_style: input.value }));
 }
 $('text').addEventListener('mouseover', showConfidence);
+$('suggest').addEventListener('change', () => changeSetting({ suggest: $('suggest').checked }));
+$('find-suggest').addEventListener('click', () => state.selected && call('find_suggestions', state.selected));
+$('sg-play').addEventListener('click', playCard);
+$('sg-leave').addEventListener('click', leaveOffers);
+// The card closes on Esc, on a click elsewhere, and when its word scrolls out of sight.
+document.addEventListener('pointerdown', (event) => {
+  if (card && !event.target.closest('#sg-card') && event.target !== card.span) closeCard();
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && card) { event.preventDefault(); closeCard(); }
+});
+$('text').addEventListener('scroll', placeCard);
 for (const id of ['doubt-light', 'doubt-strong']) {
   $(id).addEventListener('change', () => {
     // Percent in the fields, 0..1 in the settings; the wavy threshold stays below the dotted one.
@@ -1119,6 +1294,12 @@ $('text').addEventListener('click', (event) => {
     const line = word && word.parentNode.dataset.seg;
     const times = word && wordOf(state.selected, [Number(line), Number(word.dataset.w)]);
     if (times) playFrom(times[0]);
+  } else {
+    // A click (not a drag) on a word with a blue underline opens its offers (plan 06).
+    const word = event.target.closest('.w.sg');
+    const chosen = window.getSelection();
+    const shown = $('text').classList.contains('doubts-underline') || $('text').classList.contains('doubts-colors');
+    if (word && shown && (!chosen || chosen.isCollapsed)) openCard(word);
   }
 });
 // Clicking the bar must not clear the selection it is about.

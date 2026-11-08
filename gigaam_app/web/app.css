@@ -282,6 +282,34 @@ button.icon:hover { color: var(--text); background: var(--card); }
 }
 #doubt-light, #doubt-strong { width: 64px; }
 
+/* Suggested fixes (plan 06): words another model reads differently get a blue underline,
+   dotted or wavy as their doubt (a blue solid line where the word itself was sure, or in the
+   colour style). A click opens the card with the readings. */
+.text.doubts-underline .w.sg, .text.doubts-colors .w.sg {
+  text-decoration: underline solid var(--accent); text-decoration-thickness: 2px; text-underline-offset: 3px; cursor: pointer;
+}
+.text.doubts-underline .w.sg.d1 { text-decoration-style: dotted; }
+.text.doubts-underline .w.sg.d2 { text-decoration-style: wavy; text-decoration-thickness: 1.5px; }
+.text .w.sg.open { background: var(--accent-soft); border-radius: 3px; }
+.suggest-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.suggest-line button.link { font-size: inherit; }
+.check-line { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+.check-line input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
+.sg-card {
+  position: absolute; z-index: 6; width: min(420px, calc(100% - 16px)); padding: 8px;
+  background: var(--card); border: 1px solid var(--card-line); border-radius: 10px; box-shadow: var(--shadow);
+}
+.sg-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.sg-item { display: flex; gap: 10px; align-items: center; padding: 6px 8px; border-radius: 8px; }
+.sg-item:hover { background: color-mix(in srgb, var(--accent-soft) 55%, transparent); }
+.sg-item .sg-body { flex: 1; min-width: 0; }
+.sg-item .sg-model { font-size: 12px; font-weight: 600; color: var(--muted); }
+.sg-item .sg-text { overflow-wrap: anywhere; }
+.sg-item .sg-now { color: var(--muted); text-decoration: line-through; }
+.sg-item button { flex-shrink: 0; }
+.sg-actions { display: flex; justify-content: space-between; gap: 8px; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line); }
+.sg-actions button { height: 28px; }
+
 /* The bar above selected words (plan 03): listen, recognise again, edit. */
 .file-view { position: relative; }
 
