@@ -194,3 +194,62 @@ def test_write_outputs_creates_files_without_leftovers(tmp_path):
         "Привет. Как дела?\nХорошо спасибо.\n".encode("utf-8")
     assert sorted(path.name for path in (tmp_path / "out").iterdir()) == \
         ["talk-transcript.srt", "talk-transcript.txt"]
+
+
+# ---------------------------------------------------------------------- speaker names (plan 07)
+
+def spoken_transcript():
+    """Anna asks, Boris answers inside the same line, then Anna again in the next line."""
+    first = [Word(0.5, 0.9, "Привет.", speaker=0), Word(1.0, 1.4, "Как", speaker=0),
+             Word(1.5, 1.9, "дела?", speaker=0), Word(2.5, 3.0, "Хорошо.", speaker=1)]
+    second = [Word(30.0, 30.4, "А", speaker=0), Word(30.5, 31.0, "у", speaker=None),  # typed by hand
+              Word(31.1, 31.6, "тебя?", speaker=0)]
+    third = [Word(32.0, 32.5, "Тоже.", speaker=0)]
+    return Transcript(source="talk.mp3", model="RNNT", device="CPU", audio_seconds=40.0,
+                      speakers=["Анна", "Говорящий 2"], segments=[
+                          Segment(0.2, 3.1, "Привет. Как дела? Хорошо.", first),
+                          Segment(29.8, 31.8, "А у тебя?", second),
+                          Segment(31.9, 32.6, "Тоже.", third)])
+
+
+def test_plain_text_starts_each_turn_with_the_name():
+    assert plain_text(spoken_transcript()) == ("Анна: Привет. Как дела?\n\nГоворящий 2: Хорошо.\n\n"
+                                               "Анна: А у тебя?\nТоже.\n")
+
+
+def test_timestamped_text_names_the_speaker_on_every_line():
+    assert timestamped_text(spoken_transcript()) == (
+        "[00:00.200 - 00:01.900] Анна: Привет. Как дела?\n"
+        "[00:02.500 - 00:03.100] Говорящий 2: Хорошо.\n"
+        "[00:29.800 - 00:31.800] Анна: А у тебя?\n"
+        "[00:31.900 - 00:32.600] Анна: Тоже.\n")
+
+
+def test_subtitles_never_mix_speakers_and_name_the_turn():
+    cues = [text for _, _, text in subtitle_cues(spoken_transcript())]
+    assert cues == ["Анна: Привет. Как дела?", "Говорящий 2: Хорошо.", "Анна: А у тебя?", "Тоже."]
+
+
+def test_markdown_paragraph_per_turn_with_the_name_in_bold():
+    text = markdown_text(spoken_transcript(), today=DAY)
+    assert text.endswith("## 00:00\n\n**Анна:** Привет. Как дела?\n\n**Говорящий 2:** Хорошо.\n\n"
+                         "## 00:29\n\n**Анна:** А у тебя? Тоже.\n")
+
+
+def test_llm_text_names_speakers_and_says_they_may_be_wrong():
+    text = llm_text(spoken_transcript())
+    assert "Текст разделён по говорящим" in text
+    assert text.endswith("Анна: Привет. Как дела?\n\nГоворящий 2: Хорошо.\n\nАнна: А у тебя?\nТоже.\n")
+
+
+def test_json_keeps_names_and_word_speakers():
+    data = json.loads(json_text(spoken_transcript()))
+    assert data["speakers"] == ["Анна", "Говорящий 2"]
+    assert [w.get("speaker") for w in data["segments"][1]["words"]] == [0, None, 0]
+
+
+def test_without_speakers_nothing_changes():
+    transcript = spoken_transcript()
+    transcript.speakers = None
+    assert plain_text(transcript) == "Привет. Как дела? Хорошо.\nА у тебя?\nТоже.\n"
+    assert "Анна" not in markdown_text(transcript, today=DAY) + srt_text(transcript) + llm_text(transcript)

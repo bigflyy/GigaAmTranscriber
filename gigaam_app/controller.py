@@ -556,7 +556,9 @@ class Controller:
             if item is None:
                 return ""
             model = item.result.model if item.result is not None else (item.model or "")
-            transcript = Transcript(source=str(item.path), model=model, device="", segments=list(item.segments))
+            speakers = list(item.result.speakers) if item.result is not None and item.result.speakers else None
+            transcript = Transcript(source=str(item.path), model=model, device="", segments=list(item.segments),
+                                    speakers=speakers)
             doubt_below = self.settings.doubt_light
         if for_llm:
             return llm_text(transcript, doubt_below)

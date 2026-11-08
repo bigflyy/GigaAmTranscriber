@@ -1,7 +1,12 @@
 """Write a Transcript as plain text, timestamped text, Markdown, SRT subtitles, JSON,
-or text for an LLM (doubtful words marked)."""
+or text for an LLM (doubtful words marked).
 
-from dataclasses import asdict
+When speakers were looked for (plan 07, Transcript.speakers), every format names them:
+a new paragraph at each change of speaker starts with "Name: ", as in the window; the
+timestamped text names the speaker on every line, subtitles on the first cue of a turn.
+"""
+
+from dataclasses import asdict, dataclass
 import datetime
 import json
 import os
@@ -43,33 +48,101 @@ def clock(seconds, millis_separator="."):
     return f"{minutes:02d}:{secs:02d}{millis_separator}{ms:03d}"
 
 
+@dataclass
+class Part:
+    """A line of the transcript, or a piece of one where the speaker changes inside it."""
+    start: float
+    end: float
+    text: str
+    words: list
+    speaker: int = None    # index into Transcript.speakers; None without speakers
+    new_turn: bool = False  # a different speaker starts here (always False without speakers)
+
+
+def speaker_name(transcript, index):
+    """The name of speaker `index` ("Говорящий 2" when the list has no name for it)."""
+    names = transcript.speakers or []
+    return names[index] if 0 <= index < len(names) and names[index] else f"Говорящий {index + 1}"
+
+
+def line_parts(transcript):
+    """The lines with text, as Parts. Without speakers one Part per line. With speakers a
+    line is cut where the speaker of its words changes; a word without a speaker (text typed
+    where there was no neighbour) stays with the speaker before it."""
+    parts = []
+    with_speakers = bool(transcript.speakers)
+    current = None
+    for segment in transcript.segments:
+        if not segment.text:
+            continue
+        pieces = []  # [speaker, new_turn, words]
+        for word in segment.words if with_speakers else ():
+            if word.speaker is not None and word.speaker != current:
+                current = word.speaker
+                pieces.append([current, True, []])
+            elif not pieces:
+                pieces.append([current, False, []])
+            pieces[-1][2].append(word)
+        if len(pieces) <= 1:
+            speaker, new_turn = (pieces[0][0], pieces[0][1]) if pieces else (current if with_speakers else None, False)
+            parts.append(Part(segment.start, segment.end, segment.text, list(segment.words), speaker, new_turn))
+            continue
+        for index, (speaker, new_turn, words) in enumerate(pieces):
+            start = segment.start if index == 0 else words[0].start
+            end = segment.end if index == len(pieces) - 1 else words[-1].end
+            parts.append(Part(start, end, " ".join(word.text for word in words), words, speaker, new_turn))
+    return parts
+
+
+def turn_lines(transcript, render, label=lambda name: f"{name}: "):
+    """Text lines with a speaker's name at each new turn, after a blank line (as the window
+    shows it); render(part) gives a part's own text."""
+    lines = []
+    for part in line_parts(transcript):
+        text = render(part)
+        if part.new_turn:
+            if lines:
+                lines.append("")
+            text = label(speaker_name(transcript, part.speaker)) + text
+        lines.append(text)
+    return lines
+
+
 def plain_text(transcript):
-    return "".join(segment.text + "\n" for segment in transcript.segments if segment.text)
+    if not transcript.speakers:
+        return "".join(segment.text + "\n" for segment in transcript.segments if segment.text)
+    return "".join(line + "\n" for line in turn_lines(transcript, lambda part: part.text))
 
 
 def timestamped_text(transcript):
-    return "".join(f"[{clock(segment.start)} - {clock(segment.end)}] {segment.text}\n"
-                   for segment in transcript.segments if segment.text)
+    """[start - end] text per line; with speakers every line names its speaker."""
+    lines = []
+    for part in line_parts(transcript):
+        name = f"{speaker_name(transcript, part.speaker)}: " if part.speaker is not None else ""
+        lines.append(f"[{clock(part.start)} - {clock(part.end)}] {name}{part.text}\n")
+    return "".join(lines)
 
 
 def subtitle_cues(transcript):
-    """Group words into short cues: [(start, end, text)]."""
-    cues = []
-    for segment in transcript.segments:
+    """Group words into short cues: [(start, end, text)]. A cue never holds two speakers;
+    the first cue of a speaker's turn starts with the name."""
+    cues = []  # (words, name or "")
+    for part in line_parts(transcript):
         current = []
-        for word in segment.words:
+        name = f"{speaker_name(transcript, part.speaker)}: " if part.new_turn else ""
+        for word in part.words:
             if current:
                 text_length = sum(len(w.text) + 1 for w in current) + len(word.text)
                 too_long = word.end - current[0].start > CUE_MAX_SECONDS or text_length > CUE_MAX_CHARS
                 paused = word.start - current[-1].end > CUE_BREAK_GAP
                 sentence_end = current[-1].text[-1:] in ".?!" and word.end - current[0].start > 1.5
                 if too_long or paused or sentence_end:
-                    cues.append(current)
-                    current = []
+                    cues.append((current, name))
+                    current, name = [], ""
             current.append(word)
         if current:
-            cues.append(current)
-    return [(cue[0].start, cue[-1].end, " ".join(w.text for w in cue)) for cue in cues]
+            cues.append((current, name))
+    return [(cue[0].start, cue[-1].end, name + " ".join(w.text for w in cue)) for cue, name in cues]
 
 
 def srt_text(transcript):
@@ -133,22 +206,32 @@ def markdown_escape(text):
 
 
 def markdown_sections(transcript):
-    """Group segments into [(start seconds, text)] sections of about a minute each."""
+    """Group the lines into [(start seconds, paragraphs)] sections of about a minute each.
+    Without speakers a section is one paragraph of text; with speakers a paragraph per turn,
+    as (name or None, text): a section that starts inside a turn repeats no name."""
     sections = []
     current = []
-    for segment in transcript.segments:
-        if not segment.text:
-            continue
+    for part in line_parts(transcript):
         if current:
-            length = segment.start - current[0].start
-            pause = segment.start - current[-1].end
+            length = part.start - current[0].start
+            pause = part.start - current[-1].end
             if length >= SECTION_SECONDS or (pause >= SECTION_PAUSE and length >= SECTION_MIN_SECONDS):
                 sections.append(current)
                 current = []
-        current.append(segment)
+        current.append(part)
     if current:
         sections.append(current)
-    return [(section[0].start, " ".join(segment.text for segment in section)) for section in sections]
+    result = []
+    for section in sections:
+        paragraphs = []
+        for part in section:
+            if part.new_turn or not paragraphs:
+                name = speaker_name(transcript, part.speaker) if part.new_turn else None
+                paragraphs.append((name, [part.text]))
+            else:
+                paragraphs[-1][1].append(part.text)
+        result.append((section[0].start, [(name, " ".join(texts)) for name, texts in paragraphs]))
+    return result
 
 
 def markdown_text(transcript, today=None):
@@ -164,8 +247,11 @@ def markdown_text(transcript, today=None):
              "*" + " \u00b7 ".join(markdown_escape(part) for part in info) + "*"]  # middle dot between parts
     sections = markdown_sections(transcript)
     with_hours = max(transcript.audio_seconds, sections[-1][0] if sections else 0) >= 3600
-    for start, text in sections:
-        lines += ["", f"## {section_clock(start, with_hours)}", "", markdown_escape(text)]
+    for start, paragraphs in sections:
+        lines += ["", f"## {section_clock(start, with_hours)}"]
+        for name, text in paragraphs:
+            label = f"**{markdown_escape(name)}:** " if name else ""
+            lines += ["", label + markdown_escape(text)]
     return "\n".join(lines) + "\n"
 
 
@@ -218,14 +304,16 @@ def llm_text(transcript, doubt_below=LLM_DOUBT_BELOW):
     marked = sum(1 for word in words if word.confidence is not None and word.confidence < doubt_below)
     title = model_title(transcript.model) if transcript.model else "Основная модель"
     made_by = f" (модель {title})" if transcript.model else ""
-    body, places = [], 0
-    for segment in transcript.segments:
-        if segment.words:
-            line, found = versions_line(segment.words, title, doubt_below)
-            body.append(line)
-            places += found
-        elif segment.text:
-            body.append(segment.text)
+    places = 0
+
+    def render(part):
+        nonlocal places
+        if not part.words:
+            return part.text
+        line, found = versions_line(part.words, title, doubt_below)
+        places += found
+        return line
+    body = turn_lines(transcript, render)
     lines = [f"Автоматическая расшифровка речи{made_by}. Слова, в которых модель распознавания "
              "не уверена, отмечены так: слово[?66%], где число - её уверенность в слове. "
              "Эти слова могли быть распознаны неверно. Но весь текст получен распознаванием речи, "
@@ -237,6 +325,10 @@ def llm_text(transcript, doubt_below=LLM_DOUBT_BELOW):
                      f"{{{title}: как услышала она | {other}: как услышала другая модель}}. "
                      "Первая версия - основной текст. Выберите версию, которая лучше подходит по "
                      "смыслу, или исправьте её: правы могут быть обе модели или ни одна.")
+    if transcript.speakers:
+        lines.append("Текст разделён по говорящим: реплика начинается с имени и двоеточия. Говорящие "
+                     "определены автоматически по голосу, поэтому граница реплики или говорящий "
+                     "иногда указаны неверно.")
     lines.append(f"Отмечено слов: {marked} из {len(words)}." +
                  (f" Мест с разными версиями: {places}." if places else ""))
     return "\n".join(lines + [""] + body) + "\n"

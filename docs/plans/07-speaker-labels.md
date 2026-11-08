@@ -36,15 +36,15 @@ Earlier findings (HANDOFF.md, "Diarization findings"): sherpa-onnx 2.0.1 with py
 
 ### Stage C: Window
 
-- [ ] **C1** Settings checkbox (off by default) and the "Определить говорящих" button with a status line, like "Найти варианты"
-- [ ] **C2** Paragraph per turn with a coloured "Говорящий N:"; a click on the name renames that speaker everywhere
-- [ ] **C3** Number of speakers: automatic or a number the user gives
+- [x] **C1** Settings checkbox (off by default) and the "Определить говорящих" button with a status line, like "Найти варианты". Done (session 19): #file-speakers under the file name (status, "Говорящих: авто / 1-20", button, "Отменить"), Settings fieldset "Говорящие"
+- [x] **C2** Paragraph per turn with a coloured "Говорящий N:"; a click on the name renames that speaker everywhere. Done: a change of speaker (also inside a line) starts a new paragraph with the name in its colour (8 colours per theme, --spk-0..7); lines of one long turn stay paragraphs of their own (a lecture would otherwise be one paragraph); the name opens a dialog; an empty name gives the number back
+- [x] **C3** Number of speakers: automatic or a number the user gives (per file, next to the button; the after-file run is automatic)
 - [ ] **C4** window_check steps for speakers; screenshots
 
 ### Stage D: Files and CLI
 
-- [ ] **D1** txt, srt, md, json and the text for an AI carry the speaker names
-- [ ] **D2** CLI option for speakers and their count
+- [x] **D1** txt, srt, md, json and the text for an AI carry the speaker names. Done (session 19, outputs.line_parts): txt and the AI text "Имя: " at each turn after a blank line (the AI text's note says speakers are automatic and may be wrong); timestamps name the speaker on every line; srt cues never mix speakers, the first cue of a turn starts with the name; md a paragraph per turn with "**Имя:**"; json as before. "Копировать" uses the same texts
+- [x] **D2** CLI option for speakers and their count: --speakers [auto|N|off] (alone = auto; default from Settings.speakers), --download Speakers, --list-models shows the speaker models; models download by themselves the first time
 
 ### Stage E: Release v0.6.0
 

@@ -2,7 +2,9 @@
 
 gigaam-cli --list-models shows every model and whether it is installed;
 gigaam-cli --download MODEL fetches an extra model (resumes if interrupted);
-gigaam-cli --devices shows the GPUs and CPU each recognition engine can use.
+gigaam-cli --devices shows the GPUs and CPU each recognition engine can use;
+gigaam-cli --speakers FILE also finds who speaks when (plan 07): the saved files name the
+speakers ("Говорящий 1: ..."); --speakers 3 when the number of speakers is known.
 """
 
 import argparse
@@ -13,9 +15,12 @@ import sys
 import time
 
 from . import __version__, catalog, config, download
+from .audio import decode_audio
 from .engine import MODELS, ModelNotInstalled, Transcriber
 from .outputs import FORMATS, write_outputs
 from .vad import VadOptions
+
+MAX_SPEAKERS = 20  # the window's limit too (controller.MAX_SPEAKERS)
 
 
 def build_parser():
@@ -32,13 +37,19 @@ def build_parser():
     parser.add_argument("--threads", type=int, help="CPU threads for recognition (default: automatic)")
     parser.add_argument("--formats", help=f"comma-separated list from {','.join(FORMATS)} "
                                           "(default: txt,timestamps)")
+    parser.add_argument("--speakers", nargs="?", const="auto", metavar="COUNT",
+                        help="find who speaks when and name the speakers in the files: alone or "
+                             "'auto' to find their number, a number when it is known, 'off' to skip "
+                             "(default: the settings file, else off). The speaker models "
+                             f"({size_text(catalog.SPEAKER_MODEL.download_size)}) are downloaded the first time")
     parser.add_argument("--config", type=Path, help="settings file (default: gigaam-config.json beside the app)")
     parser.add_argument("--quiet", action="store_true", help="print only errors")
     parser.add_argument("--list-models", action="store_true", help="show the models and where they are installed")
     parser.add_argument("--devices", action="store_true",
                         help="show the GPUs and CPU that GigaAM (ONNX Runtime) and Whisper (whisper.cpp) can use")
-    parser.add_argument("--download", metavar="MODEL", choices=tuple(MODELS),
-                        help="download an extra model, then transcribe FILES if any are given")
+    parser.add_argument("--download", metavar="MODEL", choices=tuple(MODELS) + (catalog.SPEAKER_MODEL.key,),
+                        help="download an extra model (or Speakers, the speaker models), "
+                             "then transcribe FILES if any are given")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     tuning = parser.add_argument_group("segmentation (override the settings file)")
     for item in fields(VadOptions):
@@ -68,9 +79,26 @@ def size_text(size):
     return f"{size / 1024 ** 3:.1f} GB" if size >= 1024 ** 3 else f"{size / 1024 ** 2:.0f} MB"
 
 
+def speaker_count(value):
+    """--speakers: None (off), 0 (find the number) or the known number; ValueError otherwise."""
+    text = str(value).strip().lower()
+    if text == "off":
+        return None
+    if text == "auto":
+        return 0
+    if not text.isdigit() or not 1 <= int(text) <= MAX_SPEAKERS:
+        raise ValueError(f"--speakers: expected auto, off or a number from 1 to {MAX_SPEAKERS}")
+    return int(text)
+
+
+def find_model(key):
+    """ModelInfo for a --download name: a recognition model, or the speaker models."""
+    return catalog.SPEAKER_MODEL if key == catalog.SPEAKER_MODEL.key else catalog.find(key)
+
+
 def list_models():
     from .paths import downloads_dir, models_dir
-    for info in catalog.CATALOG:
+    for info in catalog.CATALOG + (catalog.SPEAKER_MODEL,):
         folder = catalog.installed_folder(info)
         if info.bundled:
             state = "bundled" if folder else "missing"
@@ -108,7 +136,7 @@ def list_devices():
 
 def download_model(key, quiet):
     """Download one catalog model with a progress line; returns an exit code."""
-    info = catalog.find(key)
+    info = find_model(key)
     folder = catalog.installed_folder(info)
     if folder is not None:
         if not quiet:
@@ -170,6 +198,12 @@ def main(argv=None):
     if unknown:
         print(f"Unknown format: {', '.join(unknown)}", file=sys.stderr)
         return 2
+    try:
+        speakers = speaker_count(args.speakers if args.speakers is not None
+                                 else ("auto" if settings.speakers else "off"))
+    except ValueError as error:
+        print(error, file=sys.stderr)
+        return 2
     options = settings.vad
     for item in fields(VadOptions):
         value = getattr(args, item.name)
@@ -192,6 +226,11 @@ def main(argv=None):
     if args.language and not transcriber.uses_language:
         print(f"Note: --language is for Whisper; {model} recognises Russian only.", file=sys.stderr)
     say(f"{model} on {transcriber.device_label}, loaded in {transcriber.load_seconds:.1f} s")
+    speaker_model = None
+    if speakers is not None:
+        speaker_model = load_speaker_model(device, threads, args.quiet)
+        if speaker_model is None:
+            return 1
     failures = 0
     for path in args.files:
         try:
@@ -210,6 +249,9 @@ def main(argv=None):
             if not result.segments:
                 say(f"{path.name}: no speech found, nothing written")
                 continue
+            if speaker_model is not None:
+                found, seconds = find_speakers(speaker_model, path, result, speakers or None)
+                say(f"{path.name}: {found} speaker(s) found in {seconds:.1f} s")
             written = write_outputs(result, formats, args.out_dir, doubt_below=settings.doubt_light)
             speed = result.audio_seconds / result.elapsed_seconds if result.elapsed_seconds else 0
             say(f"{path.name}: {result.audio_seconds:.0f} s of audio in {result.elapsed_seconds:.1f} s "
@@ -220,6 +262,29 @@ def main(argv=None):
             failures += 1
             print(f"{path}: {error}", file=sys.stderr)
     return 1 if failures else 0
+
+
+def load_speaker_model(device, threads, quiet):
+    """The speaker models, downloaded first if needed; None (after a message) when that fails."""
+    from .diarize import SpeakerModel
+    if catalog.installed_folder(catalog.SPEAKER_MODEL) is None:
+        if download_model(catalog.SPEAKER_MODEL.key, quiet):
+            return None
+    try:
+        return SpeakerModel(catalog.installed_folder(catalog.SPEAKER_MODEL), device=device, cpu_threads=threads)
+    except Exception as error:  # a damaged download, a provider that fails to start
+        print(f"Speaker models could not be loaded: {error}", file=sys.stderr)
+        return None
+
+
+def find_speakers(model, path, result, count):
+    """Give the words of result their speakers (count: the known number, or None to find it).
+    Returns (speakers with words, seconds it took)."""
+    from .diarize import assign_speakers
+    started = time.perf_counter()
+    found = model.diarize(decode_audio(path), num_speakers=count)
+    result.speakers = assign_speakers(result.segments, found.exclusive_turns)
+    return len(result.speakers), time.perf_counter() - started
 
 
 if __name__ == "__main__":

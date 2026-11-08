@@ -75,3 +75,75 @@ def test_wildcards_are_expanded(tmp_path):
     expanded = cli.expand_wildcards([tmp_path / "*.mp3", tmp_path / "c.wav", tmp_path / "none*.ogg"])
     # A pattern that matches nothing stays as given, so the user sees "File not found".
     assert [path.name for path in expanded] == ["a.mp3", "b.mp3", "c.wav", "none*.ogg"]
+
+
+# ---------------------------------------------------------------------- speakers (plan 07)
+
+@pytest.mark.parametrize("value, expected", [("off", None), ("auto", 0), ("AUTO", 0), ("3", 3), ("20", 20)])
+def test_speaker_count(value, expected):
+    assert cli.speaker_count(value) == expected
+
+
+@pytest.mark.parametrize("value", ["0", "21", "two", "-1"])
+def test_a_wrong_speaker_count_exits_2(tmp_path, capsys, value):
+    audio = tmp_path / "a.wav"
+    audio.write_bytes(b"")
+    assert cli.main([str(audio), "--speakers", value, "--config", str(tmp_path / "none.json")]) == 2
+    assert "--speakers" in capsys.readouterr().err
+
+
+def test_speakers_alone_means_auto():
+    assert cli.build_parser().parse_args(["a.wav", "--speakers"]).speakers == "auto"
+    assert cli.build_parser().parse_args(["--download", "Speakers"]).download == "Speakers"
+
+
+class SpokenTranscriber:
+    """Gives two lines of words for any file."""
+
+    def __init__(self, model, device, cpu_threads, language):
+        self.uses_language, self.device_label, self.load_seconds = False, "CPU", 0.1
+
+    def transcribe(self, path, options, on_progress=None):
+        from gigaam_app.engine import Segment, Transcript, Word
+        words = [Word(0.0, 0.5, "Привет."), Word(2.0, 2.5, "Здравствуйте.")]
+        return Transcript(source=str(path), model="RNNT", device="CPU", audio_seconds=3.0, elapsed_seconds=0.1,
+                          segments=[Segment(0.0, 0.5, "Привет.", words[:1]), Segment(2.0, 2.5, "Здравствуйте.", words[1:])])
+
+
+class FakeSpeakerModel:
+    asked = []
+
+    def diarize(self, audio, num_speakers=None):
+        from gigaam_app.diarize import Diarization, Turn
+        FakeSpeakerModel.asked.append(num_speakers)
+        return Diarization(exclusive_turns=[Turn(0.0, 1.0, 7), Turn(1.8, 3.0, 4)], speakers=2)
+
+
+def test_speakers_are_named_in_the_files(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(cli, "Transcriber", SpokenTranscriber)
+    monkeypatch.setattr(cli, "load_speaker_model", lambda device, threads, quiet: FakeSpeakerModel())
+    monkeypatch.setattr(cli, "decode_audio", lambda path: None)
+    FakeSpeakerModel.asked.clear()
+    audio = tmp_path / "a.wav"
+    audio.write_bytes(b"")
+    assert cli.main([str(audio), "--speakers", "2", "--formats", "txt", "--config", str(tmp_path / "none.json")]) == 0
+    assert FakeSpeakerModel.asked == [2]
+    assert (tmp_path / "a-transcript.txt").read_text(encoding="utf-8") == \
+        "Говорящий 1: Привет.\n\nГоворящий 2: Здравствуйте.\n"
+    assert "2 speaker(s) found" in capsys.readouterr().out
+
+
+def test_the_settings_file_turns_speakers_on(tmp_path, monkeypatch):
+    monkeypatch.setattr(cli, "Transcriber", SpokenTranscriber)
+    monkeypatch.setattr(cli, "load_speaker_model", lambda device, threads, quiet: FakeSpeakerModel())
+    monkeypatch.setattr(cli, "decode_audio", lambda path: None)
+    FakeSpeakerModel.asked.clear()
+    settings = tmp_path / "gigaam-config.json"
+    settings.write_text('{"speakers": true}', encoding="utf-8")
+    audio = tmp_path / "a.wav"
+    audio.write_bytes(b"")
+    assert cli.main([str(audio), "--formats", "txt", "--config", str(settings), "--quiet"]) == 0
+    assert FakeSpeakerModel.asked == [None]
+    assert cli.main([str(audio), "--formats", "txt", "--config", str(settings), "--quiet", "--speakers", "off"]) == 0
+    assert FakeSpeakerModel.asked == [None]
+    assert (tmp_path / "a-transcript.txt").read_text(encoding="utf-8") == "Привет.\nЗдравствуйте.\n"
