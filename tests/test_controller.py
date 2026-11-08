@@ -811,7 +811,7 @@ def test_doubtful_words_are_read_again_by_whisper(app, searching):
     app.handle(("suggest_result", request, "Whisper", [Word(text="наш", start=1.0, end=1.3)] + TOOLS_READING, None))
     word = searching.segments[0].words[3]
     assert word.suggestions == [{"models": ["Whisper"], "count": 2,
-                                 "words": [[2.72, 3.0, "Tools", None], [3.02, 3.5, "Calling,", None]]}]
+                                 "words": [[2.7, 3.008, "Tools", None], [3.008, 3.5, "Calling,", None]]}]
     line_message = last(app.sent, "line")
     assert line_message["index"] == 0 and line_message["words"][3][4] == word.suggestions
     app.handle(("suggest_done", request))
@@ -826,13 +826,16 @@ def test_doubtful_words_are_read_again_by_whisper(app, searching):
                     "searched": True}
 
 
-def test_take_an_offer_keeps_its_times_and_writes_the_files(app, searching):
+def test_take_an_offer_in_the_replaced_words_times_and_write_the_files(app, searching):
     [job] = suggest_jobs(app)
-    app.handle(("suggest_result", job[1], "Whisper", TOOLS_READING, None))
+    reading = [Word(text=w.text, start=w.start, end=w.end, confidence=0.8) for w in TOOLS_READING]
+    app.handle(("suggest_result", job[1], "Whisper", reading, None))
     assert app.take_suggestion(searching.id, [0, 3], 0)
     line = searching.segments[0]
     assert line.text == "наш любимый механизм Tools Calling, и"
-    assert [(w.text, w.start, w.suggestions) for w in line.words[3:5]] == [("Tools", 2.72, None), ("Calling,", 3.02, None)]
+    # The span of "Tullz Colling," (2.7-3.5 s, GigaAM's times), not Whisper's; chosen, so not doubtful.
+    assert [(w.text, w.start, w.end, w.confidence, w.suggestions) for w in line.words[3:5]] == [
+        ("Tools", 2.7, 3.008, None, None), ("Calling,", 3.008, 3.5, None, None)]
     assert "Tools Calling, и" in searching.written["txt"].read_text(encoding="utf-8")
     assert "lines_changed" in kinds(app.sent)
     with pytest.raises(ValueError):

@@ -979,7 +979,7 @@ class Controller:
             self._emit_file(item)
 
     def take_suggestion(self, file_id, position, index):
-        """Put an offered reading in place of the words it is for (its words keep their times)."""
+        """Put an offered reading in place of the words it is for (in their time span)."""
         with self.lock:
             item = self._fixable(file_id)
             position = tuple(position)
@@ -991,7 +991,10 @@ class Controller:
             positions = fix.positions_from(item.segments, position, offer["count"])
             if len(positions) != offer["count"]:
                 raise ValueError("Этот вариант уже недоступен")
-            fix.replace_words(item.segments, position, positions[-1], fix.suggestion_words(offer))
+            words = fix.suggestion_words(offer)
+            for word in words:
+                word.confidence = None  # the user chose it: not doubtful any more, like text typed by hand
+            fix.replace_words(item.segments, position, positions[-1], words)
             self._edited(item)
         self._write_again(item)
         return True
