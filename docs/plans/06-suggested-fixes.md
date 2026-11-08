@@ -33,7 +33,7 @@ the punctuation of the words it replaces. Numbers in HANDOFF.md, session 16.
 - [x] **A4** Controller: take a suggestion (words keep their times, files written again, like apply_fix), leave it (the suggestion is dropped); Settings.suggest switch
 - [x] **A5** Measure on the 455 s lecture: how many suggestions, how many right, how long; decide whether a suggestion needs two models to agree. Compare the 1.5 s / 6 words of context with reading each whole line (VAD chunk, at most 25 s) once (owner 2026-11-08: "yes"); switch the app to whole lines if they win
 
-- [ ] **A6** Measure about 25 s centred on each group (half before, half after, across line ends) against whole lines (owner 2026-11-08: "measure it, test it"); switch if it wins
+- [x] **A6** Measure about 25 s centred on each group (half before, half after, across line ends) against whole lines (owner 2026-11-08: "measure it, test it"); switch if it wins. Result: same quality (Whisper ~9-10 of 18 right against ~9 of 17), 29 readings and 31.5 s against 18 and 22.5 s; whole lines stay
 
 ### Stage B: Window
 

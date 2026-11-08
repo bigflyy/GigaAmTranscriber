@@ -48,6 +48,11 @@ Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
   объяснение, LIND-4 / LIN-4, Lin, найдены (dropped "и"), Baylor Plate (short only), пронамерение
   (short only). CTC: half-Latin words ("Lнt 4.", "иngnринга") and wrong endings. Two models
   agreed only 1-2 times (one right), so agreement is not required.
+  | about 25 s centred on the group (A6) | 29 | 31.5 s | 31 | ~9-10 of 18 | ~1 of 14 |
+  Centred vs whole line: also "reasoning" alone (line: "reasoning для обычной") and no offer for
+  "найдены"; but "Бейлер Плейта" and "lin"/"LIN" offered where the line offered nothing or the
+  same; Lean wrong in both. Same quality at 1.4x the time, so whole lines stay. It also showed a
+  lone dash read as a word ("prompt engineering –"): edge words of pure punctuation are dropped.
   Decisions: whole lines; GigaAM text checked by Whisper only (Whisper text by RNNT); offers keep
   the text's punctuation (Whisper put "?" and "«»" in). Commits 6cc2e57, 2be2351. With the
   user's terms Whisper gets most of the remaining terms right (session 14: Lean, DeepSeek,
