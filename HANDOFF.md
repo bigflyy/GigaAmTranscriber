@@ -1,6 +1,6 @@
 # Handoff: state and findings
 
-Last updated 2026-11-09 (session 19). Current plan: [docs/plans/07-speaker-labels.md](docs/plans/07-speaker-labels.md) (speakers; B-D done, E1 release left).
+Last updated 2026-11-09 (session 19). Current plan: [docs/plans/07-speaker-labels.md](docs/plans/07-speaker-labels.md) (speakers; B-D done; next Stage G, owner 2026-11-09: tidy the window, a speakers switch, fixing speakers; then E1).
 Plan 06 finished (suggested fixes, models in their own process, release v0.5.0 published as its
 Stage D). Plan 03 (fix a part):
 A and B2 done; B1 and C left. Plan 05 (player) done (C3 in v0.5.0).
@@ -37,7 +37,7 @@ Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
   voice prints ~90% of the time). Same quality as the GPU at 2 s: AMI DER 20.9 (excl 26.8),
   kremlin 0.3% words wrong, all counts right except TS3003a (2 of 4, as always). Another
   session's light test jobs may have run alongside.
-- Not seen by the owner yet: the speaker line, labels, rename, Settings checkbox, the files.
+- Owner saw it (2026-11-09): "the gui is very cluttered now", no on / off switch for speakers, no way to fix speaker results, buttons styled inconsistently; asked whether to do it now or next session (next: design with mock-ups first). Added as plan 07 Stage G and to docs/IDEAS.md (Window).
   Plan 07 left: E1 (v0.6.0 builds, smoke tests, notes, README; publishing waits for the owner).
 
 ## Session 18 (2026-11-08): speaker labels, questions first

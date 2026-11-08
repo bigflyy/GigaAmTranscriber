@@ -46,6 +46,18 @@ Earlier findings (HANDOFF.md, "Diarization findings"): sherpa-onnx 2.0.1 with py
 - [x] **D1** txt, srt, md, json and the text for an AI carry the speaker names. Done (session 19, outputs.line_parts): txt and the AI text "Имя: " at each turn after a blank line (the AI text's note says speakers are automatic and may be wrong); timestamps name the speaker on every line; srt cues never mix speakers, the first cue of a turn starts with the name; md a paragraph per turn with "**Имя:**"; json as before. "Копировать" uses the same texts
 - [x] **D2** CLI option for speakers and their count: --speakers [auto|N|off] (alone = auto; default from Settings.speakers), --download Speakers, --list-models shows the speaker models; models download by themselves the first time
 
+### Stage G: Tidy the window, speakers on / off, fixing speakers (owner 2026-11-09, before E)
+
+Owner after trying session 19's window: "very cluttered now", "no switch on / off when we
+segmented", "no way to fix segmentation results", "some buttons are showed one way and some are
+the other way". Design first, the owner chooses, then build.
+
+- [ ] **G1** Inventory of everything under the file name and above the text (status, model, "Найти варианты", speaker line, count, saved-file chips, switches, copy buttons) and how each control looks now (link-style vs button vs chip); screenshot of the current state
+- [ ] **G2** Two or three layout mock-ups side by side (for example a compact toolbar over the text with the switches Таймкоды / Сомнения / Говорящие, one "more" menu for rarer actions, status lines folded into one line; one consistent style for actions), compared with how similar apps do it (Google Recorder, Otter, MacWhisper, Telegram voice transcripts); ask the owner to choose
+- [ ] **G3** A "Говорящие" switch over the text (like Таймкоды / Сомнения): shows or hides the names and paragraphs; saved files follow the shown choice or always carry names (ask the owner)
+- [ ] **G4** Fixing speakers: options to show the owner (click a name -> menu: rename, change this paragraph's speaker to another or a new one, merge with another speaker; select words -> "Другой говорящий"); controller methods that change Word.speaker and Transcript.speakers, history and files follow; tests
+- [ ] **G5** Build the chosen layout; window_check updated; screenshots for the owner
+
 ### Stage E: Release v0.6.0
 
 - [ ] **E1** Builds (Windows, Linux), smoke tests, release notes, README; publishing waits for the owner's go-ahead

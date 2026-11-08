@@ -22,6 +22,12 @@ models, Stage E speaker diarization) and plan 02 (D1-D3).
 
 - 2026-11-08: other speaker-labelling engines after v0.6.0: "lets try this approach in v1 and try others in future". Candidates from session 18 (HANDOFF.md): Nemotron-3-Diarization (needs a newer NeMo or own ONNX code), newer pyannote releases, DiariZen if its licence changes; measure them with experiments/diarization on the kremlin.ru set and AMI.
 
+## Window
+
+- 2026-11-09: the window is cluttered and inconsistent after speakers: "i feel like the gui is very cluttered now ... you need to organize it somehow and declutter i guess. some buttons are showed one way and some are the other way". Planned as plan 07 Stage G (before the v0.6.0 release).
+- 2026-11-09: a switch to show or hide the speakers once a file has them: "there is no switch on / off when we segmented". Plan 07 Stage G.
+- 2026-11-09: a way to fix wrong speaker results: "no way to fix segmentation results" (for example give a paragraph or selected words to another speaker, merge two speakers, split one). Plan 07 Stage G.
+
 ## Links and summaries
 
 - 2026-11-07: send a video by link (YouTube for example) and get it transcribed, then summarised automatically: "an addon to firefox / chrome / just some kind of service, maybe even in our app idk". Summary with Claude / Codex / an API; a local model as experimental, for the future ("i dont have a good one").
