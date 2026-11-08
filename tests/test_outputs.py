@@ -104,6 +104,7 @@ def test_llm_text_marks_doubtful_words_before_their_punctuation():
     text = llm_text(transcript)
     lines = text.splitlines()
     assert "слово[?66%]" in lines[0] and "GigaAM v3 RNNT" in lines[0]
+    assert "ошибки возможны и в неотмеченных словах" in lines[0]
     assert lines[1] == "Отмечено слов: 2 из 5."
     assert lines[3:] == ["Привет[?66%]. Как дела?", "Хорошо[?50%] спасибо."]
     assert llm_text(transcript, doubt_below=0.6).splitlines()[3] == "Привет. Как дела?"
