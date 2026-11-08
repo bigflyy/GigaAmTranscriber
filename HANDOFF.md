@@ -1,9 +1,47 @@
 # Handoff: state and findings
 
-Last updated 2026-11-08 (session 15). Current plan: [docs/plans/03-fix-a-part.md](docs/plans/03-fix-a-part.md)
-(A and B2 done and tried; B1 and C left). Also [docs/plans/05-audio-player.md](docs/plans/05-audio-player.md) (player; only C3 Linux left).
+Last updated 2026-11-08 (session 16). Current plan: [docs/plans/06-suggested-fixes.md](docs/plans/06-suggested-fixes.md)
+(suggested fixes for doubtful words, then release v0.5.0 as its Stage C). Plan 03 (fix a part):
+A and B2 done; B1 and C left. Plan 05 (player): only C3 Linux left, done in the v0.5.0 Linux build.
 Plan 04 (Whisper) done: v0.4.0. Plan 02 (window) has D for later; plan 01 still
-holds B9, F (Parakeet, Qwen3-ASR) and E. Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
+holds B9, F (Parakeet, Qwen3-ASR) and E (speakers: the owner's next big task, for about v0.6.0).
+Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
+
+## Session 16 (2026-11-08): plan 06, suggested fixes for doubtful words
+
+- Owner tried volume, mute and Space on the seek bar: "works". Chose the recommended next work:
+  suggested fixes (the idea of merging GigaAM's and Whisper's strengths). AskUserQuestion answers:
+  release v0.5.0 after this work (plan 06 C1); look automatically after each file plus a
+  "Найти варианты" button; a word with an offer keeps its dotted / wavy line but in blue.
+- Owner's new ideas (in docs/IDEAS.md): speaker labels next after plan 06, "pr-ly 0.6.0"; paste
+  a YouTube or other link; summarise with a local Codex / Claude Code; fix doubtful words
+  automatically through an LLM.
+- Backend (643196d): fix.doubt_groups (doubtful words of one line, at most one sure word between),
+  fix.suggestion_from (the differing difflib runs that overlap the group, joined and widened, so
+  "Tullz Colling" -> "Tools Calling"; an added or dropped word takes a matching neighbour; a run
+  more than 4 words longer than the group is not offered); Word.suggestions = [{models, count,
+  words}] on the first word an offer replaces (history yes, outputs no); replace_words drops offers
+  reaching into replaced words. Worker job "suggest" = the reread routine with suggest_* events
+  (and *_failed when the audio cannot be read). Controller: after a DONE file (Settings.suggest),
+  one group at a time, only while no file waits; other installed models than the transcript's own,
+  Whisper with Settings.terms; "line" message per offer; take_suggestion / leave_suggestion;
+  Transcript.suggestions_searched; the file view's "suggest" {text, can_find, busy, searched}.
+- Window (33b74db): .w.sg blue underline (accent colour, dotted / wavy kept), hover "Другие модели
+  слышат: ...", a click opens #sg-card (each offer with its models and "Взять", "▶ Слушать",
+  "Оставить как есть"; Esc, a click away or scrolling closes / moves it); #file-suggest status line
+  with "Найти варианты" / "Искать заново"; Settings checkbox #suggest. Unit tests pass (209); NOT yet
+  seen in a real window.
+- window_check.suggest_steps (f7f27a4) and experiments/suggest/suggest_check.py (8838150) are
+  written but have not run: both waited 6 h 47 min in agg-queue behind another session's emulator
+  and were then stopped by Claude Code for low memory, before they started. Left to do: run them
+  (only when the owner says), judge plan 06 A5 (offers on the 455 s lecture: Tullz -> Tools, DepS,
+  Umail, пром-инжиниринга, файндтюнинг, Линт-4 should get right offers; сотней, Подключим,
+  детекции are known false alarms), then tick A5 and B1-B3.
+  Commands (Git Bash, repo root, MSYS_NO_PATHCONV=1): agg-queue run --kind gpu --what "GigaAM
+  suggested-fixes measurement on 455 s lecture" -- python experiments/suggest/suggest_check.py
+  build/whisper-test/audio/lecture-455s.wav --out build/suggest-test/lecture-noterms.json; and
+  agg-queue run --kind gpu --ram-gb 4 --gpu-gb 3 --cores 4 --what "GigaAM window_check with
+  suggested fixes (off screen)" -- python tools/window_check.py <long.wav> <short.mp3> --out <dir>.
 
 ## Session 15 (2026-11-08): plan 03 B2, word confidence in the window
 
