@@ -331,8 +331,8 @@ def suggestion_from(reading, context_words, first_selected, last_selected):
         return None
     offered = keep_edges(context_words[i1:i2], reading[j1:j2])
     # The offer takes the time span of the words it replaces: Whisper's word times are rough
-    # (on a whole line it put "fine tuning" 0.8 s before the word), and the player highlights
-    # the spoken word by these times.
+    # (from 1.5 s of context it put "fine tuning" about 1 s after the word, where GigaAM
+    # and a whole-line reading agree), and the player highlights the spoken word by them.
     timed = spread_words(" ".join(word.text for word in offered), context_words[i1].start, context_words[i2 - 1].end)
     if len(timed) == len(offered):
         for word, timing in zip(offered, timed):
