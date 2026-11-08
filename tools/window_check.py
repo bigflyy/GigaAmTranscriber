@@ -591,6 +591,10 @@ def main():
     parser.add_argument("--out", type=Path, default=Path("."), help="folder for the PNGs")
     parser.add_argument("--whisper", type=Path, help="a downloaded Whisper model folder to transcribe with")
     args = parser.parse_args()
+    # The log is usually redirected to a file, whose default encoding (cp1251 here) has no
+    # arrow and other page symbols: write UTF-8 so a check line never stops the scenario.
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     args.out.mkdir(parents=True, exist_ok=True)
     if sys.platform == "win32":
         os.environ["GIGAAM_WINDOW_OFFSCREEN"] = "1"
