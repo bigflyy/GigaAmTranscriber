@@ -1,7 +1,7 @@
 """Suggested fixes for doubtful words (plan 06 A5), measured without the window.
 
     python experiments/suggest/suggest_check.py AUDIO [--model RNNT] [--terms "..."]
-        [--below 0.97] [--context words|chunk] [--device auto] [--out FILE.json]
+        [--below 0.97] [--context words|chunk|centred] [--device auto] [--out FILE.json]
 
 Transcribes AUDIO with --model, groups its doubtful words (confidence below --below) the
 way the window does (fix.doubt_groups), recognises each group again with the other installed
@@ -13,6 +13,8 @@ offers as JSON for judging by hand. Uses the normal model folders. Run from the 
 on each side (fix.context_bounds), one reading per group. --context chunk: each line (one VAD
 chunk, at most 25 s) that holds doubtful words is read once as a whole, and every group in it takes
 its offer from that reading: more context for Whisper, and fewer 30 s Whisper windows.
+--context centred (owner's question, 2026-11-08): each group is read with about 25 s around it,
+half before and half after, across line ends; one reading per group.
 """
 
 import argparse
@@ -29,13 +31,31 @@ from gigaam_app.engine import Transcriber  # noqa: E402
 from gigaam_app.worker import Worker  # noqa: E402
 
 
+CENTRED_SECONDS = 25.0
+
+
+def centred_bounds(segments, first, last):
+    """The first and last word of about CENTRED_SECONDS around a group, half on each side
+    (less at the ends of the file), crossing line ends."""
+    start, end = fix.word_at(segments, first).start, fix.word_at(segments, last).end
+    half = max(0.0, (CENTRED_SECONDS - (end - start)) / 2)
+    low, high = first, last
+    while (before := fix.neighbour(segments, low, -1)) is not None and \
+            fix.word_at(segments, before).start >= start - half:
+        low = before
+    while (after := fix.neighbour(segments, high, +1)) is not None and \
+            fix.word_at(segments, after).end <= end + half:
+        high = after
+    return low, high
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("audio")
     parser.add_argument("--model", default="RNNT")
     parser.add_argument("--terms", default="")
     parser.add_argument("--below", type=float, default=0.97)
-    parser.add_argument("--context", choices=("words", "chunk"), default="words")
+    parser.add_argument("--context", choices=("words", "chunk", "centred"), default="words")
     parser.add_argument("--device", default="auto")
     parser.add_argument("--out")
     args = parser.parse_args()
@@ -61,7 +81,11 @@ def main():
     # One reading per piece: a piece is a group with its context ("words") or a whole line
     # with all its groups ("chunk"). Each piece: (context positions, [(first, last) per group]).
     pieces = []
-    if args.context == "words":
+    if args.context == "centred":
+        for first, last in groups:
+            pieces.append((fix.positions_between(segments, *centred_bounds(segments, first, last)),
+                           [(first, last)]))
+    elif args.context == "words":
         for first, last in groups:
             pieces.append((fix.positions_between(segments, *fix.context_bounds(segments, first, last)),
                            [(first, last)]))
