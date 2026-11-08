@@ -90,11 +90,12 @@ def segment(start, end, text):
     return Segment(start=start, end=end, text=text, words=[Word(text=text, start=start, end=end)])
 
 
-def finish(control, item_path, segments, cancelled=False, formats=("txt", "timestamps"), model="RNNT"):
+def finish(control, item_path, segments, cancelled=False, formats=("txt", "timestamps"), model="RNNT",
+           device="GPU (DirectML)"):
     """Play a whole transcription of the running file and write real outputs."""
     for seg in segments:
         control.handle(("segment", seg))
-    result = Transcript(source=str(item_path), model=model, device="CPU", audio_seconds=61.0,
+    result = Transcript(source=str(item_path), model=model, device=device, audio_seconds=61.0,
                         segments=list(segments), cancelled=cancelled)
     from gigaam_app.outputs import write_outputs
     written = write_outputs(result, list(formats)) if segments else []
@@ -380,7 +381,7 @@ def test_settings_apply_to_the_next_file_and_reload_the_model(app, media):
                                           "outputs": ["txt", "srt"], "include_timestamps": False, "terms": "",
                                           "doubt_marks": True, "doubt_style": "underline",
                                           "doubt_light": 0.97, "doubt_strong": 0.80, "player_volume": 1.0,
-                                          "suggest": True}
+                                          "suggest": "gpu"}
     assert app.fake_worker.take() == [("load", ("RNNT", "cpu", 4))]
     app.add_files([str(media[0])])
     job = app.fake_worker.take()[0]
@@ -885,15 +886,36 @@ def test_recognising_again_ends_the_search(app, searching):
 
 def test_search_off_in_settings_and_the_button(app, media, monkeypatch):
     monkeypatch.setattr(app, "_model_installed", lambda key: key in ("RNNT", "CTC", "Whisper"))
-    app.set_settings({"suggest": False})
+    app.set_settings({"suggest": "off"})
     app.add_files([str(media[0])])
     item = app.files[0]
     finish(app, media[0], doubtful_lines())
     assert suggest_jobs(app) == []
     assert app._file_view(item)["suggest"] == {"text": "", "can_find": True, "busy": False, "searched": False}
+    with pytest.raises(ValueError):
+        app.set_settings({"suggest": "sometimes"})
     assert app.find_suggestions(item.id)
     [job] = suggest_jobs(app)
     assert job[4] == ["Whisper"]
+
+
+def test_on_the_cpu_only_the_button_searches_unless_always(app, media, monkeypatch):
+    """Whisper on the CPU is slower than the recording (699 s for the 455 s lecture)."""
+    monkeypatch.setattr(app, "_model_installed", lambda key: key in ("RNNT", "Whisper"))
+    app.add_files([str(media[0])])
+    item = app.files[0]
+    finish(app, media[0], doubtful_lines(), device="CPU")
+    assert suggest_jobs(app) == []
+    view = app._file_view(item)["suggest"]
+    assert view["can_find"] and view["text"].startswith("На процессоре варианты ищутся долго")
+    assert app.find_suggestions(item.id)
+    assert len(suggest_jobs(app)) == 1
+    # "always" searches by itself on the CPU too.
+    app.set_settings({"suggest": "always"})
+    app.add_files([str(media[1])])
+    finish(app, media[1], doubtful_lines(), device="CPU")
+    assert app._suggest_by_itself(app.files[1])
+    assert app.files[1].id in app.suggest_queue or app.suggesting["id"] == app.files[1].id
 
 
 def test_without_whisper_there_is_no_search_and_a_hint(app, media, monkeypatch):

@@ -783,6 +783,17 @@ class Controller:
         wanted = "RNNT" if self._own_model(item) == "Whisper" else "Whisper"
         return [wanted] if self._model_installed(wanted) else []
 
+    def _on_gpu(self, item):
+        """True when the file was recognised on a video card, so Whisper most likely runs on one
+        too (the same device setting); False on the CPU."""
+        device = (item.result.device if item.result is not None else "") or ""
+        return self.settings.engine_device != "cpu" and device.upper().startswith("GPU")
+
+    def _suggest_by_itself(self, item):
+        """Whether the search starts after the file without the button (Settings.suggest)."""
+        mode = self.settings.suggest
+        return mode == "always" or (mode == "gpu" and self._on_gpu(item))
+
     def _suggest_view(self, item):
         """The line about suggested fixes under a finished file, and whether the
         "Найти варианты" button is offered: {"text", "can_find", "busy", "searched"}."""
@@ -808,6 +819,8 @@ class Controller:
             text = "Варианты для сомнительных слов предлагает Whisper: его можно скачать в Настройках"
         elif searched and doubtful:
             text = "Другие модели не предлагают других вариантов"
+        elif doubtful and self.settings.suggest == "gpu" and not self._on_gpu(item):
+            text = "На процессоре варианты ищутся долго, поэтому только по кнопке:"
         else:
             text = ""  # not searched yet, or nothing doubtful
         return {"text": text, "can_find": can_find, "busy": False, "searched": searched}
@@ -1047,7 +1060,9 @@ class Controller:
             if "doubt_marks" in change:
                 s.doubt_marks = bool(change["doubt_marks"])
             if "suggest" in change:
-                s.suggest = bool(change["suggest"])
+                if change["suggest"] not in config.SUGGEST_MODES:
+                    raise ValueError(f"Unknown suggest mode {change['suggest']!r}")
+                s.suggest = change["suggest"]
             if "doubt_style" in change:
                 if change["doubt_style"] not in config.DOUBT_STYLES:
                     raise ValueError(f"Unknown doubt style {change['doubt_style']!r}")
@@ -1337,7 +1352,7 @@ class Controller:
         # write_outputs returns the paths in the order of the formats it was given.
         item.written = dict(zip(item.formats, written))
         self.running = None
-        if item.state == DONE and item.segments and self.settings.suggest and self._suggest_models(item):
+        if item.state == DONE and item.segments and self._suggest_by_itself(item) and self._suggest_models(item):
             self._queue_suggestions(item)
         self._remember(item)
         self._emit_file(item)

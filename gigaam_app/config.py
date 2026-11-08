@@ -28,6 +28,11 @@ MAX_TERMS_LENGTH = 500
 # How the window shows the model's confidence (plan 03 B2): "underline" marks only the
 # doubtful words, "colors" colours every word from green (sure) to red.
 DOUBT_STYLES = ("underline", "colors")
+# When suggestions for doubtful words are looked for by themselves after a file (plan 06):
+# "gpu" when the file was recognised on a video card (on the CPU Whisper is slower than the
+# recording: 699 s for the 455 s lecture, against 15 s on the GPU), "always", or "off" (only
+# the "Найти варианты" button).
+SUGGEST_MODES = ("gpu", "always", "off")
 
 
 @dataclass
@@ -43,7 +48,7 @@ class Settings:
     doubt_light: float = 0.97         # underline style: below this a word is doubtful (dotted)
     doubt_strong: float = 0.80        # and below this likely wrong (wavy); 0 < strong < light <= 1
     player_volume: float = 1.0        # the window's player, 0..1
-    suggest: bool = True              # look for other readings of doubtful words after each file (plan 06)
+    suggest: str = "gpu"              # one of SUGGEST_MODES: look for other readings after each file
     outputs: list = field(default_factory=lambda: list(DEFAULT_FORMATS))
     vad: VadOptions = field(default_factory=VadOptions)
 
@@ -106,8 +111,10 @@ def parse(data):
                 raise ValueError("doubt_marks: expected true or false")
             settings.doubt_marks = value
         elif key == "suggest":
-            if type(value) is not bool:
-                raise ValueError("suggest: expected true or false")
+            if type(value) is bool:  # before 2026-11-08 an on / off switch
+                value = "gpu" if value else "off"
+            if value not in SUGGEST_MODES:
+                raise ValueError(f"suggest: expected one of {', '.join(SUGGEST_MODES)}")
             settings.suggest = value
         elif key == "doubt_style":
             if value not in DOUBT_STYLES:

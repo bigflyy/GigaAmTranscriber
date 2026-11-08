@@ -1114,7 +1114,7 @@ function renderSettings() {
   if (typeof settings.player_volume === 'number') { filePlayer.volume = settings.player_volume; showVolume(); }
   $('doubt-light').value = Math.round((settings.doubt_light || 0.97) * 100);
   $('doubt-strong').value = Math.round((settings.doubt_strong || 0.80) * 100);
-  $('suggest').checked = settings.suggest !== false;
+  $('suggest').value = settings.suggest || 'gpu';
   markAllWords();
 }
 
@@ -1244,7 +1244,7 @@ for (const input of document.querySelectorAll('input[name="doubt-style"]')) {
   input.addEventListener('change', () => changeSetting({ doubt_style: input.value }));
 }
 $('text').addEventListener('mouseover', showConfidence);
-$('suggest').addEventListener('change', () => changeSetting({ suggest: $('suggest').checked }));
+$('suggest').addEventListener('change', () => changeSetting({ suggest: $('suggest').value }));
 $('find-suggest').addEventListener('click', () => state.selected && call('find_suggestions', state.selected));
 $('sg-play').addEventListener('click', playCard);
 $('sg-edit').addEventListener('click', editCard);

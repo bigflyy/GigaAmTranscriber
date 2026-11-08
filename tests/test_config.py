@@ -68,6 +68,16 @@ def test_doubt_marks_default_on_and_round_trip():
     assert (config.Settings().doubt_light, config.Settings().doubt_strong) == (0.97, 0.80)
 
 
+def test_suggest_modes_and_the_old_switch():
+    assert config.Settings().suggest == "gpu"
+    assert config.parse({"suggest": "off"}).suggest == "off"
+    # A settings file from before 2026-11-08 held an on / off switch.
+    assert (config.parse({"suggest": True}).suggest, config.parse({"suggest": False}).suggest) == ("gpu", "off")
+    assert json.loads(config.parse({"suggest": "always"}).to_json())["suggest"] == "always"
+    with pytest.raises(ValueError):
+        config.parse({"suggest": "sometimes"})
+
+
 def test_vad_ints_stay_ints():
     settings = config.parse({"vad_min_speech_ms": 300.0, "max_duration": 20})
     assert type(settings.vad.vad_min_speech_ms) is int and type(settings.vad.max_duration) is float
