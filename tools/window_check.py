@@ -293,6 +293,61 @@ def doubt_steps(js, control, item, shoot):
     wait(lambda: js("$('text').classList.contains('doubts-underline')"), 5, "underline style again")
 
 
+def suggest_steps(js, control, item, shoot):
+    """Plan 06 on the finished short file: after it was recognised, its doubtful words were
+    read again by the other models in the background. The status line reports the search; a
+    word with an offer has a blue underline and a hover text; a click opens the card, and
+    "Vzyat" puts the offer into the text. If the real models offered nothing on this clip,
+    one test offer is added so the page is still checked."""
+    from gigaam_app import fix
+    from gigaam_app.engine import Word
+    js("document.querySelectorAll('#files li')[1].click()")
+    wait(lambda: js("$('text').querySelectorAll('.w').length") > 4, 10, "words of the short file")
+    wait(lambda: item.result.suggestions_searched and control.suggesting is None, 240, "suggestion search")
+    status = js("$('file-suggest-text').textContent")
+    offered = [word for segment in item.segments for word in segment.words if word.suggestions]
+    check("search ran after the file", item.result.suggestions_searched,
+          f"{status!r}; offers: " + "; ".join(f"{w.text} -> {[(o['models'], o['words']) for o in w.suggestions]}"
+                                              for w in offered))
+    check("status line reports it", (status.startswith("Другие модели") if offered or status else True)
+          and js("!$('find-suggest').hidden") and js("$('find-suggest').textContent") == "Искать заново", status)
+    if not offered:
+        with control.lock:
+            first = item.segments[0].words[1]
+            fix.add_suggestion(item.segments, (0, 1), 1, [Word(first.start, first.end, "проверка", 0.9)], "CTC")
+            control._emit("line", {"id": item.id, **control._segment_view(0, item.segments[0])})
+    wait(lambda: js("$('text').querySelectorAll('.w.sg').length") > 0, 10, "blue underline")
+    check("offered words are marked", js("$('text').querySelectorAll('.w.sg').length") > 0)
+    colour = js("(() => { const w = $('text').querySelector('.w.sg'); const probe = document.createElement('span');"
+                " probe.style.color = 'var(--accent)'; document.body.appendChild(probe);"
+                " const out = [getComputedStyle(w).textDecorationColor, getComputedStyle(probe).color];"
+                " probe.remove(); return out; })()")
+    check("the mark is blue (the accent colour)", colour[0] == colour[1], colour)
+    title = js("(() => { const w = $('text').querySelector('.w.sg');"
+               " w.dispatchEvent(new MouseEvent('mouseover', {bubbles: true})); return w.title; })()")
+    check("hover names the offer", "Другие модели слышат" in title, title)
+    js("window.getSelection().removeAllRanges(); $('text').querySelector('.w.sg')"
+       ".dispatchEvent(new MouseEvent('click', {bubbles: true}))")
+    wait(lambda: not js("$('sg-card').hidden"), 5, "offer card")
+    rows = js("[...$('sg-list').querySelectorAll('.sg-item')].map(li => li.textContent)")
+    check("card lists the offers", len(rows) >= 1 and all("Взять" in row for row in rows), rows)
+    shoot("04f-suggestion-card")
+    js("document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape'}))")
+    check("Esc closes the card", js("$('sg-card').hidden"))
+    js("$('text').querySelector('.w.sg').dispatchEvent(new MouseEvent('click', {bubbles: true}))")
+    wait(lambda: not js("$('sg-card').hidden"), 5, "offer card again")
+    offer_text = js("$('sg-list').querySelector('.sg-text strong').textContent")
+    js("$('sg-list').querySelector('button.primary').click()")
+    wait(lambda: offer_text in " ".join(segment.text for segment in item.segments), 10, "offer taken")
+    wait(lambda: offer_text in js("$('text').textContent"), 10, "offer on the page")
+    check("Vzyat puts the offer into the text", offer_text in js("$('text').textContent")
+          and js("$('sg-card').hidden"), offer_text)
+    js("$('find-suggest').click()")
+    wait(lambda: control.suggesting is None and item.result.suggestions_searched
+         and not js("$('file-suggest-text').textContent").startswith(("Ищу", "Варианты")), 240, "search again")
+    check("the button searches again", item.result.suggestions_searched)
+
+
 def player_steps(js, control, item, shoot):
     """Plan 05 on the finished short file (muted): play, pause, seek, the spoken word is
     highlighted, a timecode plays from its line."""
@@ -417,6 +472,7 @@ def scenario(window, control, long_audio, short_audio, shoot, whisper=False):
         check("copy for an LLM button", js("!!$('copy-llm') && !$('copy-llm').hidden"))
         shoot("04-done")
         doubt_steps(js, control, control.files[1], shoot)
+        suggest_steps(js, control, control.files[1], shoot)
         player_steps(js, control, control.files[1], shoot)
         fix_steps(js, control, control.files[1], short_audio, shoot)
 
