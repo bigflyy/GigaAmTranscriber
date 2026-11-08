@@ -59,6 +59,9 @@ class Transcript:
     # The window looked for other readings of the doubtful words (plan 06); they are kept
     # in Word.suggestions. Not written to the transcript files.
     suggestions_searched: bool = False
+    # Speaker names (plan 07), Word.speaker indexes them: "Говорящий 1", ... until the user
+    # renames one. None when speakers were not looked for.
+    speakers: list = None
 
     @property
     def text(self):

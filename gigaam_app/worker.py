@@ -19,6 +19,13 @@ for each model, and ("reread_done", request); when the audio cannot be read,
 Looking for suggested fixes (plan 06) recognises one group of doubtful words the same way:
 the job "suggest" sends the same events named suggest_range, suggest_loading, suggest_result
 suggest_failed and suggest_done.
+
+Looking for speakers (plan 07, diarize.py), job ("diarize", request, path, device, threads,
+num_speakers), sends ("diarize_loading", request) when the speaker models load,
+("diarize_progress", request, done, total) and at the end one
+("diarize_result", request, turns or None, error text or None): turns are
+(start, end, speaker) of the exclusive diarization (one speaker at a time); None with
+no error text when the job was cancelled.
 """
 
 import multiprocessing
@@ -27,8 +34,8 @@ import queue
 import threading
 import time
 
-from . import catalog, download, fix
-from .audio import SAMPLE_RATE, decode_range
+from . import catalog, diarize, download, fix
+from .audio import SAMPLE_RATE, decode_audio, decode_range
 from .engine import Transcriber
 from .outputs import LLM_DOUBT_BELOW, write_outputs
 from .paths import restore_child_environment
@@ -55,6 +62,7 @@ class Worker(threading.Thread):
         self.engine = None
         self.engine_key = None
         self.spare = {}  # other models loaded to recognise a selected part again: key -> Transcriber
+        self.speaker_model = None  # (device, threads, diarize.SpeakerModel), loaded at the first "diarize"
 
     def run(self):
         while True:
@@ -72,6 +80,8 @@ class Worker(threading.Thread):
                     self._reread(*job[1:])
                 elif job[0] == "suggest":
                     self._reread(*job[1:], prefix="suggest")
+                elif job[0] == "diarize":
+                    self._diarize(*job[1:])
             except Exception as error:  # every failure is shown in the window
                 self.events.put(("error", str(error) or type(error).__name__))
 
@@ -195,6 +205,39 @@ class Worker(threading.Thread):
                 self.events.put((prefix + "_result", request, model, None, str(error) or type(error).__name__))
         self.events.put((prefix + "_done", request))
 
+    def _diarize(self, request, path, device, threads, num_speakers=None):
+        """Find who speaks when in a whole file (plan 07)."""
+        self.cancel.clear()
+        try:
+            folder = catalog.installed_folder(catalog.SPEAKER_MODEL)
+            if folder is None:
+                raise catalog.ModelNotInstalled(catalog.SPEAKER_MODEL)
+            if self.speaker_model is None or self.speaker_model[:2] != (device, threads):
+                self.events.put(("diarize_loading", request))
+                self.speaker_model = None
+                model = diarize.SpeakerModel(folder, device=device, cpu_threads=threads or None)
+                self.speaker_model = (device, threads, model)
+            model = self.speaker_model[2]
+            audio = decode_audio(path)
+            last = [0.0]
+
+            def progress(done, total):
+                now = time.perf_counter()
+                if now - last[0] > 0.2 or done == total:
+                    last[0] = now
+                    self.events.put(("diarize_progress", request, done, total))
+
+            result = model.diarize(audio, num_speakers=num_speakers, on_progress=progress,
+                                   should_cancel=self.cancel.is_set)
+        except Exception as error:
+            self.events.put(("diarize_result", request, None, str(error) or type(error).__name__))
+            return
+        if result.cancelled:
+            self.events.put(("diarize_result", request, None, None))
+            return
+        turns = [(turn.start, turn.end, turn.speaker) for turn in result.exclusive_turns]
+        self.events.put(("diarize_result", request, turns, None))
+
 
 # ---------------------------------------------------------------------- the model process
 
@@ -205,7 +248,7 @@ def _job_subject(job):
         return job[1]
     if job[0] == "transcribe":
         return job[2]
-    if job[0] in ("reread", "suggest"):
+    if job[0] in ("reread", "suggest", "diarize"):
         return job[1]
     return None
 
@@ -378,6 +421,9 @@ class WorkerProcess:
         if kind in ("reread", "suggest"):
             self.events.put((kind + "_failed", subject, text))
             self.events.put((kind + "_done", subject))
+            return
+        if kind == "diarize":
+            self.events.put(("diarize_result", subject, None, text))
             return
         if loading is not None:
             self.events.put(("load_failed", loading, text))

@@ -35,6 +35,9 @@ class Word:
     # "words": [[start, end, text, confidence], ...]}. None when there are none. Kept in the
     # history, not written to the transcript files.
     suggestions: list = None
+    # Who says the word (plan 07): an index into Transcript.speakers, None when speakers
+    # were not looked for (or the word was typed by hand and has no neighbour to follow).
+    speaker: int = None
 
 
 def letter_key(piece):

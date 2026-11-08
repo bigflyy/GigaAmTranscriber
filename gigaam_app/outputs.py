@@ -81,13 +81,18 @@ def srt_text(transcript):
 
 def json_text(transcript):
     """The whole transcript as JSON: segments with word times and, where known, each
-    word's confidence (0..1, how sure the model was; left out when unknown)."""
+    word's confidence (0..1, how sure the model was; left out when unknown) and speaker
+    (an index into "speakers", the names; both left out when speakers were not looked for)."""
     data = asdict(transcript)
     data.pop("suggestions_searched", None)  # the window's state (plan 06), not part of the text
+    if data.get("speakers") is None:
+        data.pop("speakers", None)
     for segment in data["segments"]:
         for word in segment["words"]:
             if word.get("confidence") is None:
                 word.pop("confidence", None)
+            if word.get("speaker") is None:
+                word.pop("speaker", None)
             word.pop("suggestions", None)  # the window's offers (plan 06), not part of the text
     data["text"] = transcript.text
     return json.dumps(data, ensure_ascii=False, indent=1) + "\n"
