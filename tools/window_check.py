@@ -331,7 +331,7 @@ def suggest_steps(js, control, item, shoot):
     wait(lambda: not js("$('sg-card').hidden"), 5, "offer card")
     rows = js("[...$('sg-list').querySelectorAll('.sg-item')].map(li => li.textContent)")
     check("card lists the offers", len(rows) >= 1 and all("Взять" in row for row in rows), rows)
-    shoot("04f-suggestion-card")
+    shoot("04g-suggestion-card")
     js("document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape'}))")
     check("Esc closes the card", js("$('sg-card').hidden"))
     js("$('text').querySelector('.w.sg').dispatchEvent(new MouseEvent('click', {bubbles: true}))")
