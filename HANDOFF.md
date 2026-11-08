@@ -36,6 +36,11 @@ Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
   A quick CPU model check run outside the queue was part of the load that froze the PC once
   (global heavy-work rule now: anything that loads a model goes through agg-queue).
 - window_check with suggest_steps: 84/84 (the card screenshot is 04g-suggestion-card.png, was 04f).
+  Later runs found a player bug: loadAudio compared the file object, which every status update
+  of a search replaces, so play did nothing during a search (fixed 9bbcb99, compares ids). Taken
+  offers: GigaAM's time span of the replaced words, confidence None (no doubt mark). Owner asked
+  for "Исправить..." in the card (B4, 1e7a44c: the fix dialog filled with the offer).
+  window_check 88/88 (04h-edit-from-card.png). Plan 06 left: C1, the v0.5.0 release.
 - Plan 06 A5, experiments/suggest/suggest_check.py on the 455 s lecture, RNNT text, no terms,
   29 doubtful groups (outputs build/suggest-test/lecture-words.* and lecture-chunk.*):
   | context | readings | search | offers | Whisper right | CTC right |

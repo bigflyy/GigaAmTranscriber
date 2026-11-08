@@ -41,7 +41,7 @@ the punctuation of the words it replaces. Numbers in HANDOFF.md, session 16.
 - [x] **B2** File status shows the search ("Ищу варианты: 5 / 35"); "Найти варианты" for files without suggestions; Settings switch "Предлагать исправления"
 - [x] **B3** Tests (fix.py, controller with a fake model) and window_check.py steps
 
-- [ ] **B4** "Исправить..." in the offer card (owner 2026-11-08: "yes"): opens the fix dialog for the words the offer covers, the box filled with the offer's text, so a nearly right offer can be corrected by hand
+- [x] **B4** "Исправить..." in the offer card (owner 2026-11-08: "yes"): opens the fix dialog for the words the offer covers, the box filled with the offer's text, so a nearly right offer can be corrected by hand
 
 ### Stage C: Release v0.5.0
 
