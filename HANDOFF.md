@@ -1,11 +1,11 @@
 # Handoff: state and findings
 
-Last updated 2026-11-08 (session 17). Current plan: [docs/plans/06-suggested-fixes.md](docs/plans/06-suggested-fixes.md)
-(suggested fixes for doubtful words, models in their own process, then release v0.5.0 as its
+Last updated 2026-11-08 (session 17). Last plan: [docs/plans/06-suggested-fixes.md](docs/plans/06-suggested-fixes.md)
+(finished: suggested fixes, models in their own process, release v0.5.0 published as its
 Stage D). Plan 03 (fix a part):
-A and B2 done; B1 and C left. Plan 05 (player): only C3 Linux left, done in the v0.5.0 Linux build.
+A and B2 done; B1 and C left. Plan 05 (player) done (C3 in v0.5.0).
 Plan 04 (Whisper) done: v0.4.0. Plan 02 (window) has D for later; plan 01 still
-holds B9, F (Parakeet, Qwen3-ASR) and E (speakers: the owner's next big task, for about v0.6.0).
+holds B9, F (Parakeet, Qwen3-ASR, F5 for suggestions) and E (speakers: the owner's next big task, for about v0.6.0).
 Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
 
 ## Session 17 (2026-11-08): plan 06 Stage C, models in their own process
@@ -63,6 +63,17 @@ Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
   (B5): window_check now checks that case and clicks the button. Rerun with --whisper: 90/90
   (offers "fine tuning", "prompt инжиниринга" from Whisper on the CPU). Not tried: a real Linux
   desktop with speakers.
+- This session's 10 commits first carried "Co-Authored-By: Claude" (the harness reminder, against
+  the owner's git rule); rewritten locally before the push (filter-branch on d892e59^..HEAD,
+  content unchanged, ids in the notes updated). 17 older commits on GitHub (from 0a2c87f,
+  2026-11-06) still carry it. Owner: "force push if no consequences"; not done, because the ids
+  of ~80 commits, 46 ids in the notes and the tags v0.3.0, v0.4.0 and models-1 would change
+  (no forks or stars). Asked the owner again.
+- Released (owner: "publish"): main pushed (29cecf4..b6d7ba8), annotated tag v0.5.0,
+  https://github.com/bigflyy/GigaAmTranscriber/releases/tag/v0.5.0 is Latest with the five
+  assets; GitHub's digests equal SHA256SUMS. No Docker images (as for v0.3.0 and v0.4.0).
+  Plan 06 is finished. Next big work by the owner's ideas: speaker labels (plan 01 Stage E,
+  about v0.6.0); also plan 01 F/F5 (other models), plan 03 B1 / C.
 
 ## Session 16 (2026-11-08): plan 06, suggested fixes for doubtful words
 

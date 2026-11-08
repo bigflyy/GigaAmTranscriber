@@ -57,4 +57,4 @@ session 16). Owner 2026-11-08: run the models in a separate process, before v0.5
 
 ### Stage D: Release v0.5.0
 
-- [ ] **D1** Release v0.5.0 (fix a part, doubt marks, AI export, player, suggested fixes): Windows and Linux builds with smoke tests, plan 05 C3 (player on Linux), notes, owner's go-ahead before publishing
+- [x] **D1** Release v0.5.0 (fix a part, doubt marks, AI export, player, suggested fixes): Windows and Linux builds with smoke tests, plan 05 C3 (player on Linux), notes, owner's go-ahead before publishing. Published 2026-11-08: https://github.com/bigflyy/GigaAmTranscriber/releases/tag/v0.5.0
