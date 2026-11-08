@@ -1,11 +1,40 @@
 # Handoff: state and findings
 
-Last updated 2026-11-08 (session 16). Current plan: [docs/plans/06-suggested-fixes.md](docs/plans/06-suggested-fixes.md)
-(suggested fixes for doubtful words, then release v0.5.0 as its Stage C). Plan 03 (fix a part):
+Last updated 2026-11-08 (session 17). Current plan: [docs/plans/06-suggested-fixes.md](docs/plans/06-suggested-fixes.md)
+(suggested fixes for doubtful words, models in their own process, then release v0.5.0 as its
+Stage D). Plan 03 (fix a part):
 A and B2 done; B1 and C left. Plan 05 (player): only C3 Linux left, done in the v0.5.0 Linux build.
 Plan 04 (Whisper) done: v0.4.0. Plan 02 (window) has D for later; plan 01 still
 holds B9, F (Parakeet, Qwen3-ASR) and E (speakers: the owner's next big task, for about v0.6.0).
 Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
+
+## Session 17 (2026-11-08): plan 06 Stage C, models in their own process
+
+- Owner chose option 1 (Worker in a separate process, before v0.5.0): "1 yes". Built (1dba76b):
+  worker.WorkerProcess runs the Worker in a spawned process (never fork) behind the same jobs /
+  cancel / engine_key / start / stop, so the controller is unchanged. The process sends
+  internal events "_job" (which job runs, or None between jobs), "_engine_key" (before
+  "loaded") and "_exit"; a forwarder thread passes the rest on. A process that dies is
+  reported (a reread / suggest gets *_failed + *_done; a load gets load_failed; then "error",
+  which fails a running file) and a new process takes the waiting jobs. The process ends when
+  the window's process is gone (parent_process().join()). A download job carries the
+  ModelInfo, so window_check's test model (registered only in the window's process) still
+  downloads. launchers/gui_main.py calls multiprocessing.freeze_support(); the frozen builds
+  are not yet tried (D1 smoke tests). Tests 463 passed, 2 skipped; window_check --whisper 88/88.
+- Probe (scratchpad load_probe.py, through agg-queue): with WorkerProcess the window's main
+  thread stops for at most 0.12 s during an RNNT load (was 3.8 s); start to "loaded" 3.3 s
+  (load itself 2.8 s, DirectML: the dev venv and the Windows build use onnxruntime-directml).
+- Owner asked whether the load itself can be shortened. RNNT encoder (445 MB) open, seconds:
+  | setting | DirectML | CPU |
+  | --- | --- | --- |
+  | optimisation ALL (the app) | 2.2 (3.5 cold) | 2.2-2.9 |
+  | BASIC | 2.1 | 1.8 |
+  | none (lower bound) | 1.4 | 0.8 |
+  | optimised copy saved, opened with none | fails to open (DirectML: "invalid unordered_map key") | 1.1-1.4 |
+  DirectML's own start is 0.4 s (1.8 s cold). The saved DirectML copy is 885 MB (twice the
+  model). So a cache could save ~1-1.5 s on the CPU only, at the cost of a per-device copy
+  on disk that must be redone for each ONNX Runtime version; on the GPU at most ~0.7 s
+  (lower optimisation level, slower recognition untested). Not built; recommended to leave it.
 
 ## Session 16 (2026-11-08): plan 06, suggested fixes for doubtful words
 

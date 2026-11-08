@@ -52,8 +52,8 @@ while it opens the model, and pywebview runs Python on every move of the window 
 session 16). Owner 2026-11-08: run the models in a separate process, before v0.5.0 ("1 yes").
 
 - [x] **C1** worker.WorkerProcess: the Worker in a spawned process, the same jobs / cancel / engine_key / start / stop for the controller; a crashed process is reported (the running file fails, a search gets its _failed event) and replaced; the process ends when the window's process is gone; launchers/gui_main.py calls freeze_support(); tests/test_worker_process.py
-- [ ] **C2** Check: window_check with Whisper passes; the window's main thread no longer stops during a load (probe); the frozen Windows and Linux builds start the process (in the release smoke tests, D1)
-- [ ] **C3** Owner's question 2026-11-08: can the load itself be shortened? Measure where the time goes (CUDA start-up, graph optimisation, an optimised copy kept on disk) and answer
+- [x] **C2** Check: window_check with Whisper passes; the window's main thread no longer stops during a load (probe); the frozen Windows and Linux builds start the process (in the release smoke tests, D1)
+- [x] **C3** Owner's question 2026-11-08: can the load itself be shortened? Measure where the time goes (CUDA start-up, graph optimisation, an optimised copy kept on disk) and answer. Result (HANDOFF session 17): a saved optimised copy does not open on DirectML; on the CPU it would save ~1-1.5 s of ~2.5 s; not built
 
 ### Stage D: Release v0.5.0
 
