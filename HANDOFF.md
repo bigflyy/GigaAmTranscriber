@@ -38,6 +38,20 @@ Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
   transcript after 10 s, no process left. Linux ~/gigaam-build-060 in WSL (1026 MiB): CLI,
   Whisper CPU 16.5 s, speakers CPU, missing-WebKit message, window wrote the file. WSL script:
   this session's scratchpad wsl/build.sh. Screens for the owner: scratchpad release/screens.
+- H3 (owner 2026-11-10, chose (a) and "now, in v0.6.0"; 61034f1): controller.add_files emits
+  "added" {id of the first added file}; app.js onAdded shows it at once (also a waiting file,
+  also from Настройки) and sets followRunning; state.touched (pointerdown / wheel / touchmove /
+  keydown captured on #view-file, or the player starting; cleared when another file is shown);
+  onStarted moves to the starting file only when followRunning and not touched.
+- Fix dialog bug (owner 2026-11-10: selecting text in Исправить... and letting go outside closed
+  it; 12797be): the backdrop click closes only when the pointerdown also started on the
+  backdrop (fixPressOutside). Release notes mention both.
+- window_check: add_steps (copies added-*.mp3 / added-long.mp4 in a temp folder; second_session
+  filters names starting "added-"), the selection-outside step in fix_steps; --whisper 141/141;
+  546 tests. Both apps rebuilt after these (Windows zip 933.6 MiB, Linux 843.1 MiB, all smoke
+  tests pass, `sha256sum -c` OK at 00:37 on 2026-11-10). New screen release/screens/02d-added-stays.
+- Tooling: the heavy-work hook queues "python -I <scratchpad script>" as GPU work (it waited for
+  GPU memory with nothing running); use the Edit tool for small file edits instead.
 - Next: on the owner's go-ahead, push main (sessions 18-22) and publish v0.6.0 as v0.5.0 was
   (annotated tag, release with the five assets, notes from RELEASE_NOTES.md, check GitHub's
   digests against SHA256SUMS), then tick E1. After that: the Whisper CPU speed-up (IDEAS, Models).
