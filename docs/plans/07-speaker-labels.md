@@ -67,11 +67,15 @@ Owner's answers (session 20, 2026-11-09, on https://claude.ai/artifact/DeRDh7s7N
 - Session 19's choices kept: lines of a long turn stay paragraphs, a speaker search holds the next
   file, the after-file run counts by itself. Owner added: when the user picks their own number,
   show the model's own count as a hint ("the model counted N speakers").
+- Round 2 (same page, top): owner chose A2: A plus one thin line of speaker chips under the
+  switches (colour, name, share of the talk; a chip's menu renames, merges, jumps to the next
+  turn; "Заново..." at the end), hidden with the Говорящие switch. Not A1 (hideable side panels)
+  nor A3 (a Говорящие menu in the toolbar).
 
 - [x] **G1** Inventory of everything under the file name and above the text (status, model, "Найти варианты", speaker line, count, saved-file chips, switches, copy buttons) and how each control looks now (link-style vs button vs chip); screenshot of the current state. Done (session 20): 11 controls in 5 looks (blue links, big buttons, small buttons, chips, a dropdown); up to 6 lines under the name; head + tools take 40% of a 680 px window; empty status leaves "Искать заново" / "Определить заново" alone on an indented line. Page with the screenshot (window_check 103/103, screen 04k): https://claude.ai/artifact/DeRDh7s7NayNWyu8M1K2PG
-- [ ] **G2** Two or three layout mock-ups side by side (for example a compact toolbar over the text with the switches Таймкоды / Сомнения / Говорящие, one "more" menu for rarer actions, status lines folded into one line; one consistent style for actions), compared with how similar apps do it (Google Recorder, Otter, MacWhisper, Telegram voice transcripts); ask the owner to choose
+- [x] **G2** Two or three layout mock-ups side by side (for example a compact toolbar over the text with the switches Таймкоды / Сомнения / Говорящие, one "more" menu for rarer actions, status lines folded into one line; one consistent style for actions), compared with how similar apps do it (Google Recorder, Otter, MacWhisper, Telegram voice transcripts); ask the owner to choose
 - [ ] **G3** A "Говорящие" switch over the text (like Таймкоды / Сомнения): shows or hides the names and paragraphs; saved files follow the shown choice or always carry names (ask the owner)
-- [ ] **G4** Fixing speakers: options to show the owner (click a name -> menu: rename, change this paragraph's speaker to another or a new one, merge with another speaker; select words -> "Другой говорящий"); controller methods that change Word.speaker and Transcript.speakers, history and files follow; tests
+- [x] **G4** Fixing speakers: options to show the owner (click a name -> menu: rename, change this paragraph's speaker to another or a new one, merge with another speaker; select words -> "Другой говорящий"); controller methods that change Word.speaker and Transcript.speakers, history and files follow; tests. Done (session 20): set_words_speaker(file, first, last, speaker or None = new; a number left without words is used again), merge_speakers(file, source, target); the view lists speakers with words and their share of speech time; Transcript.speakers_found (the model's own count, from the worker's new "diarize_found" event; not in the JSON file) for the hint; Settings.show_speakers; copy_text(..., with_speakers). 525 tests pass
 - [ ] **G5** Build the chosen layout; window_check updated; screenshots for the owner
 
 ### Stage E: Release v0.6.0

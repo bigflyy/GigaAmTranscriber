@@ -165,7 +165,7 @@ def test_worker_diarize_job_sends_turns(monkeypatch, tmp_path):
             on_progress(1, 2)
             on_progress(2, 2)
             assert num_speakers == 3 and len(audio) == 16000
-            return diarize.Diarization(exclusive_turns=[Turn(0.0, 1.0, 0), Turn(1.0, 2.0, 1)], speakers=2)
+            return diarize.Diarization(exclusive_turns=[Turn(0.0, 1.0, 0), Turn(1.0, 2.0, 1)], speakers=2, found=4)
 
     monkeypatch.setattr(diarize, "SpeakerModel", FakeModel)
     monkeypatch.setattr(catalog, "installed_folder", lambda info: tmp_path)
@@ -179,6 +179,8 @@ def test_worker_diarize_job_sends_turns(monkeypatch, tmp_path):
         got.append(events.get())
     assert got[0] == ("diarize_loading", 7)
     assert ("diarize_result", 7, [(0.0, 1.0, 0), (1.0, 2.0, 1)], None) in got
+    # The model's own count comes just before the result (the window's hint).
+    assert got.index(("diarize_found", 7, 4)) + 1 == got.index(("diarize_result", 7, [(0.0, 1.0, 0), (1.0, 2.0, 1)], None))
     assert ("diarize_result", 8, [(0.0, 1.0, 0), (1.0, 2.0, 1)], None) in got
     assert FakeModel.loads == 1   # loaded once, kept for the next file
 

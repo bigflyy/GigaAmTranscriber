@@ -158,6 +158,7 @@ def json_text(transcript):
     (an index into "speakers", the names; both left out when speakers were not looked for)."""
     data = asdict(transcript)
     data.pop("suggestions_searched", None)  # the window's state (plan 06), not part of the text
+    data.pop("speakers_found", None)        # the window's hint (plan 07)
     if data.get("speakers") is None:
         data.pop("speakers", None)
     for segment in data["segments"]:

@@ -62,6 +62,9 @@ class Transcript:
     # Speaker names (plan 07), Word.speaker indexes them: "Говорящий 1", ... until the user
     # renames one. None when speakers were not looked for.
     speakers: list = None
+    # How many speakers the model counted by itself in the last search (plan 07), also when
+    # the user gave a number; the window shows it as a hint. Not written to the files.
+    speakers_found: int = None
 
     @property
     def text(self):

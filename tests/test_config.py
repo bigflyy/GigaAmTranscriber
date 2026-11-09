@@ -60,6 +60,12 @@ def test_whisper_and_its_language_load():
     assert json.loads(settings.to_json())["language"] == "en"
 
 
+def test_speaker_names_shown_by_default_and_round_trip():
+    assert config.Settings().show_speakers is True
+    again = config.parse(json.loads(config.parse({"show_speakers": False}).to_json()))
+    assert again.show_speakers is False
+
+
 def test_doubt_marks_default_on_and_round_trip():
     assert (config.Settings().doubt_marks, config.Settings().doubt_style) == (True, "underline")
     settings = config.parse({"doubt_marks": False, "doubt_style": "colors", "doubt_light": 0.9, "doubt_strong": 0.5})
@@ -96,6 +102,7 @@ def test_vad_ints_stay_ints():
     ({"cpu_threads": True}, "cpu_threads"),
     ({"include_timestamps": "yes"}, "include_timestamps"),
     ({"doubt_marks": 1}, "doubt_marks"),
+    ({"show_speakers": "no"}, "show_speakers"),
     ({"doubt_style": "bold"}, "doubt_style"),
     ({"player_volume": 1.5}, "player_volume"),
     ({"player_volume": True}, "player_volume"),

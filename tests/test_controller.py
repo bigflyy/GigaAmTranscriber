@@ -1041,7 +1041,8 @@ def test_speakers_are_off_by_default(spoken, app):
     assert app.settings.speakers is False
     assert app.speaker_queue == [] and app.diarizing is None
     view = app._file_view(spoken)["speakers"]
-    assert view == {"names": [], "text": "", "can_find": True, "busy": False, "can_cancel": False}
+    assert view == {"names": [], "list": [], "found": None, "text": "", "can_find": True, "busy": False,
+                    "can_cancel": False, "error": False}
 
 
 def test_the_setting_downloads_the_models_then_finds_the_speakers(app, media, monkeypatch, tmp_path):
@@ -1127,6 +1128,85 @@ def test_a_fixed_word_takes_the_speaker_of_the_word_it_replaces(spoken, app):
     app.handle(("diarize_result", speaker_jobs(app)[0][1], TURNS, None))
     app.apply_fix(spoken.id, [0, 3], [0, 3], "Отлично, спасибо.")
     assert [(w.text, w.speaker) for w in spoken.segments[0].words[3:]] == [("Отлично,", 1), ("спасибо.", 1)]
+
+
+def found_speakers(app, item, count=None, found=None):
+    """A speaker search of item with TURNS as its result (speakers [0, 0, 0, 1, 0, 0, 0])."""
+    app.find_speakers(item.id, count)
+    request = speaker_jobs(app)[0][1]
+    if found is not None:
+        app.handle(("diarize_found", request, found))
+    app.handle(("diarize_result", request, TURNS, None))
+
+
+def speakers_of(item):
+    return [word.speaker for segment in item.segments for word in segment.words]
+
+
+def test_the_view_lists_the_speakers_with_their_share_of_the_speech(spoken, app):
+    found_speakers(app, spoken)
+    view = app._file_view(spoken)["speakers"]
+    # Words: 0.5 + 0.2 + 0.3 + 0.1 + 0.1 + 0.4 = 1.6 s of speaker 1, 0.4 s of speaker 2.
+    assert view["list"] == [{"index": 0, "name": "Говорящий 1", "share": 80},
+                            {"index": 1, "name": "Говорящий 2", "share": 20}]
+    assert view["found"] == 2 and view["error"] is False
+
+
+def test_words_go_to_another_speaker_or_a_new_one(spoken, app):
+    found_speakers(app, spoken)
+    app.sent.clear()
+    assert app.set_words_speaker(spoken.id, [0, 0], [0, 1], 1)
+    assert speakers_of(spoken) == [1, 1, 0, 1, 0, 0, 0]
+    assert "lines_changed" in kinds(app.sent)
+    assert app.set_words_speaker(spoken.id, [1, 0], [1, 2], None)   # a new speaker
+    assert speakers_of(spoken) == [1, 1, 0, 1, 2, 2, 2]
+    assert spoken.result.speakers == ["Говорящий 1", "Говорящий 2", "Говорящий 3"]
+    saved = json.loads(spoken.written["json"].read_text(encoding="utf-8"))
+    assert [w["speaker"] for w in saved["segments"][1]["words"]] == [2, 2, 2]
+    assert "Говорящий 3: А у тебя?" in spoken.written["txt"].read_text(encoding="utf-8")
+    # Speaker 3's words go back: the next new speaker takes the free number again.
+    app.set_words_speaker(spoken.id, [1, 0], [1, 2], 0)
+    app.set_words_speaker(spoken.id, [1, 2], [1, 2], None)
+    assert speakers_of(spoken)[-1] == 2 and len(spoken.result.speakers) == 3
+    with pytest.raises(ValueError):
+        app.set_words_speaker(spoken.id, [0, 0], [0, 0], 7)
+    with pytest.raises(ValueError):
+        app.set_words_speaker(spoken.id, [0, 2], [0, 1], 0)   # ends before it starts
+
+
+def test_words_need_speakers_first(spoken, app):
+    with pytest.raises(ValueError):
+        app.set_words_speaker(spoken.id, [0, 0], [0, 1], None)
+
+
+def test_merge_gives_every_word_of_one_speaker_to_another(spoken, app):
+    found_speakers(app, spoken)
+    app.rename_speaker(spoken.id, 0, "Анна")
+    assert app.merge_speakers(spoken.id, 1, 0)
+    assert speakers_of(spoken) == [0] * 7
+    view = app._file_view(spoken)["speakers"]
+    assert view["list"] == [{"index": 0, "name": "Анна", "share": 100}]
+    assert view["text"] == "Найдено: 1 говорящий"
+    assert "Говорящий 2" not in spoken.written["txt"].read_text(encoding="utf-8")
+    for source, target in ((1, 0), (0, 0), (0, 5)):   # nothing left to move, the same one, unknown
+        with pytest.raises(ValueError):
+            app.merge_speakers(spoken.id, source, target)
+
+
+def test_the_models_own_count_is_kept_as_a_hint(spoken, app):
+    found_speakers(app, spoken, count=2, found=3)
+    assert spoken.result.speakers_found == 3
+    assert app._file_view(spoken)["speakers"]["found"] == 3
+    assert "speakers_found" not in json.loads(spoken.written["json"].read_text(encoding="utf-8"))
+    found_speakers(app, spoken, found=5)   # automatic: the speakers it did find
+    assert spoken.result.speakers_found == 2
+
+
+def test_copy_leaves_the_names_out_when_they_are_hidden(spoken, app):
+    found_speakers(app, spoken)
+    assert app.copy_text(spoken.id, False).startswith("Говорящий 1: ")
+    assert "Говорящий" not in app.copy_text(spoken.id, False, False, False)
+    assert "Говорящий" not in app.copy_text(spoken.id, True, False, False)
 
 
 def test_cancel_a_search_or_take_it_out_of_the_line(spoken, app, media):

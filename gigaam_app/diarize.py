@@ -65,6 +65,9 @@ class Diarization:
     speakers: int = 0
     centroids: np.ndarray = None  # (speakers, 256) voice print of each speaker
     cancelled: bool = False
+    # How many speakers the clustering found by itself (VBx), also when the user gave a
+    # number: the window shows it as a hint next to the count (owner, 2026-11-09).
+    found: int = 0
 
 
 class Cancelled(Exception):
@@ -200,7 +203,7 @@ class SpeakerModel:
             return Diarization()
         embeddings = self._embed(padded, starts, segmentations, exclude_overlap, progress)
         clock.lap("voice prints")
-        hard_clusters, centroids = self._cluster(embeddings, segmentations, num_speakers)
+        hard_clusters, centroids, found = self._cluster(embeddings, segmentations, num_speakers)
         clock.lap("clustering")
         if num_speakers:
             count = np.minimum(count, num_speakers)
@@ -212,7 +215,8 @@ class SpeakerModel:
         self.timings = clock.laps
         if centroids is not None and len(order):
             centroids = np.pad(centroids, ((0, max(0, binary.shape[1] - len(centroids))), (0, 0)))[order]
-        return Diarization(turns=turns, exclusive_turns=exclusive_turns, speakers=len(order), centroids=centroids)
+        return Diarization(turns=turns, exclusive_turns=exclusive_turns, speakers=len(order), centroids=centroids,
+                           found=found)
 
     # 2. Speaker count ----------------------------------------------------------------
 
@@ -241,7 +245,8 @@ class SpeakerModel:
     # 4. Clustering -------------------------------------------------------------------
 
     def _cluster(self, embeddings, segmentations, num_speakers):
-        """(chunks, 3) speaker of each local speaker, and the speakers' centroids."""
+        """(chunks, 3) speaker of each local speaker, the speakers' centroids, and the number
+        of speakers VBx found by itself (before a number given by the user is forced)."""
         num_chunks, local, dimension = embeddings.shape
         num_frames = segmentations.shape[1]
         alone = segmentations * (segmentations.sum(axis=2, keepdims=True) == 1)
@@ -251,12 +256,13 @@ class SpeakerModel:
         train = embeddings[chunk_idx, speaker_idx].astype(np.float64)
         if len(train) < 2:
             hard = np.zeros((num_chunks, local), dtype=np.int64)
-            return hard, train.mean(axis=0, keepdims=True) if len(train) else None
+            return hard, train.mean(axis=0, keepdims=True) if len(train) else None, len(train)
         normed = train / np.linalg.norm(train, axis=1, keepdims=True)
         ahc = centroid_linkage_clusters(normed, self.threshold)
         responsibilities, priors = vbx(ahc, self.plda.transform(train), self.plda.phi, self.fa, self.fb)
         kept = responsibilities[:, priors > 1e-7]
         centroids = kept.T @ train / kept.sum(axis=0)[:, None]
+        found = len(centroids)
         constrained = True
         if num_speakers and num_speakers != len(centroids):
             constrained = False   # as pyannote: forcing the count turns the constraint off
@@ -271,7 +277,7 @@ class SpeakerModel:
             hard = constrained_argmax(similarity)
         else:
             hard = np.argmax(similarity, axis=2)
-        return hard.astype(np.int64), centroids
+        return hard.astype(np.int64), centroids, found
 
     # 5. Back to time ----------------------------------------------------------------
 

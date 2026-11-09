@@ -548,15 +548,19 @@ class Controller:
                 "words": [[word.start, word.end, word.text, word.confidence, word.suggestions, word.speaker]
                           for word in segment.words]}
 
-    def copy_text(self, file_id, with_times, for_llm=False):
+    def copy_text(self, file_id, with_times, for_llm=False, with_speakers=True):
         """The text as in the saved files: plain, or with [start - end] timecodes, or for
-        an LLM (doubtful words marked, below the dotted threshold of the settings)."""
+        an LLM (doubtful words marked, below the dotted threshold of the settings).
+        with_speakers: False leaves the speaker names out, as the window shows them hidden
+        (the saved files always carry them, owner 2026-11-09)."""
         with self.lock:
             item = self._find(file_id)
             if item is None:
                 return ""
             model = item.result.model if item.result is not None else (item.model or "")
             speakers = list(item.result.speakers) if item.result is not None and item.result.speakers else None
+            if not with_speakers:
+                speakers = None
             transcript = Transcript(source=str(item.path), model=model, device="", segments=list(item.segments),
                                     speakers=speakers)
             doubt_below = self.settings.doubt_light
@@ -1072,11 +1076,15 @@ class Controller:
     # ------------------------------------------------------------------ speaker labels (plan 07)
 
     def _speakers_view(self, item):
-        """The speaker line under a finished file: {"names" (Transcript.speakers, [] when not
-        looked for), "text" (how the search goes, or how many were found), "can_find" (the
-        "Определить говорящих" button), "busy", "can_cancel"}."""
+        """The speakers of a finished file: {"names" (Transcript.speakers, [] when not looked
+        for), "list" (the speakers that have words, in order: {"index", "name", "share" (per
+        cent of the speech time)}), "found" (the model's own count, a hint), "text" (how the
+        search goes, how many were found, or why it failed), "can_find" (a search may start),
+        "busy", "can_cancel", "error"}."""
         names = list(item.result.speakers or []) if item.result is not None else []
-        view = {"names": names, "text": "", "can_find": False, "busy": False, "can_cancel": False}
+        found = item.result.speakers_found if item.result is not None else None
+        view = {"names": names, "list": self._speaker_shares(item) if names else [], "found": found,
+                "text": "", "can_find": False, "busy": False, "can_cancel": False, "error": False}
         if item.state not in (DONE, CANCELLED) or item.result is None or not item.segments:
             return view
         search = self.diarizing
@@ -1106,12 +1114,24 @@ class Controller:
                         f"из {download['total'] / 1024 ** 2:.0f} МБ")
             return {**view, "text": text, "busy": True, "can_cancel": self.speaker_download is None}
         if item.speaker_error:
-            text = "Не удалось определить говорящих: " + item.speaker_error
-        elif names:
-            text = "Найдено: " + speakers_text(len(names))
-        else:
-            text = ""
+            return {**view, "text": "Не удалось определить говорящих: " + item.speaker_error, "can_find": True,
+                    "error": True}
+        text = "Найдено: " + speakers_text(len(view["list"])) if names else ""
         return {**view, "text": text, "can_find": True}
+
+    @staticmethod
+    def _speaker_shares(item):
+        """The speakers that have words, in order, with their share of the speech time (per
+        cent, whole numbers; a speaker with words always gets at least 1)."""
+        names = item.result.speakers or []
+        seconds = {}
+        for segment in item.segments:
+            for word in segment.words:
+                if word.speaker is not None and 0 <= word.speaker < len(names):
+                    seconds[word.speaker] = seconds.get(word.speaker, 0.0) + max(word.end - word.start, 0.01)
+        total = sum(seconds.values()) or 1.0
+        return [{"index": index, "name": names[index], "share": max(1, round(100 * seconds[index] / total))}
+                for index in sorted(seconds)]
 
     def find_speakers(self, file_id, count=None):
         """The "Определить говорящих" button: find who speaks when in a finished file.
@@ -1174,6 +1194,52 @@ class Controller:
         self._write_again(item, lines=False)
         return True
 
+    def set_words_speaker(self, file_id, first, last, speaker=None):
+        """Give the words first..last ([line, word] positions) to another speaker: an index
+        into the names, or None for a new speaker ("Говорящий N"; a number whose speaker has no
+        words left is used again). Neighbouring turns of one speaker join by themselves, since
+        the window and the files start a turn where the speaker changes. Files follow."""
+        with self.lock:
+            item = self._fixable(file_id, first, last)
+            names = item.result.speakers
+            if not names:
+                raise ValueError("Говорящие в этом файле ещё не определены")
+            if speaker is None:
+                used = {entry["index"] for entry in self._speaker_shares(item)}
+                speaker = next((index for index in range(len(names)) if index not in used), len(names))
+                if speaker == len(names):
+                    names.append("")
+                names[speaker] = diarize.default_name(speaker)
+            elif not 0 <= int(speaker) < len(names):
+                raise ValueError("Этого говорящего уже нет")
+            speaker = int(speaker)
+            for position in fix.positions_between(item.segments, tuple(first), tuple(last)):
+                fix.word_at(item.segments, position).speaker = speaker
+            item.result.segments = item.segments  # restored files keep a copy of the list
+        self._write_again(item)
+        return True
+
+    def merge_speakers(self, file_id, source, target):
+        """Every word of speaker `source` goes to `target` (one person found as two). The
+        source's number stays unused until a new speaker takes it."""
+        with self.lock:
+            item = self._fixable(file_id)
+            names = item.result.speakers or []
+            source, target = int(source), int(target)
+            if source == target or not (0 <= source < len(names) and 0 <= target < len(names)):
+                raise ValueError("Этого говорящего уже нет")
+            moved = 0
+            for segment in item.segments:
+                for word in segment.words:
+                    if word.speaker == source:
+                        word.speaker = target
+                        moved += 1
+            if not moved:
+                raise ValueError("Этого говорящего уже нет")
+            item.result.segments = item.segments
+        self._write_again(item)
+        return True
+
     def _pump_speakers(self):
         """Start the next speaker search, or the speaker models' download it needs. Called when
         no file waits to be recognised and nothing else runs on the worker. True when the
@@ -1226,12 +1292,18 @@ class Controller:
             search["loading"] = False
             if search["since"] is None and search["total"]:
                 search["since"] = (self.clock(), search["done"] / search["total"])
+        elif kind == "diarize_found":
+            search["found"] = args[0]
         elif kind == "diarize_result":
             turns, error = args
             self.diarizing = None
             if current and turns is not None:
                 turns = [diarize.Turn(start, end, speaker) for start, end, speaker in turns]  # tuples from the worker
                 item.result.speakers = diarize.assign_speakers(item.segments, turns, item.result.speakers)
+                # The hint next to the count: with a number given, what the model would have
+                # found by itself; otherwise the speakers it did find.
+                found = search.get("found") if search.get("count") else None
+                item.result.speakers_found = found or len(item.result.speakers)
                 self._write_again(item)
             elif current and error:
                 item.speaker_error = error

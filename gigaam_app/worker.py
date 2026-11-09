@@ -22,7 +22,8 @@ suggest_failed and suggest_done.
 
 Looking for speakers (plan 07, diarize.py), job ("diarize", request, path, device, threads,
 num_speakers), sends ("diarize_loading", request) when the speaker models load,
-("diarize_progress", request, done, total) and at the end one
+("diarize_progress", request, done, total), on success ("diarize_found", request, count)
+(how many speakers the model found by itself, also when a number was given) and at the end one
 ("diarize_result", request, turns or None, error text or None): turns are
 (start, end, speaker) of the exclusive diarization (one speaker at a time); None with
 no error text when the job was cancelled.
@@ -236,6 +237,7 @@ class Worker(threading.Thread):
             self.events.put(("diarize_result", request, None, None))
             return
         turns = [(turn.start, turn.end, turn.speaker) for turn in result.exclusive_turns]
+        self.events.put(("diarize_found", request, result.found))
         self.events.put(("diarize_result", request, turns, None))
 
 
