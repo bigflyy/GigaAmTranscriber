@@ -57,6 +57,8 @@ itself is the same as in v0.5.0.
 - Adding files shows the first of them at once, also when it has to wait. The window no longer
   switches to another file while you read: it moves to the next file only if you have not
   scrolled, clicked or played anything in the one on screen.
+- The **Исправить...** dialog no longer closes when you select its text with the mouse and let
+  go outside the dialog.
 - **Настройки** -> **Дополнительно** (folded) has three speech search settings, each with its
   default a click away: the pause a line may end on (2 s), the speech threshold (50 %; lower
   finds quiet voices, higher suits noisy recordings) and the longest line (25 s, also the
