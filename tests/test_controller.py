@@ -384,7 +384,7 @@ def test_settings_apply_to_the_next_file_and_reload_the_model(app, media):
                                           "outputs": ["txt", "srt"], "include_timestamps": False, "terms": "",
                                           "doubt_marks": True, "doubt_style": "underline",
                                           "doubt_light": 0.97, "doubt_strong": 0.80, "player_volume": 1.0,
-                                          "suggest": "gpu", "speakers": False}
+                                          "suggest": "gpu", "speakers": False, "show_speakers": True}
     assert app.fake_worker.take() == [("load", ("RNNT", "cpu", 4))]
     app.add_files([str(media[0])])
     job = app.fake_worker.take()[0]
@@ -1200,6 +1200,14 @@ def test_the_models_own_count_is_kept_as_a_hint(spoken, app):
     assert "speakers_found" not in json.loads(spoken.written["json"].read_text(encoding="utf-8"))
     found_speakers(app, spoken, found=5)   # automatic: the speakers it did find
     assert spoken.result.speakers_found == 2
+
+
+def test_the_speaker_switch_is_saved_and_reset(app, tmp_path):
+    app.set_settings({"show_speakers": False})
+    assert app.settings.show_speakers is False and config.load(tmp_path / "settings.json").show_speakers is False
+    assert last(app.sent, "settings")["show_speakers"] is False
+    app.reset_settings()
+    assert app.settings.show_speakers is True
 
 
 def test_copy_leaves_the_names_out_when_they_are_hidden(spoken, app):

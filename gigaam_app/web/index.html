@@ -45,44 +45,32 @@
 
     <!-- The selected file: progress, live text, saved files. -->
     <section id="view-file" class="view file-view" hidden>
+      <!-- Plan 07 Stage G (owner chose layout A2, 2026-11-09): the name and one line of facts,
+           three buttons on the right (copy, saved files, more), the view switches, a line of
+           speaker chips, and one status line only while a search runs or after it failed. -->
       <div class="file-head">
         <div class="title-row">
           <div class="title-box">
             <h2 id="file-name"></h2>
-            <p id="file-status" class="muted"></p>
-            <p id="file-model" class="muted" hidden></p>
-            <!-- Suggested fixes for doubtful words (plan 06): how the search goes, and the button. -->
-            <p id="file-suggest" class="muted suggest-line" hidden>
-              <span id="file-suggest-text"></span>
-              <button id="find-suggest" class="link" type="button"
-                title="Распознать сомнительные слова другими моделями и предложить их варианты">Найти варианты</button>
-            </p>
-            <!-- Speaker labels (plan 07): how the search goes, the known number of speakers, the button. -->
-            <p id="file-speakers" class="muted suggest-line" hidden>
-              <span id="file-speakers-text"></span>
-              <label id="speaker-count-box" class="speaker-count"
-                title="Если известно, сколько людей говорит в записи, укажите число: так точнее">Говорящих:
-                <select id="speaker-count"></select></label>
-              <button id="find-speakers" class="link" type="button"
-                title="Разделить текст на абзацы по говорящим">Определить говорящих</button>
-              <button id="cancel-speakers" class="link" type="button" hidden>Отменить</button>
-            </p>
+            <p class="meta muted"><span id="file-status"></span><span id="file-model" hidden></span></p>
           </div>
           <div class="actions">
             <button id="file-cancel" class="danger" type="button" hidden>Отмена</button>
             <button id="file-retry" type="button" hidden>Распознать снова</button>
-            <button id="file-remove" type="button" hidden>Убрать из списка</button>
+            <span id="copy-group" class="split">
+              <button id="copy" type="button">Копировать</button><button id="copy-more" type="button"
+                class="more" aria-label="Другие способы копирования" aria-haspopup="menu"
+                title="Копировать для ИИ">&#9662;</button>
+            </span>
+            <button id="files-button" type="button" aria-haspopup="menu"
+              title="Сохранённые файлы рядом с записью">Файлы <span class="caret" aria-hidden="true">&#9662;</span></button>
+            <button id="more-button" class="square" type="button" aria-haspopup="menu" aria-label="Ещё"
+              title="Ещё">&#8943;</button>
           </div>
         </div>
         <div id="file-bar" class="bar" hidden><div></div></div>
-        <div id="saved" class="saved" hidden>
-          <span class="saved-label">Сохранено:</span>
-          <span id="saved-list" class="saved-list"></span>
-          <button id="show-folder" class="link" type="button">Показать в папке</button>
-        </div>
       </div>
       <div class="text-tools">
-        <span id="text-label" class="caps">Текст</span>
         <label class="switch">
           <input id="times" type="checkbox">
           <span class="track" aria-hidden="true"><span class="knob"></span></span>
@@ -93,8 +81,22 @@
           <span class="track" aria-hidden="true"><span class="knob"></span></span>
           Сомнения
         </label>
-        <button id="copy" type="button">Копировать</button>
-        <button id="copy-llm" type="button" title="Текст с отмеченными сомнительными словами, чтобы вставить в чат с ИИ">Копировать для ИИ</button>
+        <label id="show-speakers-box" class="switch" title="Показывать, кто говорит. Сохранённые файлы всегда с именами">
+          <input id="show-speakers" type="checkbox">
+          <span class="track" aria-hidden="true"><span class="knob"></span></span>
+          Говорящие
+        </label>
+      </div>
+      <!-- One chip per speaker (colour, name, share of the speech); a chip opens its menu. -->
+      <div id="speaker-line" class="speaker-line" hidden>
+        <span id="speaker-chips" class="speaker-chips"></span>
+        <span id="speaker-hint" class="muted" hidden></span>
+        <button id="speakers-again" class="small" type="button" title="Определить говорящих заново">Заново...</button>
+      </div>
+      <!-- A running search (suggested fixes, speakers) or a failed one. -->
+      <div id="task-line" class="task-line" role="status" hidden>
+        <span id="task-text"></span>
+        <button id="task-cancel" class="small" type="button" hidden>Отменить</button>
       </div>
       <div id="text" class="text" tabindex="0" aria-live="off"></div>
       <!-- The player for the whole file (plan 05): under the text of a finished or cancelled file. -->
@@ -126,6 +128,8 @@
         <button id="sel-play" type="button" title="Прослушать выделенный фрагмент">&#9654; Слушать</button>
         <button id="sel-reread" type="button" title="Распознать фрагмент заново разными моделями">Распознать заново</button>
         <button id="sel-edit" type="button" title="Исправить текст вручную" aria-label="Исправить вручную">&#9998;</button>
+        <button id="sel-speaker" type="button" title="Кто сказал эти слова" aria-haspopup="menu" hidden>Говорящий
+          <span class="caret" aria-hidden="true">&#9662;</span></button>
       </div>
     </section>
 
@@ -189,9 +193,9 @@
           <legend>Говорящие</legend>
           <label class="check-line"><input id="speakers" type="checkbox"> Определять говорящих после каждого файла</label>
           <p id="speakers-hint" class="hint">Текст делится на абзацы по говорящим: «Говорящий 1:», «Говорящий 2:»...
-            Щелчок по имени переименовывает говорящего во всём тексте и в сохранённых файлах. Для любого
-            готового файла есть кнопка «Определить говорящих» под его именем; там же можно указать, сколько
-            людей говорит, если это известно. <span id="speakers-size"></span></p>
+            Для любого готового файла их можно найти переключателем «Говорящие» над текстом или в меню «...»;
+            там же можно указать, сколько людей говорит, если это известно. Щелчок по имени переименовывает
+            говорящего, отдаёт реплику другому или объединяет двух говорящих. <span id="speakers-size"></span></p>
         </fieldset>
         <fieldset>
           <legend>Сохранять рядом с файлом</legend>
@@ -271,6 +275,22 @@
     <button id="speaker-save" class="primary" type="button">Сохранить</button>
   </div>
 </dialog>
+
+<!-- Before a speaker search (plan 07 G): how many speakers, when the user knows it. -->
+<dialog id="speaker-search" class="dialog" aria-labelledby="speaker-search-title">
+  <h2 id="speaker-search-title">Определить говорящих</h2>
+  <label class="inline" for="speaker-count">Сколько людей говорит:
+    <select id="speaker-count"></select></label>
+  <p id="speaker-found" class="hint" hidden></p>
+  <p class="hint">Если число известно, укажите его: так точнее. Иначе модель посчитает сама.</p>
+  <div class="dialog-actions">
+    <button id="speaker-search-cancel" type="button">Отмена</button>
+    <button id="speaker-search-go" class="primary" type="button">Определить</button>
+  </div>
+</dialog>
+
+<!-- One popup menu for the buttons "Копировать", "Файлы", "...", the speaker chips and names. -->
+<div id="menu" class="menu" role="menu" hidden></div>
 
 <div id="toast" class="toast" role="status" hidden></div>
 <script src="app.js"></script>

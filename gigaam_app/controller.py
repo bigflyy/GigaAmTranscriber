@@ -421,7 +421,7 @@ class Controller:
                 "outputs": list(s.outputs), "include_timestamps": s.include_timestamps,
                 "terms": s.terms, "doubt_marks": s.doubt_marks, "doubt_style": s.doubt_style,
                 "doubt_light": s.doubt_light, "doubt_strong": s.doubt_strong, "player_volume": s.player_volume,
-                "suggest": s.suggest, "speakers": s.speakers}
+                "suggest": s.suggest, "speakers": s.speakers, "show_speakers": s.show_speakers}
 
     # ------------------------------------------------------------------ page calls
 
@@ -1382,6 +1382,8 @@ class Controller:
                 s.suggest = change["suggest"]
             if "speakers" in change:
                 s.speakers = bool(change["speakers"])
+            if "show_speakers" in change:
+                s.show_speakers = bool(change["show_speakers"])
             if "doubt_style" in change:
                 if change["doubt_style"] not in config.DOUBT_STYLES:
                     raise ValueError(f"Unknown doubt style {change['doubt_style']!r}")
@@ -1413,6 +1415,7 @@ class Controller:
                                   "include_timestamps": defaults.include_timestamps,
                                   "doubt_marks": defaults.doubt_marks, "doubt_style": defaults.doubt_style,
                                   "suggest": defaults.suggest, "speakers": defaults.speakers,
+                                  "show_speakers": defaults.show_speakers,
                                   "doubt_light": defaults.doubt_light, "doubt_strong": defaults.doubt_strong})
 
     def _save_settings(self):

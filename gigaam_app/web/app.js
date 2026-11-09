@@ -202,20 +202,23 @@ function renderMain() {
   $('file-name').title = file.path;
   $('file-status').textContent = file.status;
   // Which model made (or is making) this text: files of earlier sessions may differ from the settings.
-  $('file-model').textContent = file.model ? `Модель: ${file.model}` : '';
+  $('file-model').textContent = file.model ? ` \u00b7 ${file.model}` : '';
   $('file-model').hidden = !file.model;
   $('file-cancel').hidden = !file.can_cancel;
   $('file-cancel').disabled = !!file.cancelling;
-  $('file-retry').hidden = !file.can_retry;
-  $('file-remove').hidden = !file.can_remove;
+  // "Распознать снова" stays in sight only for a file without text; otherwise it is in "...".
+  $('file-retry').hidden = !(file.can_retry && !file.segments);
   const bar = $('file-bar');
   bar.hidden = file.state !== 'running';
   bar.firstElementChild.style.width = `${Math.round((file.progress || 0) * 100)}%`;
-  renderSaved(file);
-  renderSuggest(file);
-  renderSpeakers(file);
-  $('text-label').textContent = file.state === 'running' ? 'Текст появляется по ходу' : 'Текст';
   $('copy').disabled = !file.segments;
+  $('copy-more').disabled = !file.segments;
+  $('files-button').hidden = !(file.outputs || []).some((item) => item.path);
+  $('more-button').hidden = !moreItems(file).length;
+  renderSpeakerSwitch(file);
+  renderSpeakerLine(file);
+  renderTasks(file);
+  if (state.drawn && state.drawn.id === file.id && state.drawn.speakers !== speakersShown(file)) drawLines(file.id);
   renderAudioBar(file);
   const lines = state.lines.get(file.id);
   if (lines && lines.length === 0) {
@@ -234,24 +237,134 @@ function placeholderFor(file) {
   return 'Речь не найдена.';
 }
 
-function renderSaved(file) {
-  const outputs = file.outputs || [];
-  const box = $('saved');
-  box.hidden = !outputs.some((item) => item.path);
-  const list = $('saved-list');
-  list.textContent = '';
-  for (const item of outputs) {
-    const chip = el('button', item.path ? 'chip' : 'chip missing');
-    chip.type = 'button';
-    chip.dataset.format = item.format;
-    chip.appendChild(el('b', '', item.short));
-    chip.appendChild(document.createTextNode(item.path ? item.label : `+ ${item.label}`));
-    chip.title = item.path ? `Открыть ${item.path}` : `Создать файл: ${item.label}`;
-    chip.addEventListener('click', () => (item.path
-      ? call('open_output', file.id, item.format)
-      : call('create_output', file.id, item.format)));
-    list.appendChild(chip);
+// ------------------------------------------------------------------ head menus (plan 07 G)
+// Layout A2 (owner, 2026-11-09): rare actions sit in menus that one popup (#menu) shows under
+// their button: "Копировать" (for an AI), "Файлы" (the saved files), "..." (search again,
+// recognise again, remove), a speaker chip, a speaker name in the text, "Говорящий" on the
+// selection bar. Items: {id, label, hint, side, mark, dot (speaker number), action, disabled},
+// 'sep', or {heading}.
+
+let menuAnchor = null;
+
+function openMenu(anchor, items) {
+  if (menuAnchor === anchor) { closeMenu(); return; }  // a second click on the button closes it
+  closeMenu();
+  const menu = $('menu');
+  menu.textContent = '';
+  for (const item of items) {
+    if (item === 'sep') { menu.appendChild(el('div', 'menu-sep')); continue; }
+    if (item.heading) { menu.appendChild(el('div', 'menu-heading', item.heading)); continue; }
+    const button = el('button', 'menu-item');
+    button.type = 'button';
+    button.setAttribute('role', 'menuitem');
+    if (item.id) button.dataset.item = item.id;
+    if (item.dot !== undefined) {
+      const dot = el('span', 'spk-dot');
+      dot.style.setProperty('--spk', `var(--spk-${item.dot % 8})`);
+      button.appendChild(dot);
+    } else {
+      button.appendChild(el('span', 'menu-mark', item.mark || ''));
+    }
+    const text = el('span', 'menu-text');
+    text.appendChild(el('span', '', item.label));
+    if (item.hint) text.appendChild(el('small', '', item.hint));
+    button.appendChild(text);
+    if (item.side) button.appendChild(el('span', 'menu-side', item.side));
+    button.disabled = !!item.disabled;
+    button.addEventListener('click', () => { closeMenu(); item.action(); });
+    menu.appendChild(button);
   }
+  menu.hidden = false;
+  menuAnchor = anchor;
+  anchor.setAttribute('aria-expanded', 'true');
+  placeMenu();
+  const first = menu.querySelector('.menu-item:not(:disabled)');
+  if (first) first.focus({ preventScroll: true });
+}
+
+function placeMenu() {
+  // Under the button, its right edge kept inside the window; above it when there is no room.
+  if (!menuAnchor) return;
+  const menu = $('menu');
+  const box = menuAnchor.getBoundingClientRect();
+  let left = box.left;
+  if (left + menu.offsetWidth > window.innerWidth - 8) left = box.right - menu.offsetWidth;
+  left = Math.max(8, left);
+  let top = box.bottom + 4;
+  if (top + menu.offsetHeight > window.innerHeight - 8) top = Math.max(8, box.top - menu.offsetHeight - 4);
+  menu.style.left = `${left}px`;
+  menu.style.top = `${top}px`;
+}
+
+function closeMenu(focusBack) {
+  if ($('menu').hidden) return;
+  $('menu').hidden = true;
+  const anchor = menuAnchor;
+  menuAnchor = null;
+  if (anchor) {
+    anchor.setAttribute('aria-expanded', 'false');
+    if (focusBack && document.contains(anchor)) anchor.focus({ preventScroll: true });
+  }
+}
+
+function moveMenuFocus(step) {
+  const items = [...$('menu').querySelectorAll('.menu-item:not(:disabled)')];
+  if (!items.length) return;
+  const index = items.indexOf(document.activeElement);
+  items[(index + step + items.length) % items.length].focus();
+}
+
+function copyItems() {
+  return [{ id: 'copy-llm', label: 'Копировать для ИИ', hint: 'с отмеченными сомнительными словами и пояснением',
+            action: () => copyText(true) }];
+}
+
+function fileItems(file) {
+  // The saved files beside the audio: a tick opens one, a plus writes a format not saved yet.
+  const items = (file.outputs || []).map((item) => ({
+    id: `out-${item.format}`, mark: item.path ? '\u2713' : '+', label: item.label, side: item.short,
+    hint: item.path ? '' : 'создать файл',
+    action: () => (item.path ? call('open_output', file.id, item.format) : call('create_output', file.id, item.format)),
+  }));
+  items.push('sep', { id: 'show-folder', label: 'Показать в папке', action: () => call('show_folder', file.id) });
+  return items;
+}
+
+function moreItems(file) {
+  const items = [];
+  const suggest = file.suggest || {};
+  if (suggest.can_find) {
+    items.push({ id: 'find-suggest', label: suggest.searched ? 'Искать варианты заново' : 'Найти варианты',
+                 hint: suggest.text || 'Другие модели прочитают сомнительные слова ещё раз',
+                 action: () => call('find_suggestions', file.id) });
+  }
+  const speakers = file.speakers || {};
+  if (speakers.can_find) {
+    items.push({ id: 'find-speakers',
+                 label: (speakers.names || []).length ? 'Определить говорящих заново...' : 'Определить говорящих...',
+                 action: () => openSpeakerSearch(file.id) });
+  }
+  const tail = [];
+  if (file.can_retry && file.segments) {
+    tail.push({ id: 'retry', label: 'Распознать снова', action: () => { state.followRunning = true; call('retry', file.id); } });
+  }
+  if (file.can_remove) tail.push({ id: 'remove', label: 'Убрать из списка', action: () => removeFile(file.id) });
+  if (items.length && tail.length) items.push('sep');
+  return items.concat(tail);
+}
+
+function renderTasks(file) {
+  // One line only while a search runs (with its cancel), or after a speaker search failed.
+  const parts = [];
+  const suggest = file.suggest || {};
+  if (suggest.busy && suggest.text) parts.push(suggest.text);
+  const speakers = file.speakers || {};
+  const speakerTask = (speakers.busy || speakers.error) && speakers.text;
+  if (speakerTask) parts.push(speakers.text);
+  $('task-line').hidden = !parts.length;
+  $('task-line').classList.toggle('error', !!speakers.error && !speakers.busy);
+  $('task-text').textContent = parts.join(' \u00b7 ');
+  $('task-cancel').hidden = !(speakerTask && speakers.can_cancel);
 }
 
 // ------------------------------------------------------------------ live text
@@ -273,7 +386,9 @@ function drawLines(id) {
   const lines = state.lines.get(id) || [];
   const fragment = document.createDocumentFragment();
   const names = speakerNames(id);
-  if (names.length) appendTurns(fragment, lines, names);
+  const withSpeakers = names.length > 0 && speakersShown(fileById(id));
+  state.drawn = { id, speakers: withSpeakers };
+  if (withSpeakers) appendTurns(fragment, lines, names);
   else for (const line of lines) fragment.appendChild(lineNode(line));
   closeCard();
   text.appendChild(fragment);
@@ -377,7 +492,8 @@ function speakerLabel(speaker, names) {
   const label = el('button', 'spk', `${(names || [])[speaker] || `Говорящий ${speaker + 1}`}:`);
   label.type = 'button';
   label.dataset.speaker = speaker;
-  label.title = 'Переименовать говорящего';
+  label.title = 'Переименовать, отдать реплику другому, объединить';
+  label.setAttribute('aria-haspopup', 'menu');
   label.style.setProperty('--spk', `var(--spk-${speaker % 8})`);
   return label;
 }
@@ -411,15 +527,186 @@ function relabelSpeakers(id) {
   }
 }
 
-function renderSpeakers(file) {
-  // The line under the file name: how the search goes, how many were found, and the button.
+function speakersShown(file) {
+  // The "Говорящие" switch (Settings.show_speakers) for a file that has speakers.
+  return !!file && speakerNames(file.id).length > 0 && !(state.settings && state.settings.show_speakers === false);
+}
+
+function speakerList(fileId) {
+  // The speakers that have words: [{index, name, share}] (controller._speaker_shares).
+  const file = fileById(fileId);
+  return (file && file.speakers && file.speakers.list) || [];
+}
+
+function speakerName(fileId, speaker) {
+  return speakerNames(fileId)[speaker] || `Говорящий ${speaker + 1}`;
+}
+
+function speakersWord(number) {
+  // controller.speakers_text: "1 говорящий", "3 говорящих".
+  return `${number} ${number % 10 === 1 && number % 100 !== 11 ? 'говорящий' : 'говорящих'}`;
+}
+
+function renderSpeakerSwitch(file) {
+  // On a file without speakers the switch is off; turning it on asks for the count and searches.
   const info = file.speakers || {};
-  $('file-speakers').hidden = !info.text && !info.can_find;
-  $('file-speakers-text').textContent = info.text || '';
-  $('find-speakers').hidden = !info.can_find;
-  $('speaker-count-box').hidden = !info.can_find;
-  $('find-speakers').textContent = (info.names || []).length ? 'Определить заново' : 'Определить говорящих';
-  $('cancel-speakers').hidden = !info.can_cancel;
+  const has = (info.names || []).length > 0;
+  $('show-speakers').checked = speakersShown(file);
+  $('show-speakers').disabled = !has && !info.can_find;
+  $('show-speakers-box').classList.toggle('off', $('show-speakers').disabled);
+}
+
+function renderSpeakerLine(file) {
+  // One chip per speaker with words: colour, name, share of the speech; a chip opens its menu.
+  const info = file.speakers || {};
+  const list = info.list || [];
+  const line = $('speaker-line');
+  line.hidden = !(speakersShown(file) && list.length);
+  $('speakers-again').hidden = !info.can_find;
+  const hint = info.found && info.found !== list.length ? `модель насчитала ${info.found}` : '';
+  $('speaker-hint').hidden = !hint;
+  $('speaker-hint').textContent = hint;
+  const key = JSON.stringify([file.id, list]);
+  if (line.hidden || line.dataset.key === key) return;  // progress updates leave the chips (and focus) alone
+  line.dataset.key = key;
+  const chips = $('speaker-chips');
+  chips.textContent = '';
+  for (const entry of list) {
+    const chip = el('button', 'spk-chip');
+    chip.type = 'button';
+    chip.dataset.speaker = entry.index;
+    chip.setAttribute('aria-haspopup', 'menu');
+    chip.style.setProperty('--spk', `var(--spk-${entry.index % 8})`);
+    chip.title = `${entry.name}: ${entry.share} % речи. Переименовать, перейти к реплике, объединить`;
+    chip.append(el('span', 'spk-dot'), el('span', 'spk-name', entry.name), el('small', '', `${entry.share}%`));
+    chip.addEventListener('click', () => openMenu(chip, chipItems(file.id, entry.index)));
+    chips.appendChild(chip);
+  }
+}
+
+function mergeItems(fileId, speaker) {
+  // "Объединить X с Y": every turn of X goes to Y, who keeps their name.
+  const others = speakerList(fileId).filter((entry) => entry.index !== speaker);
+  if (!others.length) return [];
+  const items = ['sep', { heading: `Объединить «${speakerName(fileId, speaker)}» с` }];
+  for (const entry of others) {
+    items.push({ id: `merge-${entry.index}`, dot: entry.index, label: entry.name,
+                 hint: `все реплики станут «${entry.name}»`,
+                 action: () => call('merge_speakers', fileId, speaker, entry.index) });
+  }
+  return items;
+}
+
+function chipItems(fileId, speaker) {
+  return [{ id: 'rename', label: 'Переименовать...', action: () => openRename(speaker) },
+          { id: 'next-turn', label: 'Следующая реплика', action: () => nextTurn(speaker) },
+          ...mergeItems(fileId, speaker)];
+}
+
+function nextTurn(speaker) {
+  // The first name of this speaker below the top of the text, or the first one again.
+  const text = $('text');
+  const labels = [...text.querySelectorAll(`.spk[data-speaker="${speaker}"]`)];
+  if (!labels.length) return;
+  const top = text.getBoundingClientRect().top + 8;
+  const next = labels.find((label) => label.getBoundingClientRect().top > top) || labels[0];
+  next.scrollIntoView({ block: 'start' });
+  text.scrollTop -= 12;
+  next.classList.remove('flash');
+  void next.offsetWidth;  // restart the animation
+  next.classList.add('flash');
+  next.focus({ preventScroll: true });
+}
+
+function turnRange(fileId, label) {
+  // The words of the turn that starts at this name: until another speaker's word.
+  const paragraph = label.parentNode;
+  const firstWord = paragraph.querySelector('.w');
+  if (!firstWord) return null;
+  const speaker = Number(label.dataset.speaker);
+  const lines = state.lines.get(fileId) || [];
+  const first = [Number(paragraph.dataset.seg), Number(firstWord.dataset.w)];
+  let last = first;
+  for (let index = first[0]; index < lines.length; index += 1) {
+    const words = lines[index].words || [];
+    for (let w = index === first[0] ? first[1] : 0; w < words.length; w += 1) {
+      const owner = words[w][5];
+      if (owner !== null && owner !== undefined && owner !== speaker) return { first, last };
+      last = [index, w];
+    }
+  }
+  return { first, last };
+}
+
+function giveItems(fileId, range, heading, except) {
+  // "Эту реплику сказал" / "Эти слова сказал": another speaker with words, or a new one.
+  const items = [{ heading }];
+  for (const entry of speakerList(fileId)) {
+    if (entry.index === except) continue;
+    items.push({ id: `give-${entry.index}`, dot: entry.index, label: entry.name,
+                 action: () => call('set_words_speaker', fileId, range.first, range.last, entry.index) });
+  }
+  items.push({ id: 'give-new', mark: '+', label: 'Новый говорящий',
+               action: () => call('set_words_speaker', fileId, range.first, range.last, null) });
+  return items;
+}
+
+function turnItems(fileId, label) {
+  const speaker = Number(label.dataset.speaker);
+  const items = [{ id: 'rename', label: `Переименовать «${speakerName(fileId, speaker)}»...`,
+                   action: () => openRename(speaker) }];
+  const range = turnRange(fileId, label);
+  if (range) items.push('sep', ...giveItems(fileId, range, 'Эту реплику сказал', speaker));
+  return items.concat(mergeItems(fileId, speaker));
+}
+
+function wordsOwners(range) {
+  const lines = state.lines.get(range.fileId) || [];
+  const owners = [];
+  for (let index = range.first[0]; index <= range.last[0]; index += 1) {
+    const words = (lines[index] && lines[index].words) || [];
+    const from = index === range.first[0] ? range.first[1] : 0;
+    const to = index === range.last[0] ? range.last[1] : words.length - 1;
+    for (let w = from; w <= to; w += 1) owners.push(words[w][5]);
+  }
+  return owners;
+}
+
+function selectionItems() {
+  // "Говорящий" on the selection bar: the selected words go to another speaker or a new one.
+  if (!selection) return [];
+  const chosen = { fileId: selection.fileId, first: selection.first, last: selection.last };
+  const owners = new Set(wordsOwners(chosen));
+  const except = owners.size === 1 ? [...owners][0] : undefined;
+  return giveItems(chosen.fileId, chosen, 'Эти слова сказал', except).map((item) => (item.action
+    ? { ...item, action: () => { window.getSelection().removeAllRanges(); hideBar(); item.action(); } } : item));
+}
+
+let searchingFile = null;  // the file of the open "Определить говорящих" dialog
+
+function openSpeakerSearch(fileId) {
+  const file = fileById(fileId);
+  if (!file) return;
+  searchingFile = fileId;
+  const found = file.speakers && file.speakers.found;
+  $('speaker-count').value = '0';
+  // Owner (2026-11-09): with a number of one's own, the model's count is still worth seeing.
+  $('speaker-found').hidden = !found;
+  $('speaker-found').textContent = found ? `В прошлый раз модель насчитала сама: ${speakersWord(found)}.` : '';
+  $('speaker-search').showModal();
+  $('speaker-count').focus();
+}
+
+async function startSpeakerSearch() {
+  const fileId = searchingFile;
+  searchingFile = null;
+  $('speaker-search').close();
+  if (!fileId) return;
+  if (state.settings && state.settings.show_speakers === false) {
+    state.settings.show_speakers = true;  // the user asked for speakers: show them when found
+    call('set_settings', { show_speakers: true });
+  }
+  await call('find_speakers', fileId, Number($('speaker-count').value) || null);
 }
 
 let renaming = null;  // {fileId, speaker} while the name dialog is open
@@ -512,7 +799,7 @@ async function copyText(forLlm) {
   // forLlm: the text with doubtful words marked as word[?66%] and a note on the marks.
   const file = fileById(state.selected);
   if (!file) return;
-  const text = await call('copy_text', file.id, $('times').checked, !!forLlm);
+  const text = await call('copy_text', file.id, $('times').checked, !!forLlm, speakersShown(file));
   if (text === null) return;
   try {
     await navigator.clipboard.writeText(text);
@@ -600,6 +887,7 @@ function updateBar() {
   const found = file ? selectedWords() : null;
   if (!found) { hideBar(); return; }
   selection = { fileId: file.id, first: found.first, last: found.last };
+  $('sel-speaker').hidden = !speakersShown(file);
   $('sel-bar').hidden = false;
   placeBar(found.range);
 }
@@ -783,15 +1071,6 @@ function editCard() {
   selection = { fileId, first: spanPosition(spans[0]), last: spanPosition(spans[spans.length - 1]) };
   openFix(false);
   if (whole) $('fix-text').value = wordsText(first.offer.words);
-}
-
-function renderSuggest(file) {
-  // The line under the file name: how the search goes, and "Найти варианты".
-  const info = file.suggest || {};
-  $('file-suggest').hidden = !info.text && !info.can_find;
-  $('file-suggest-text').textContent = info.text || '';
-  $('find-suggest').hidden = !info.can_find;
-  $('find-suggest').textContent = info.searched ? 'Искать заново' : 'Найти варианты';
 }
 
 // ---- playing a part
@@ -1232,6 +1511,7 @@ function renderSettings() {
     }
   }
   markAllWords();
+  renderMain();  // the speaker switch follows Settings.show_speakers (also after a reset)
 }
 
 async function changeSetting(change) {
@@ -1344,10 +1624,50 @@ $('close-settings').addEventListener('click', () => setView('file'));
 $('banner-close').addEventListener('click', () => { $('banner').hidden = true; });
 $('file-cancel').addEventListener('click', () => state.selected && call('cancel', state.selected));
 $('file-retry').addEventListener('click', () => { state.followRunning = true; call('retry', state.selected); });
-$('file-remove').addEventListener('click', () => removeFile(state.selected));
-$('show-folder').addEventListener('click', () => call('show_folder', state.selected));
 $('copy').addEventListener('click', () => copyText(false));
-$('copy-llm').addEventListener('click', () => copyText(true));
+$('copy-more').addEventListener('click', () => openMenu($('copy-more'), copyItems()));
+$('files-button').addEventListener('click', () => {
+  const file = fileById(state.selected);
+  if (file) openMenu($('files-button'), fileItems(file));
+});
+$('more-button').addEventListener('click', () => {
+  const file = fileById(state.selected);
+  if (file) openMenu($('more-button'), moreItems(file));
+});
+$('show-speakers').addEventListener('change', () => {
+  const file = fileById(state.selected);
+  const on = $('show-speakers').checked;
+  if (on && file && !speakerNames(file.id).length) {
+    $('show-speakers').checked = false;  // nothing to show yet: ask for the count and search
+    openSpeakerSearch(file.id);
+    return;
+  }
+  state.settings.show_speakers = on;
+  call('set_settings', { show_speakers: on });
+  if (file) {
+    const top = $('text').scrollTop;
+    drawLines(file.id);
+    $('text').scrollTop = top;
+  }
+});
+$('speakers-again').addEventListener('click', () => state.selected && openSpeakerSearch(state.selected));
+$('task-cancel').addEventListener('click', () => state.selected && call('cancel_speakers', state.selected));
+$('speaker-search-go').addEventListener('click', startSpeakerSearch);
+$('speaker-search-cancel').addEventListener('click', () => { searchingFile = null; $('speaker-search').close(); });
+$('speaker-search').addEventListener('close', () => { searchingFile = null; });
+$('sel-speaker').addEventListener('click', () => openMenu($('sel-speaker'), selectionItems()));
+document.addEventListener('pointerdown', (event) => {
+  if (menuAnchor && !event.target.closest('#menu') && !menuAnchor.contains(event.target)) closeMenu();
+});
+document.addEventListener('keydown', (event) => {
+  if ($('menu').hidden) return;
+  if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeMenu(true); }
+  else if (event.key === 'ArrowDown') { event.preventDefault(); moveMenuFocus(1); }
+  else if (event.key === 'ArrowUp') { event.preventDefault(); moveMenuFocus(-1); }
+  else if (event.key === 'Tab') closeMenu();
+}, true);
+window.addEventListener('resize', () => closeMenu());
+$('text').addEventListener('scroll', () => { if (menuAnchor && $('text').contains(menuAnchor)) closeMenu(); });
 $('times').addEventListener('change', () => {
   applyTimes($('times').checked);
   call('set_settings', { include_timestamps: $('times').checked });
@@ -1361,11 +1681,7 @@ for (const input of document.querySelectorAll('input[name="doubt-style"]')) {
 }
 $('text').addEventListener('mouseover', showConfidence);
 $('suggest').addEventListener('change', () => changeSetting({ suggest: $('suggest').value }));
-$('find-suggest').addEventListener('click', () => state.selected && call('find_suggestions', state.selected));
 $('speakers').addEventListener('change', () => changeSetting({ speakers: $('speakers').checked }));
-$('find-speakers').addEventListener('click', () => state.selected
-  && call('find_speakers', state.selected, Number($('speaker-count').value) || null));
-$('cancel-speakers').addEventListener('click', () => state.selected && call('cancel_speakers', state.selected));
 $('speaker-save').addEventListener('click', saveRename);
 $('speaker-cancel').addEventListener('click', () => { renaming = null; $('speaker').close(); });
 $('speaker-name').addEventListener('keydown', (event) => {
@@ -1433,7 +1749,7 @@ $('text').addEventListener('scroll', () => {
 window.addEventListener('resize', () => { if (selection) updateBar(); });
 $('text').addEventListener('click', (event) => {
   const label = event.target.closest('.spk');
-  if (label) { openRename(Number(label.dataset.speaker)); return; }
+  if (label) { if (state.selected) openMenu(label, turnItems(state.selected, label)); return; }
   const time = event.target.closest('time.playable');
   if (time && fixableFile()) playLine(Number(time.parentNode.dataset.seg));
   else if (event.altKey) {

@@ -293,6 +293,28 @@ def doubt_steps(js, control, item, shoot):
     wait(lambda: js("$('text').classList.contains('doubts-underline')"), 5, "underline style again")
 
 
+def open_menu(js, anchor):
+    """Open the popup menu of a button (plan 07 G: "...", "Файлы", the copy arrow, a speaker
+    chip or name) given as a page expression; returns [[data-item, text]] of its items."""
+    js(f"closeMenu(); {anchor}.click()")
+    wait(lambda: not js("$('menu').hidden"), 5, f"menu of {anchor}")
+    return js("[...$('menu').querySelectorAll('.menu-item')].map(b => [b.dataset.item || '', b.textContent])")
+
+
+def menu_texts(js, anchor):
+    """The items of a menu as {data-item: text}; the menu is closed again."""
+    items = dict(open_menu(js, anchor))
+    js("closeMenu()")
+    return items
+
+
+def choose(js, anchor, item):
+    """Open a menu and click the item with this data-item (ASCII, so no quotes needed)."""
+    items = open_menu(js, anchor)
+    js(f"$('menu').querySelector('[data-item={item}]').click()")
+    return items
+
+
 def suggest_steps(js, control, item, shoot):
     """Plan 06 on the finished short file: after it was recognised, its doubtful words were
     read again by the other models in the background. The status line reports the search; a
@@ -309,17 +331,17 @@ def suggest_steps(js, control, item, shoot):
         time.sleep(1)
         check("on the CPU no search by itself", not item.result.suggestions_searched and control.suggesting is None
               and item.id not in control.suggest_queue)
-        check("on the CPU the button is offered", js("!$('find-suggest').hidden")
-              and js("$('find-suggest').textContent") == "Найти варианты", js("$('find-suggest').textContent"))
-        js("$('find-suggest').click()")
+        offered_item = menu_texts(js, "$('more-button')").get("find-suggest", "")
+        check("on the CPU the menu offers the search", offered_item.startswith("Найти варианты"), offered_item)
+        choose(js, "$('more-button')", "find-suggest")
     wait(lambda: item.result.suggestions_searched and control.suggesting is None, 240, "suggestion search")
-    status = js("$('file-suggest-text').textContent")
+    status = menu_texts(js, "$('more-button')").get("find-suggest", "")
     offered = [word for segment in item.segments for word in segment.words if word.suggestions]
     check("search ran after the file", item.result.suggestions_searched,
           f"{status!r}; offers: " + "; ".join(f"{w.text} -> {[(o['models'], o['words']) for o in w.suggestions]}"
                                               for w in offered))
-    check("status line reports it", (status.startswith("Другие модели") if offered or status else True)
-          and js("!$('find-suggest').hidden") and js("$('find-suggest').textContent") == "Искать заново", status)
+    check("the menu item reports it", status.startswith("Искать варианты заново")
+          and ("Другие модели" in status if offered else True) and js("$('task-line').hidden"), status)
     if not offered:
         with control.lock:
             first = item.segments[0].words[1]
@@ -356,7 +378,7 @@ def suggest_steps(js, control, item, shoot):
     # Search again. The flag is cleared first, so the wait below cannot pass before the
     # click has reached Python (it did, and the player steps then ran during the search).
     item.result.suggestions_searched = False
-    js("$('find-suggest').click()")
+    choose(js, "$('more-button')", "find-suggest")
     wait(lambda: control.suggesting is not None or item.result.suggestions_searched, 10, "search starts")
     # The player works while the search reports its progress (each report replaced the
     # file's object in the page, and play silently did nothing).
@@ -365,8 +387,8 @@ def suggest_steps(js, control, item, shoot):
     check("play works during a search", js("!filePlayer.paused"))
     js("filePlayer.pause(); filePlayer.currentTime = 0")
     wait(lambda: control.suggesting is None and item.result.suggestions_searched, 240, "search again")
-    check("the button searches again", item.result.suggestions_searched
-          and not js("$('file-suggest-text').textContent").startswith(("Ищу", "Варианты")))
+    wait(lambda: js("$('task-line').hidden"), 10, "status line gone after the search")
+    check("the menu searches again", item.result.suggestions_searched and js("$('task-line').hidden"))
     # "Исправить...": the fix dialog for the offer's words, filled with the offer; the user's
     # own text goes in. If the search found nothing left, one test offer is added.
     if not js("$('text').querySelectorAll('.w.sg').length"):
@@ -394,31 +416,42 @@ def suggest_steps(js, control, item, shoot):
 
 
 def speaker_steps(js, control, item, shoot):
-    """Plan 07 on the finished short file: the button with a known count of 2 downloads the
-    speaker models from the models-1 release (the temporary download folder starts empty),
-    finds the speakers, and the text shows coloured "Govoryashchiy N:" labels; a click on one
-    renames that speaker in every label and in the transcript. Then the Settings checkbox."""
+    """Plan 07 on the finished short file. The "Govoryashchie" switch on a file without
+    speakers asks for the count; with 2 it downloads the speaker models from the models-1
+    release (the temporary download folder starts empty) and finds the speakers. The text
+    shows coloured labels and the line of speaker chips. A name's menu renames and gives its
+    turn to a new speaker, a chip's menu merges, selected words go to a new speaker, and the
+    switch hides and shows the names. Then the Settings checkbox."""
     js("document.querySelectorAll('#files li')[1].click()")
     wait(lambda: js("$('text').querySelectorAll('.w').length") > 4, 10, "words of the short file")
-    check("speaker button offered", js("!$('file-speakers').hidden && !$('find-speakers').hidden")
-          and js("$('find-speakers').textContent") == "Определить говорящих", js("$('find-speakers').textContent"))
+    check("speaker switch is off and usable", not js("$('show-speakers').checked")
+          and not js("$('show-speakers').disabled") and js("$('speaker-line').hidden"))
+    more = menu_texts(js, "$('more-button')")
+    check("the more menu offers a speaker search", more.get("find-speakers") == "Определить говорящих...", more)
+    js("$('show-speakers').click()")
+    wait(lambda: js("$('speaker-search').open"), 5, "count dialog")
+    check("the switch asks for the count first", not js("$('show-speakers').checked"))
     check("count choice: auto and 1..20", js("$('speaker-count').options.length") == 21
           and js("$('speaker-count').value") == "0")
-    js("$('speaker-count').value = '2'; $('find-speakers').click()")
+    shoot("04i-speaker-count")
+    js("$('speaker-count').value = '2'; $('speaker-search-go').click()")
     wait(lambda: control.speaker_download is not None or control.diarizing is not None, 10, "speaker search starts")
     seen = set()
 
     def finished():
-        seen.add(js("$('file-speakers-text').textContent").split(":")[0])
+        if not js("$('task-line').hidden"):
+            seen.add(js("$('task-text').textContent").split(":")[0])
         return control.diarizing is None and control.speaker_download is None and not control.speaker_queue
     started = time.perf_counter()
     wait(finished, 300, "speakers found")
     seconds = time.perf_counter() - started
     names = item.result.speakers or []
-    status = js("$('file-speakers-text').textContent")
-    check("speakers found", names and status.startswith("Найдено"), f"{status!r}, {names}, {seconds:.1f} s, seen {seen}")
+    check("speakers found", names and item.result.speakers_found, f"{names}, found {item.result.speakers_found}, "
+          f"{seconds:.1f} s, seen {seen}")
+    check("the status line showed the search", any(text.startswith(("Определяю", "Скачиваю")) for text in seen), seen)
     check("models were downloaded", catalog.installed_folder(catalog.SPEAKER_MODEL) is not None)
     wait(lambda: js("$('text').querySelectorAll('.spk').length") > 0, 10, "speaker labels")
+    wait(lambda: js("$('task-line').hidden"), 10, "status line gone")
     labels = js("[...$('text').querySelectorAll('.spk')].map(b => b.textContent)")
     check("labels start the turns", labels and labels[0] == "Говорящий 1:"
           and js("$('text').querySelector('p').querySelector('.spk') !== null"), labels[:6])
@@ -429,19 +462,25 @@ def speaker_steps(js, control, item, shoot):
     check("the first speaker has its colour", colour[0] == colour[1], colour)
     words_shown = js("$('text').querySelectorAll('.w').length")
     check("every word still shown once", words_shown == sum(len(s.words) for s in item.segments), words_shown)
-    check("button now searches again", js("$('find-speakers').textContent") == "Определить заново")
-    shoot("04i-speakers")
-    js("$('text').querySelector('.spk').click()")
+    chips = js("[...$('speaker-chips').querySelectorAll('.spk-chip')].map(c => c.textContent)")
+    check("the speaker line shows each speaker with a share", not js("$('speaker-line').hidden") and chips
+          and chips[0].startswith("Говорящий 1") and chips[0].endswith("%"), chips)
+    check("the switch is on now", js("$('show-speakers').checked"))
+    more = menu_texts(js, "$('more-button')")
+    check("the more menu searches again", more.get("find-speakers") == "Определить говорящих заново...", more)
+    shoot("04j-speakers")
+    choose(js, "$('text').querySelector('.spk')", "rename")
     wait(lambda: js("$('speaker').open"), 5, "rename dialog")
     check("rename dialog has the name", js("$('speaker-name').value") == "Говорящий 1", js("$('speaker-name').value"))
-    shoot("04j-speaker-rename")
     js("$('speaker-name').value = 'Anna'; $('speaker-save').click()")
     wait(lambda: item.result.speakers[0] == "Anna", 10, "renamed in Python")
     wait(lambda: js("$('text').querySelector('.spk').textContent") == "Anna:", 10, "renamed on the page")
     first_labels = js("[...$('text').querySelectorAll('.spk[data-speaker=\"0\"]')].map(b => b.textContent)")
     check("rename reaches every label of that speaker", first_labels and set(first_labels) == {"Anna:"},
           first_labels[:4])
-    check("rename closes the dialog", not js("$('speaker').open"))
+    wait(lambda: js("$('speaker-chips').textContent").startswith("Anna"), 10, "renamed chip")
+    check("rename closes the dialog and reaches the chip", not js("$('speaker').open")
+          and js("$('speaker-chips').textContent").startswith("Anna"))
     # The clip has one voice: give the second half of its first line to a second speaker, as a
     # search would, to see a line drawn in two parts (one time, two labels, every word once).
     with control.lock:
@@ -458,6 +497,56 @@ def speaker_steps(js, control, item, shoot):
     check("every word still shown once with two speakers",
           js("$('text').querySelectorAll('.w').length") == sum(len(s.words) for s in item.segments))
     shoot("04k-two-speakers")
+    # G4: the name's menu gives the turn of speaker 2 to a new speaker.
+    second_label = "$('text').querySelectorAll('.spk')[1]"
+    ids = [key for key, _ in open_menu(js, second_label)]
+    check("name menu: rename, give the turn to Anna or a new speaker, merge", ids == ["rename", "give-0", "give-new",
+                                                                                     "merge-0"], ids)
+    shoot("04l-speaker-menu")
+    js("$('menu').querySelector('[data-item=give-new]').click()")
+    half = len(item.segments[0].words) // 2
+    wait(lambda: item.segments[0].words[-1].speaker == 2, 10, "turn given to a new speaker")
+    check("the turn goes to a new speaker", [w.speaker for w in item.segments[0].words[half:]] == [2] * (
+        len(item.segments[0].words) - half) and item.result.speakers[2] == "Говорящий 3", item.result.speakers)
+    wait(lambda: js("[...$('text').querySelectorAll('.spk')].map(b => b.textContent).join('|')").startswith(
+        "Anna:|Говорящий 3:"), 10, "new speaker on the page")
+    wait(lambda: js("$('speaker-chips').querySelectorAll('.spk-chip').length") == 2, 10, "chips follow")
+    # A chip's menu merges the new speaker into Anna.
+    choose(js, "$('speaker-chips').querySelectorAll('.spk-chip')[1]", "merge-0")
+    wait(lambda: all(w.speaker == 0 for s in item.segments for w in s.words), 10, "merged")
+    wait(lambda: js("$('text').querySelectorAll('.spk').length") == 1, 10, "one label after the merge")
+    check("merge leaves one speaker", js("$('speaker-chips').querySelectorAll('.spk-chip').length") == 1
+          and "Говорящий 3" not in item.written["txt"].read_text(encoding="utf-8")
+          if "txt" in item.written else True)
+    # Selected words (the last two of the first line) go to a new speaker from the selection bar.
+    js("(() => { const spans = $('text').querySelectorAll('p[data-seg=\"0\"] .w'); const r = document.createRange();"
+       " r.setStart(spans[spans.length - 2].firstChild, 0);"
+       " r.setEnd(spans[spans.length - 1].firstChild, 1);"
+       " const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);"
+       " document.dispatchEvent(new PointerEvent('pointerup')); })()")
+    wait(lambda: not js("$('sel-bar').hidden"), 5, "selection bar for speakers")
+    check("the selection bar offers the speaker", not js("$('sel-speaker').hidden"))
+    ids = [key for key, _ in open_menu(js, "$('sel-speaker')")]
+    check("selected words: only a new speaker (all are Anna's)", ids == ["give-new"], ids)
+    shoot("04m-words-speaker")
+    js("$('menu').querySelector('[data-item=give-new]').click()")
+    wait(lambda: [w.speaker for w in item.segments[0].words[-2:]] == [1, 1], 10, "words given")
+    check("selected words go to a new speaker", item.segments[0].words[-3].speaker == 0
+          and item.result.speakers[1] == "Говорящий 2", [w.speaker for w in item.segments[0].words])
+    wait(lambda: js("$('text').querySelectorAll('.spk').length") >= 2, 10, "words split on the page")
+    # The switch hides the names and chips; the copy then has no names; on again brings them back.
+    js("$('show-speakers').click()")
+    wait(lambda: js("$('text').querySelectorAll('.spk').length") == 0, 5, "names hidden")
+    wait(lambda: control.settings.show_speakers is False, 5, "switch saved")
+    check("the switch hides names and chips", js("$('speaker-line').hidden")
+          and js("$('text').querySelectorAll('.w').length") == sum(len(s.words) for s in item.segments)
+          and "Говорящий" not in control.copy_text(item.id, False, False, False))
+    check("saved files keep the names", "txt" not in item.written
+          or "Говорящий 2:" in item.written["txt"].read_text(encoding="utf-8"))
+    shoot("04n-speakers-hidden")
+    js("$('show-speakers').click()")
+    wait(lambda: js("$('text').querySelectorAll('.spk').length") >= 2, 5, "names shown again")
+    check("the switch shows them again", not js("$('speaker-line').hidden") and control.settings.show_speakers)
     # The Settings checkbox is saved at once; switched off again so later steps run as before.
     js("$('open-settings').click()")
     check("speakers checkbox off by default", not js("$('speakers').checked"))
@@ -573,24 +662,28 @@ def scenario(window, control, long_audio, short_audio, shoot, whisper=False):
         check("timecodes switch", js("$('text').classList.contains('with-times')") != before)
         js("$('times').click()")
         js("document.querySelectorAll('#files li')[1].click()")
-        chips = js("[...document.querySelectorAll('#saved-list .chip')].map(c => c.textContent)")
-        check("saved chips", chips[:2] == ["TXTТекст", "TXTС таймкодами"], chips)
+        files_menu = open_menu(js, "$('files-button')")
+        ids = [key for key, _ in files_menu]
+        check("the Files menu lists the formats", ids[:2] == ["out-txt", "out-timestamps"] and ids[-1] == "show-folder"
+              and files_menu[0][1].startswith("\u2713Текст"), files_menu)
+        shoot("04-files-menu")
         # Scripts sent to the page stay ASCII: pywebview on GTK cuts non-ASCII scripts short.
-        js("document.querySelector('#saved-list .chip[data-format=srt]').click()")
+        js("$('menu').querySelector('[data-item=out-srt]').click()")
         srt = Path(short_audio).with_name(Path(short_audio).stem + "-transcript.srt")
         wait(lambda: srt.is_file(), 10, "SRT written")
         check("SRT created from the page", srt.is_file() and srt.stat().st_size > 0)
-        js("document.querySelector('#saved-list .chip[data-format=md]').click()")
+        choose(js, "$('files-button')", "out-md")
         markdown = Path(short_audio).with_name(Path(short_audio).stem + "-transcript.md")
         wait(lambda: markdown.is_file(), 10, "Markdown written")
         check("Markdown created from the page",
               markdown.is_file() and markdown.read_text(encoding="utf-8").startswith("# " + Path(short_audio).name))
-        js("document.querySelector('#saved-list .chip[data-format=llm]').click()")
+        choose(js, "$('files-button')", "out-llm")
         for_llm = Path(short_audio).with_name(Path(short_audio).stem + "-transcript-llm.txt")
         wait(lambda: for_llm.is_file(), 10, "text for an LLM written")
         check("text for an LLM created from the page",
               for_llm.is_file() and "[?" in for_llm.read_text(encoding="utf-8"))
-        check("copy for an LLM button", js("!!$('copy-llm') && !$('copy-llm').hidden"))
+        copy_menu = menu_texts(js, "$('copy-more')")
+        check("copy for an LLM in the copy menu", list(copy_menu) == ["copy-llm"], copy_menu)
         shoot("04-done")
         doubt_steps(js, control, control.files[1], shoot)
         suggest_steps(js, control, control.files[1], shoot)
@@ -599,7 +692,7 @@ def scenario(window, control, long_audio, short_audio, shoot, whisper=False):
         fix_steps(js, control, control.files[1], short_audio, shoot)
 
         # Retry the short file, remove the cancelled one.
-        js("$('file-retry').click()")
+        choose(js, "$('more-button')", "retry")
         wait(lambda: control.files[1].state == "running", 10, "retry started")
         wait(lambda: control.files[1].state == "done", 120, "retry done")
         wait(lambda: js("document.querySelectorAll('#files li')[1].classList.contains('done')"), 10, "page shows done")
@@ -694,8 +787,8 @@ def second_session(window, control, short_audio, long_audio):
               and js("$('text').querySelectorAll('p:not(.placeholder)').length") > 0)
         js("document.querySelectorAll('#files li')[0].click()")
         wait(lambda: js("$('text').querySelectorAll('p:not(.placeholder)').length") > 0, 10, "restored text")
-        chips = js("[...document.querySelectorAll('#saved-list .chip')].map(c => c.dataset.format)")
-        check("restored file offers its saved files", chips[:4] == ["txt", "timestamps", "md", "srt"], chips)
+        ids = list(menu_texts(js, "$('files-button')"))
+        check("restored file offers its saved files", ids[:4] == ["out-txt", "out-timestamps", "out-md", "out-srt"], ids)
         shoot_again("09-next-session")
     except Exception as error:
         check("second session", False, repr(error))

@@ -34,14 +34,14 @@ are transcribed one at a time, in the order added: the list on the left shows
 which are done, running and waiting, and the right side shows the selected
 file's progress and its text as it is recognised. **Отмена** stops the running
 file and keeps the finished part. Each file names the model that recognised it
-("Модель: GigaAM v3 RNNT"; the list line says RNNT, CTC or Whisper), also after the
+in the line under its name (the list line says RNNT, CTC or Whisper), also after the
 settings choose another. The model loads in the background as soon as
 the window opens and stays loaded between files. Closing the window while a file
 runs asks first; the part recognised so far is saved.
 
 The list is kept between sessions: finished files come back with their text the
 next time the window opens, and missing formats can still be written from it.
-**Убрать из списка** forgets a file; its saved transcripts stay where they are. The
+**...** -> **Убрать из списка** forgets a file; its saved transcripts stay where they are. The
 list lives in `%LOCALAPPDATA%\GigaAmTranscriber\history` on Windows and
 `~/.local/share/gigaam-transcriber/history` on Linux (`GIGAAM_HISTORY` overrides it).
 Results are saved beside the source file:
@@ -55,8 +55,8 @@ Results are saved beside the source file:
 | `json` | `name-transcript.json` | segments and every word with its start and end time and the model's confidence (0 to 1) |
 | `llm` | `name-transcript-llm.txt` | text to paste into a chat with an AI: a note on the marks, then the text with doubtful words marked as `word[?66%]` (below the dotted threshold), and both versions `{GigaAM v3 RNNT: ... \| Whisper ...: ...}` where another model heard otherwise |
 
-TXT and timestamped TXT are on by default; a finished file also offers the
-other formats, made from the text already recognised. **Настройки** (bottom left)
+TXT and timestamped TXT are on by default; **Файлы** above the text opens the saved
+ones and writes the other formats from the text already recognised. **Настройки** (bottom left)
 chooses the formats, the model (RNNT by default, CTC, or Whisper), the device (Авто,
 Видеокарта, Процессор) and CPU threads; changes count from the next file.
 Choosing Whisper the first time asks to download it (547 MB); with Whisper the
@@ -64,8 +64,16 @@ settings also show **Язык речи**: automatic detection or a chosen langua
 Words the model was unsure of are underlined in the text (dotted: maybe wrong,
 wavy: likely wrong; hover a word for the number); the **Сомнения** switch above
 the text hides the marks, and **Настройки** can colour every word from green to
-red by confidence instead. **Копировать для ИИ** copies the text in the `llm`
-format, ready to paste into a chat with an AI model.
+red by confidence instead. **Копировать** copies the text as shown; its arrow offers
+**Копировать для ИИ**, the text in the `llm` format, ready to paste into a chat with an AI model.
+
+The **Говорящие** switch above the text finds who speaks when (on a file without
+speakers it asks how many people talk, if known) and then shows or hides the names; the
+saved files always carry them. A new paragraph starts at each change of speaker with a
+coloured name, and a line of chips under the switches shows each speaker's share of the
+speech. A click on a name renames that speaker, gives the turn to another or a new
+speaker, or merges two speakers; selected words get **Говорящий** for the same.
+**Настройки** -> **Говорящие** runs the search after every file.
 
 A bar under the text plays the whole file (play / pause, seeking, speed, volume;
 Space plays and pauses) and highlights the word being spoken; a click on a line's
@@ -77,7 +85,7 @@ recognised on the GPU, each line with doubtful words is also read by another mod
 (Whisper checks GigaAM, RNNT checks Whisper): where it heard something else, the
 underline turns blue and a click shows the offer with **Взять** and **Оставить как
 есть**. **Настройки** -> **Варианты для сомнительных слов** chooses when to look
-(after GPU files, always, or only with the **Найти варианты** button). The models
+(after GPU files, always, or only with **...** -> **Найти варианты**). The models
 run in a separate process, so the window stays responsive while they load.
 
 Settings are saved at once to `gigaam-config.json` beside the app (the command

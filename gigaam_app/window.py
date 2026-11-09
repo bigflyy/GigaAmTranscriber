@@ -191,8 +191,8 @@ class Api:
     def segments(self, file_id):
         return self._controller.segments(file_id)
 
-    def copy_text(self, file_id, with_times, for_llm=False):
-        return self._controller.copy_text(file_id, with_times, for_llm)
+    def copy_text(self, file_id, with_times, for_llm=False, with_speakers=True):
+        return self._controller.copy_text(file_id, with_times, for_llm, with_speakers)
 
     def open_output(self, file_id, fmt):
         return self._controller.open_output(file_id, fmt)
@@ -232,6 +232,12 @@ class Api:
 
     def rename_speaker(self, file_id, index, name):
         return self._controller.rename_speaker(file_id, index, name)
+
+    def set_words_speaker(self, file_id, first, last, speaker=None):
+        return self._controller.set_words_speaker(file_id, first, last, speaker)
+
+    def merge_speakers(self, file_id, source, target):
+        return self._controller.merge_speakers(file_id, source, target)
 
     def set_settings(self, change):
         return self._controller.set_settings(change)

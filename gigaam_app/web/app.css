@@ -231,29 +231,56 @@ button.icon:hover { color: var(--text); background: var(--card); }
 
 /* ------------------------------------------------------------------ file view */
 
-.file-head { padding: 18px 28px 14px; display: flex; flex-direction: column; gap: 10px; border-bottom: 1px solid var(--line); }
+/* Plan 07 Stage G, layout A2: every action above the text is the same bordered button
+   (32 px; .small 26 px in the lines below); a menu holds the rarer ones. */
+.file-head { padding: 16px 28px 12px; display: flex; flex-direction: column; gap: 10px; border-bottom: 1px solid var(--line); }
 .title-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .title-box { flex: 1; min-width: 200px; }
 .title-box h2 { font-size: 18px; font-weight: 700; overflow-wrap: anywhere; }
-.title-box p { font-size: 13px; margin-top: 3px; }
-.actions { display: flex; gap: 8px; }
-.actions button { height: 36px; padding: 0 14px; border-radius: 10px; }
+.title-box .meta { font-size: 13px; margin-top: 3px; }
+.actions { display: flex; gap: 8px; align-items: center; }
+.actions .caret, .sel-bar .caret { font-size: 13px; color: var(--muted); margin-left: 2px; }
+.split { display: inline-flex; }
+.split button:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.split button.more { border-top-left-radius: 0; border-bottom-left-radius: 0; border-left: none; padding: 0 9px;
+  font-size: 13px; color: var(--muted); }
+button.square { width: 32px; padding: 0; font-size: 16px; line-height: 1; }
+button.small { height: 26px; padding: 0 10px; font-size: 12px; border-radius: 7px; }
 
 .bar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
 .bar div { height: 6px; border-radius: 3px; background: var(--accent); width: 0; transition: width 0.2s; }
 
-.saved { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; }
-.saved-label { color: var(--muted); }
-.saved-list { display: contents; }
-.chip {
-  height: 28px; padding: 0 10px; border-radius: 8px; font-size: 12px; display: inline-flex; align-items: center; gap: 6px;
-}
-.chip b { font-size: 11px; font-weight: 700; color: var(--link); }
-.chip.missing { border-style: dashed; background: transparent; color: var(--muted); }
-.chip.missing b { color: var(--muted); }
+.text-tools { display: flex; align-items: center; gap: 18px; padding: 10px 28px; flex-wrap: wrap; }
+.switch.off { opacity: 0.5; cursor: default; }
 
-.text-tools { display: flex; align-items: center; gap: 14px; padding: 10px 28px; }
-.text-tools .caps { flex: 1; }
+/* The speaker chips (layout A2): colour, name, share of the speech; each opens its menu. */
+.speaker-line { display: flex; align-items: center; gap: 6px 8px; flex-wrap: wrap; padding: 0 28px 10px; }
+.speaker-chips { display: contents; }
+.spk-chip { height: 26px; padding: 0 10px; border-radius: 13px; font-size: 12px; display: inline-flex; align-items: center; gap: 6px; }
+.spk-chip small { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.spk-chip[aria-expanded="true"] { border-color: var(--accent); }
+.spk-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--spk); flex: none; }
+#speaker-hint { font-size: 12px; }
+
+/* A running search or a failed one: one line, only then. */
+.task-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 28px 10px; padding: 6px 12px;
+  border-radius: 8px; background: var(--accent-soft); color: var(--text-2); font-size: 13px; }
+.task-line.error { background: var(--danger-soft); color: var(--danger); }
+
+/* The one popup menu (app.js openMenu). */
+.menu { position: fixed; z-index: 20; min-width: 220px; max-width: min(380px, calc(100vw - 16px));
+  max-height: calc(100vh - 16px); overflow-y: auto; padding: 4px; display: flex; flex-direction: column;
+  background: var(--card); border: 1px solid var(--card-line); border-radius: 10px; box-shadow: var(--shadow); }
+.menu-item { height: auto; min-height: 32px; padding: 5px 10px 5px 8px; border: none; border-radius: 7px; background: transparent;
+  display: flex; align-items: center; gap: 8px; text-align: left; white-space: normal; }
+.menu-item:hover, .menu-item:focus-visible { background: var(--accent-soft); outline: none; }
+.menu-mark { width: 12px; flex: none; text-align: center; color: var(--ok); font-weight: 700; }
+.menu-text { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.menu-text small { color: var(--muted); font-size: 12px; }
+.menu-side { font-size: 11px; font-weight: 700; color: var(--link); }
+.menu-item .spk-dot { margin: 0 1.5px; }
+.menu-sep { height: 1px; background: var(--line); margin: 4px 2px; }
+.menu-heading { padding: 6px 10px 2px 28px; font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
 
 .switch { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2); cursor: pointer; user-select: none; }
 .switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
@@ -298,8 +325,6 @@ button.icon:hover { color: var(--text); background: var(--card); }
 .text.doubts-underline .w.sg.d1 { text-decoration-style: dotted; }
 .text.doubts-underline .w.sg.d2 { text-decoration-style: wavy; text-decoration-thickness: 1.5px; }
 .text .w.sg.open { background: var(--accent-soft); border-radius: 3px; }
-.suggest-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
-.suggest-line button.link { font-size: inherit; }
 
 /* Speaker labels (plan 07): a change of speaker starts a new paragraph (turn-start) with the
    speaker's name in their colour (--spk, set per label); a line split by a change keeps its
@@ -311,8 +336,11 @@ button.icon:hover { color: var(--text); background: var(--card); }
 }
 .text .spk:hover { text-decoration: underline; }
 .text .spk:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-#speaker-count { min-width: 0; width: auto; height: 24px; padding: 0 4px; border-radius: 6px; font-size: inherit; }
-.speaker-count { display: inline-flex; gap: 6px; align-items: center; }
+.text .spk.flash { animation: spk-flash 1.2s ease-out; }
+@keyframes spk-flash { from { background: var(--accent-track); } to { background: transparent; } }
+@media (prefers-reduced-motion: reduce) { .text .spk.flash { animation: none; background: var(--accent-soft); } }
+#speaker-count { min-width: 0; width: auto; height: 28px; padding: 0 6px; border-radius: 6px; font: inherit; margin-left: 6px; }
+#speaker-search .inline { display: flex; align-items: center; margin-bottom: 10px; }
 #speaker-name { width: 100%; margin-bottom: 6px; padding: 7px 9px; font: inherit; border: 1px solid var(--card-line);
   border-radius: 8px; background: var(--card); color: var(--text); }
 #speaker-name:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -452,5 +480,6 @@ input[type="number"] { width: 72px; }
 @media (max-width: 640px) {
   .app { flex-direction: column; }
   .side { flex: 0 0 auto; max-height: 40%; border-right: none; border-bottom: 1px solid var(--line); }
-  .file-head, .text-tools, .text, .settings-head, .settings-body, .audio-bar { padding-left: 16px; padding-right: 16px; }
+  .file-head, .text-tools, .speaker-line, .text, .settings-head, .settings-body, .audio-bar { padding-left: 16px; padding-right: 16px; }
+  .task-line { margin-left: 16px; margin-right: 16px; }
 }
