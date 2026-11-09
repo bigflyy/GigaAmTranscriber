@@ -32,7 +32,14 @@ Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
 - window_check: menu helpers open_menu / menu_texts / choose; speaker steps cover the switch,
   dialog, chips, give turn, merge, selected words, hide / show; screens 04i-04n and 04-files-menu.
   First run 116/118 (set_settings ignored show_speakers: fixed); second run --whisper 117/117;
-  526 tests pass. Waiting for the owner to try it; then E1.
+  526 tests pass.
+- Owner tried it: menu headings now "Эту реплику сказал(а)" / "Эти слова сказал(а)". Owner saw a line
+  cut mid-sentence ("...действительно могут" / 00:55 "Решить большинство проблем.") stand as its own
+  paragraph without a name and asked if it was a bug: no, the words are Anna's (session 19 kept each
+  line of a turn as a paragraph). Owner chose B: plan 07 G6 (join a line to the paragraph before it
+  when that one ends without . ? !, its time a small grey mark inside; a turn starting mid-line gets
+  its first word's time). Mock-up: round 3 on the artifact page; owner asked for it before the build,
+  so G6 waits for the owner's look at it. Then E1.
 
 ## Session 19 (2026-11-09): plan 07 B4, C, D done (speakers in the window, files, CLI)
 

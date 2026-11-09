@@ -656,7 +656,7 @@ function turnItems(fileId, label) {
   const items = [{ id: 'rename', label: `Переименовать «${speakerName(fileId, speaker)}»...`,
                    action: () => openRename(speaker) }];
   const range = turnRange(fileId, label);
-  if (range) items.push('sep', ...giveItems(fileId, range, 'Эту реплику сказал', speaker));
+  if (range) items.push('sep', ...giveItems(fileId, range, 'Эту реплику сказал(а)', speaker));
   return items.concat(mergeItems(fileId, speaker));
 }
 
@@ -678,7 +678,7 @@ function selectionItems() {
   const chosen = { fileId: selection.fileId, first: selection.first, last: selection.last };
   const owners = new Set(wordsOwners(chosen));
   const except = owners.size === 1 ? [...owners][0] : undefined;
-  return giveItems(chosen.fileId, chosen, 'Эти слова сказал', except).map((item) => (item.action
+  return giveItems(chosen.fileId, chosen, 'Эти слова сказал(а)', except).map((item) => (item.action
     ? { ...item, action: () => { window.getSelection().removeAllRanges(); hideBar(); item.action(); } } : item));
 }
 
