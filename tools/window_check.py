@@ -410,6 +410,18 @@ def suggest_steps(js, control, item, shoot):
     wait(lambda: control.suggesting is None and item.result.suggestions_searched, 240, "search again")
     wait(lambda: js("$('task-line').hidden"), 10, "status line gone after the search")
     check("the menu searches again", item.result.suggestions_searched and js("$('task-line').hidden"))
+    # Owner 2026-11-09: the search can be cancelled from the status line; the line on the
+    # worker ends, the file does not count as searched ("Найти варианты" stays offered).
+    item.result.suggestions_searched = False
+    choose(js, "$('more-button')", "find-suggest")
+    wait(lambda: not js("$('task-suggest-cancel').hidden") or item.result.suggestions_searched, 15, "cancel button")
+    shoot("04g2-search-cancel")
+    js("$('task-suggest-cancel').click()")
+    wait(lambda: control.suggesting is None, 60, "search stopped")
+    wait(lambda: js("$('task-line').hidden"), 10, "status line gone after the cancel")
+    offered_item = menu_texts(js, "$('more-button')").get("find-suggest", "")
+    check("Otmenit stops the search, which is not counted as done", not item.result.suggestions_searched
+          and js("$('task-line').hidden") and offered_item.startswith("Найти варианты"), offered_item)
     # "Исправить...": the fix dialog for the offer's words, filled with the offer; the user's
     # own text goes in. If the search found nothing left, one test offer is added.
     if not js("$('text').querySelectorAll('.w.sg').length"):
@@ -517,6 +529,10 @@ def speaker_steps(js, control, item, shoot):
     check("a line cut mid-sentence joins the paragraph before it; a turn inside a line has its word's time",
           shape == ["name Соня", "00:29 Меня Соня.", "name Анна", "00:47 Мы могут Решить проблемы.",
                     "00:57 Подкаст выходит."], shape)
+    plain = js("(() => { const f = document.createDocumentFragment(); appendParagraphs(f, " + made + ", null);"
+               " return [...f.children].map(n => n.querySelector('time').textContent + ' ' + n.querySelector('p').textContent); })()")
+    check("without speakers a line cut mid-sentence joins too", plain == [
+        "00:29 Меня Соня. Мы могут Решить проблемы.", "00:57 Подкаст выходит."], plain)
     # The clip has one voice: give the second half of its first line to a second speaker, as a
     # search would, to see a line drawn in two parts (one time, two labels, every word once).
     with control.lock:

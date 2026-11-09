@@ -3,9 +3,10 @@ or text for an LLM (doubtful words marked).
 
 When speakers were looked for (plan 07, Transcript.speakers), every format names them:
 a new paragraph at each change of speaker starts with "Name: "; the timestamped text names
-the speaker on every line, subtitles on the first cue of a turn. With speakers the plain
-text, Markdown and the text for an LLM also join a line cut in the middle of a sentence to
-the paragraph before it, as the window does (plan 07 G6); srt and timestamps keep each line.
+the speaker on every line, subtitles on the first cue of a turn. The plain text, Markdown
+and the text for an LLM join a line cut in the middle of a sentence to the paragraph before
+it, as the window does (plan 07 G6), with or without speakers; srt and timestamps keep each
+line.
 """
 
 from dataclasses import asdict, dataclass
@@ -110,14 +111,13 @@ def ends_sentence(text):
 
 
 def paragraphs(transcript):
-    """The parts grouped into paragraphs, as the window draws them: [[Part, ...]]. Without
-    speakers a paragraph per line. With speakers (plan 07 G6, owner 2026-11-09) a part joins
-    the paragraph before it when it goes on with the same turn and that paragraph ended
-    without . ? ! (the VAD cuts a line at 25 s at a short breath, often mid-sentence)."""
+    """The parts grouped into paragraphs, as the window draws them: [[Part, ...]]. A part
+    joins the paragraph before it when that paragraph ended without . ? ! (the VAD cuts a
+    line at 25 s at a short breath, often mid-sentence; plan 07 G6, owner 2026-11-09), unless
+    a new speaker's turn starts with it."""
     groups = []
-    with_speakers = bool(transcript.speakers)
     for part in line_parts(transcript):
-        joins = with_speakers and groups and not part.new_turn and not ends_sentence(part_text(groups[-1][-1]))
+        joins = groups and not part.new_turn and not ends_sentence(part_text(groups[-1][-1]))
         if joins:
             groups[-1].append(part)
         else:
@@ -140,8 +140,7 @@ def turn_lines(transcript, render, label=lambda name: f"{name}: "):
 
 
 def plain_text(transcript):
-    if not transcript.speakers:
-        return "".join(segment.text + "\n" for segment in transcript.segments if segment.text)
+    """A paragraph per line, lines cut mid-sentence joined; with speakers "Name: " at each turn."""
     return "".join(line + "\n" for line in turn_lines(transcript, lambda part: part.text))
 
 
@@ -240,17 +239,16 @@ def markdown_escape(text):
 def markdown_sections(transcript):
     """Group the lines into [(start seconds, paragraphs)] sections of about a minute each.
     Without speakers a section is one paragraph of text; with speakers a paragraph per turn,
-    as (name or None, text): a section that starts inside a turn repeats no name. With
-    speakers a section does not start in the middle of a sentence (plan 07 G6), unless the
-    section has grown to three minutes."""
+    as (name or None, text): a section that starts inside a turn repeats no name. A section
+    does not start in the middle of a sentence (plan 07 G6), unless it has grown to three
+    minutes."""
     sections = []
     current = []
-    with_speakers = bool(transcript.speakers)
     for part in line_parts(transcript):
         if current:
             length = part.start - current[0].start
             pause = part.start - current[-1].end
-            mid_sentence = (with_speakers and not part.new_turn and not ends_sentence(part_text(current[-1]))
+            mid_sentence = (not part.new_turn and not ends_sentence(part_text(current[-1]))
                             and length < 3 * SECTION_SECONDS)
             due = length >= SECTION_SECONDS or (pause >= SECTION_PAUSE and length >= SECTION_MIN_SECONDS)
             if due and not mid_sentence:

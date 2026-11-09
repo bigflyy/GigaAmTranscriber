@@ -304,7 +304,12 @@ def test_srt_and_timestamps_keep_each_line():
     assert "Решить проблемы." in [text for _, _, text in subtitle_cues(transcript)]
 
 
-def test_without_speakers_lines_stay_apart():
+def test_without_speakers_a_line_cut_mid_sentence_joins_too():
+    # Owner 2026-11-09: "a line cut mid sentence should join in files without speakers too".
     transcript = cut_transcript()
     transcript.speakers = None
-    assert plain_text(transcript) == "Меня зовут Соня. Мы показываем, могут\nРешить проблемы.\nПодкаст выходит.\n"
+    assert plain_text(transcript) == "Меня зовут Соня. Мы показываем, могут Решить проблемы.\nПодкаст выходит.\n"
+    assert llm_text(transcript).endswith("\nМеня зовут Соня. Мы показываем, могут Решить проблемы.\nПодкаст выходит.\n")
+    assert markdown_text(transcript, today=DAY).endswith(
+        "## 00:29\n\nМеня зовут Соня. Мы показываем, могут Решить проблемы. Подкаст выходит.\n")
+    assert timestamped_text(transcript).splitlines()[1] == "[00:54.900 - 00:56.100] Решить проблемы."
