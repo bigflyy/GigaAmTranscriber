@@ -52,7 +52,23 @@ Owner after trying session 19's window: "very cluttered now", "no switch on / of
 segmented", "no way to fix segmentation results", "some buttons are showed one way and some are
 the other way". Design first, the owner chooses, then build.
 
-- [ ] **G1** Inventory of everything under the file name and above the text (status, model, "Найти варианты", speaker line, count, saved-file chips, switches, copy buttons) and how each control looks now (link-style vs button vs chip); screenshot of the current state
+Owner's answers (session 20, 2026-11-09, on https://claude.ai/artifact/DeRDh7s7NayNWyu8M1K2PG):
+- Layout: A (toolbar + menus: name and one fact line; Копировать ▾, Файлы ▾, ⋯; switches Таймкоды /
+  Сомнения / Говорящие; a status line only while a search runs). But: "i do like B tho, and we
+  could make both panels hideable, to fix the small monitor problem ... the percentage of text by
+  speaker is useful i guess. and like being able to assing them a name. the rest is cluttering
+  maybe ... round 2?" So a second round of mock-ups: A with B's speaker list (share of talk, name).
+- Говорящие switch: saved files always carry the names when speakers are known; Копировать
+  copies what is on screen.
+- Fixes: all of them: a paragraph to another or a new speaker, merge two speakers, selected words
+  to another or a new speaker. Owner: when selected words go to the speaker of the next (or
+  previous) paragraph, they join that paragraph ("it should merge them right? into one
+  paragraph?": yes, neighbouring turns of one speaker always join).
+- Session 19's choices kept: lines of a long turn stay paragraphs, a speaker search holds the next
+  file, the after-file run counts by itself. Owner added: when the user picks their own number,
+  show the model's own count as a hint ("the model counted N speakers").
+
+- [x] **G1** Inventory of everything under the file name and above the text (status, model, "Найти варианты", speaker line, count, saved-file chips, switches, copy buttons) and how each control looks now (link-style vs button vs chip); screenshot of the current state. Done (session 20): 11 controls in 5 looks (blue links, big buttons, small buttons, chips, a dropdown); up to 6 lines under the name; head + tools take 40% of a 680 px window; empty status leaves "Искать заново" / "Определить заново" alone on an indented line. Page with the screenshot (window_check 103/103, screen 04k): https://claude.ai/artifact/DeRDh7s7NayNWyu8M1K2PG
 - [ ] **G2** Two or three layout mock-ups side by side (for example a compact toolbar over the text with the switches Таймкоды / Сомнения / Говорящие, one "more" menu for rarer actions, status lines folded into one line; one consistent style for actions), compared with how similar apps do it (Google Recorder, Otter, MacWhisper, Telegram voice transcripts); ask the owner to choose
 - [ ] **G3** A "Говорящие" switch over the text (like Таймкоды / Сомнения): shows or hides the names and paragraphs; saved files follow the shown choice or always carry names (ask the owner)
 - [ ] **G4** Fixing speakers: options to show the owner (click a name -> menu: rename, change this paragraph's speaker to another or a new one, merge with another speaker; select words -> "Другой говорящий"); controller methods that change Word.speaker and Transcript.speakers, history and files follow; tests
