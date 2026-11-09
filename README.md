@@ -34,7 +34,9 @@ and about 25 s on the CPU; see [BENCHMARK.md](BENCHMARK.md).
 Add files with **+ Добавить** or drag them (or a folder) onto the window. They
 are transcribed one at a time, in the order added: the list on the left shows
 which are done, running and waiting, and the right side shows the selected
-file's progress and its text as it is recognised. The text stays where the reader
+file's progress and its text as it is recognised. Adding files shows the first of
+them at once; when the next file starts, the window moves to it only if you have not
+scrolled, clicked or played anything in the file on screen. The text stays where the reader
 is: when new lines arrive below, a **Новый текст** button takes you there, and the
 text keeps following the new lines while you stay at its end (scroll up and it stops).
 **Отмена** stops the running

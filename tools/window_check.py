@@ -389,6 +389,43 @@ def speech_steps(js, shoot):
     check("the default link puts the default back", js("$('vad-pause').value") == "2" and js("$('vad-pause-default').hidden"))
 
 
+def add_steps(js, control, long_audio, short_audio, shoot):
+    """Plan 07 H3: the first added file shows at once (also from Настройки); when the next
+    file starts, the window moves to it only if the reader has not touched the shown file."""
+    folder = Path(tempfile.mkdtemp(prefix="gigaam-added-"))
+    copies = {}
+    for name, source in (("added-short", short_audio), ("added-short2", short_audio),
+                         ("added-long", long_audio), ("added-short3", short_audio)):
+        copies[name] = folder / (name + Path(source).suffix)
+        shutil.copy2(source, copies[name])
+
+    def shown():
+        return js("(fileById(state.selected) || {}).name")
+
+    def finished(*names):
+        states = {item.path.stem: item.state for item in control.files}
+        return all(states.get(name) in ("done", "failed") for name in names)
+
+    js("document.querySelectorAll('#files li')[0].click()")  # reading a file picked by hand
+    reading = shown()
+    js("$('open-settings').click()")
+    control.add_files([str(copies["added-short"]), str(copies["added-short2"])])
+    check("adding shows the first added file at once, also from the settings",
+          wait(lambda: shown() == copies["added-short"].name and js("state.view") == "file", 10,
+               "first added file shown"), f"{reading} -> {shown()}")
+    wait(lambda: finished("added-short", "added-short2"), 120, "two added files recognised")
+    check("untouched, the window follows the queue to the next file",
+          wait(lambda: shown() == copies["added-short2"].name, 10, "next file shown"), shown())
+    control.add_files([str(copies["added-long"]), str(copies["added-short3"])])
+    wait(lambda: shown() == copies["added-long"].name, 10, "long added file shown")
+    js("$('text').dispatchEvent(new PointerEvent('pointerdown', {bubbles: true}))")  # the reader clicks
+    wait(lambda: finished("added-long", "added-short3"), 180, "long and short added files recognised")
+    time.sleep(0.5)
+    check("a file the reader touched stays on screen when the next one starts",
+          shown() == copies["added-long"].name, shown())
+    shoot("02d-added-stays")
+
+
 def open_menu(js, anchor):
     """Open the popup menu of a button (plan 07 G: "...", "Файлы", the copy arrow, a speaker
     chip or name) given as a page expression; returns [[data-item, text]] of its items."""
@@ -905,6 +942,7 @@ def scenario(window, control, long_audio, short_audio, shoot, whisper=False):
         js("$('close-settings').click()")
         wait(lambda: control.engine["state"] == "ready" and "RNNT" in js("$('engine-text').textContent"),
              60, "RNNT after Whisper")
+        add_steps(js, control, long_audio, short_audio, shoot)
 
         # Closing while a file runs, then "Zakryt": the window closes and the file stops.
         for written in Path(long_audio).parent.glob(Path(long_audio).stem + "-transcript*"):
@@ -931,7 +969,7 @@ def second_session(window, control, short_audio, long_audio):
         wait(lambda: js("typeof state !== 'undefined' && state.booted"), 30, "page ready again")
         files = js("state.files.map(f => [f.name, f.state])")
         # The Whisper steps add a third file; it does not change these two.
-        files = [entry for entry in files if not entry[0].startswith("whisper-")]
+        files = [entry for entry in files if not entry[0].startswith(("whisper-", "added-"))]
         check("files come back in the next session",
               files[:2] == [[Path(short_audio).name, "done"], [Path(long_audio).name, "cancelled"]], files)
         check("the newest is selected with its text",

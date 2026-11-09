@@ -24,6 +24,7 @@ const state = {
   options: { models: [], devices: [], formats: [] },
   selected: null,       // id of the file shown on the right
   followRunning: true,  // show the running file when the next one starts
+  touched: false,       // the reader did something with the shown file (plan 07 H3)
   lines: new Map(),     // file id -> [{start, end, text}] already fetched
   view: 'file',         // 'file' or 'settings'
 };
@@ -154,13 +155,30 @@ function updateOneFile(file) {
 }
 
 function onStarted(file) {
-  // A new file started: show it unless the user is reading another file on purpose.
+  // A new file started. Plan 07 H3: show it only while the reader follows the queue and has
+  // not touched the file on screen; a reader busy with a file stays where they are.
   state.lines.set(file.id, []);
   if (file.id === state.selected) stopFollowingText();  // recognised again: from the top
-  if (state.followRunning || !state.selected) select(file.id, false);
+  if (!state.selected || (state.followRunning && !state.touched)) select(file.id, false);
+}
+
+function onAdded(data) {
+  // Plan 07 H3 (owner 2026-11-10): files were added: show the first of them at once, also
+  // when it waits, and follow the queue from there.
+  if (!fileById(data.id)) return;
+  state.followRunning = true;
+  if (state.view === 'settings') setView('file');
+  select(data.id, false);
+}
+
+function touchFile() {
+  // The reader did something with the file on screen (scrolled, clicked, typed, played):
+  // the window no longer moves to the next file by itself.
+  state.touched = true;
 }
 
 function select(id, byUser) {
+  if (state.selected !== id) state.touched = false;
   if (byUser) {
     const file = fileById(id);
     state.followRunning = !!file && file.state === 'running';
@@ -1413,7 +1431,7 @@ function followPlayer() {
   if (!filePlayer.paused) requestAnimationFrame(followPlayer);
 }
 
-filePlayer.addEventListener('play', () => { showPlaying(true); requestAnimationFrame(followPlayer); });
+filePlayer.addEventListener('play', () => { touchFile(); showPlaying(true); requestAnimationFrame(followPlayer); });
 filePlayer.addEventListener('pause', () => showPlaying(false));
 filePlayer.addEventListener('ended', () => { showPlaying(false); markNow(null); });
 filePlayer.addEventListener('timeupdate', () => { if (filePlayer.paused) followPlayer(); });
@@ -1749,6 +1767,7 @@ function apply(message) {
     case 'download': onDownload(data); break;
     case 'error': showError(data.text, data.source); break;
     case 'notice': toast(data.text); break;
+    case 'added': onAdded(data); break;
     case 'confirm_close': askClose(data.text); break;
     case 'lines_reset': state.lines.set(data.id, []); if (state.selected === data.id) drawLines(data.id); break;
     case 'lines_changed': refreshLines(data.id); break;
@@ -1881,6 +1900,10 @@ document.addEventListener('keydown', (event) => {
 });
 $('text').addEventListener('scroll', placeCard);
 $('text').addEventListener('scroll', onTextScroll);
+// Plan 07 H3: anything the reader does in the file view keeps the window on this file.
+for (const kind of ['pointerdown', 'wheel', 'touchmove', 'keydown']) {
+  $('view-file').addEventListener(kind, touchFile, { passive: true, capture: true });
+}
 $('new-text').addEventListener('click', goToNewText);
 for (const id of ['doubt-light', 'doubt-strong']) {
   $(id).addEventListener('change', () => {

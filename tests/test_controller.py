@@ -446,6 +446,18 @@ def test_a_language_from_the_file_outside_the_list_is_still_offered(tmp_path, mo
     assert snapshot["settings"]["language"] == "haw"
 
 
+def test_the_page_is_told_the_first_added_file(app, media):
+    # Plan 07 H3: the window shows the first file of each addition at once, also a waiting one.
+    app.add_files([str(media[0])])
+    assert last(app.sent, "added")["id"] == app.files[0].id
+    app.add_files([str(media[1]), str(media[2])])
+    assert app.files[1].state == "waiting"
+    assert last(app.sent, "added")["id"] == app.files[1].id
+    count = sum(message["kind"] == "added" for message in app.sent)
+    app.add_files([str(media[1])])  # already waiting: nothing added, nothing to show
+    assert sum(message["kind"] == "added" for message in app.sent) == count
+
+
 def test_unknown_device_is_refused(app):
     with pytest.raises(ValueError):
         app.set_settings({"device": "TPU"})

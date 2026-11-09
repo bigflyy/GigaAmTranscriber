@@ -490,6 +490,7 @@ class Controller:
 
         added = 0
         with self.lock:
+            first = len(self.files)
             for path, check in candidates:
                 if not check or sound[path]:
                     added += self._add(path)
@@ -499,6 +500,8 @@ class Controller:
                 self.declined.discard(self.settings.model)
                 self._pump()
                 self._emit_files()
+                # Plan 07 H3: the page shows the first added file at once, also when it waits.
+                self._emit("added", {"id": self.files[first].id})
         return added
 
     def _add(self, path):
