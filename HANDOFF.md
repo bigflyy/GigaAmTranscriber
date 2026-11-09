@@ -40,7 +40,10 @@ Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
   when that one ends without . ? !, its time a small grey mark inside; a turn starting mid-line gets
   its first word's time). Mock-up: round 3 on the artifact page; owner asked for it before the build,
   so G6 waits for the owner's look at it. Round 4 (D and E, name first): owner chose D (name above,
-  time column). G7: "▶ Отсюда" on the selection bar (owner: yes). Then E1.
+  time column), then confirmed D after hearing how B joins. Lines are cut mid-sentence because the
+  VAD caps a line at 25 s and cuts at the longest short pause (a breath) when no 2 s pause comes.
+  Owner: saved txt, md and AI text join such lines too ("yes"); srt and timestamps keep their timing.
+  G7: "▶ Отсюда" on the selection bar (owner: yes). Then E1.
 - Bug (owner): the suggestion card closed whenever the search added an offer (with speakers every
   line event redraws the whole text, and drawLines closes the card). Fixed: onLine reopens the card
   on the same word (reopenCard); window_check step for it; window_check --whisper 118/118.
