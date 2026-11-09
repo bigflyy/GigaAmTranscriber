@@ -26,10 +26,6 @@ models, Stage E speaker diarization) and plan 02 (D1-D3).
 
 ## Window
 
-- 2026-11-09: speech search (VAD) settings in the window: "are vad params not in settings? could they be?" Today 8 keys are only in gigaam-config.json and CLI flags (--vad-threshold ...; README table). Proposed (session 21, waiting for the owner): a folded "Дополнительно" part of Настройки with 2-3 of them in plain words (how long a pause ends a line, how sensitive the speech search is, the longest line, capped at 25 s because GigaAM and Whisper's 30 s window need it), each with "по умолчанию"; the rest stay in the file.
-
-- 2026-11-09: the text should not jump down by itself while a file is recognised: "maybe it shouldnt auto go down when transcribing? what if person is reading the top? wdyt? configurable?" Today (app.js onSegment) the text follows new lines while the reader is at its end, and stops once they scroll up; but before the text fills the window the reader counts as "at the end", so the first overflow pushes the top away. Proposed (session 21, waiting for the owner): no following by itself; a small "Новый текст" button at the bottom when text arrives below; following starts when the reader scrolls to the end or clicks it, and stops when they scroll up. No setting.
-
 - 2026-11-09: side panels that can be hidden, for small screens: "we could make both panels hideable, to fix the small monitor problem". Said about the file list and a speakers panel (mock-up A1); the owner chose a speaker line instead (A2), so for now this is about hiding the file list.
 
 ## Links and summaries
@@ -39,6 +35,9 @@ models, Stage E speaker diarization) and plan 02 (D1-D3).
 - 2026-11-08: fix the doubtful words automatically through an LLM (a local Codex or Claude Code): "summarize and maybe fix it (the unsure words) auto via llm (codex / claude code)". Builds on the "Для ИИ" text, which marks doubtful words as слово[?66%], and on the suggested fixes of plan 06 (the LLM could pick between the models' readings).
 
 ## Started
+
+- 2026-11-09: speech search (VAD) settings in the window: "are vad params not in settings? could they be?" Today 8 keys are only in gigaam-config.json and CLI flags (--vad-threshold ...; README table). Proposed (session 21): a folded "Дополнительно" part of Настройки with 2-3 of them in plain words (how long a pause ends a line, how sensitive the speech search is, the longest line, capped at 25 s because GigaAM and Whisper's 30 s window need it), each with "по умолчанию"; the rest stay in the file. Owner 2026-11-09: "ok", in v0.6.0. Started: docs/plans/07-speaker-labels.md Stage H.
+- 2026-11-09: the text should not jump down by itself while a file is recognised: "maybe it shouldnt auto go down when transcribing? what if person is reading the top? wdyt? configurable?" Today (app.js onSegment) the text follows new lines while the reader is at its end, and stops once they scroll up; but before the text fills the window the reader counts as "at the end", so the first overflow pushes the top away. Proposed (session 21): no following by itself; a small "Новый текст" button at the bottom when text arrives below; following starts when the reader scrolls to the end or clicks it, and stops when they scroll up. No setting. Owner 2026-11-09: "ok", in v0.6.0. Started: docs/plans/07-speaker-labels.md Stage H.
 
 - 2026-11-09: the window is cluttered and inconsistent after speakers: "i feel like the gui is very cluttered now ... you need to organize it somehow and declutter i guess. some buttons are showed one way and some are the other way". Started 2026-11-09 (session 20): docs/plans/07-speaker-labels.md Stage G (owner chose layout A2).
 - 2026-11-09: a switch to show or hide the speakers once a file has them: "there is no switch on / off when we segmented". Started 2026-11-09 (session 20): docs/plans/07-speaker-labels.md Stage G (owner chose layout A2).

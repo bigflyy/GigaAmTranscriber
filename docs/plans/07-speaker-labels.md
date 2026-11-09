@@ -80,6 +80,13 @@ Owner's answers (session 20, 2026-11-09, on https://claude.ai/artifact/DeRDh7s7N
 - [x] **G7** "▶ Отсюда" on the selection bar (owner 2026-11-09: "yes"): plays from the selection's start and keeps going; "▶ Слушать" still plays only the selection; Alt+click stays. Done (session 21): #sel-from; window_check step
 - [x] **G5** Build the chosen layout; window_check updated; screenshots for the owner. Done (session 20): layout A2 built (HANDOFF.md session 20); window_check --whisper 117/117; screens 04-files-menu, 04i-04n in session 20's scratchpad wcheck/shots3
 
+### Stage H: Two window changes for v0.6.0 (owner 2026-11-09, before E)
+
+Owner's ideas (docs/IDEAS.md, Started), both "ok" for v0.6.0 with the proposals below.
+
+- [ ] **H1** No jumping down while a file is recognised ("what if person is reading the top?"): the text never follows new lines by itself; a small "Новый текст" button at the bottom when text arrives below the view; following starts when the reader clicks it or scrolls to the end, and stops when they scroll up. No setting. Today app.js onSegment follows while the reader is "at the end", which is also true before the text fills the window. window_check step
+- [ ] **H2** Speech search (VAD) settings in the window ("are vad params not in settings? could they be?"): a folded "Дополнительно" part at the bottom of Настройки with 2-3 in plain words, each with "по умолчанию": how long a pause ends a line (vad_min_silence_ms, now 2 s), how sensitive the speech search is (vad_threshold, for noisy recordings), the longest line (max_duration / vad_max_speech_s, at most 25 s: GigaAM and Whisper's 30 s window). The other keys stay in gigaam-config.json. Settings save at once like the others; README; window_check step
+
 ### Stage E: Release v0.6.0
 
 - [ ] **E1** Builds (Windows, Linux), smoke tests, release notes, README; publishing waits for the owner's go-ahead

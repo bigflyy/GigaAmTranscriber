@@ -1,6 +1,6 @@
 # Handoff: state and findings
 
-Last updated 2026-11-09 (session 21). Current plan: [docs/plans/07-speaker-labels.md](docs/plans/07-speaker-labels.md) (speakers; B-D and G done, owner liked G6 / G7; next: E1, the v0.6.0 release).
+Last updated 2026-11-09 (session 21). Current plan: [docs/plans/07-speaker-labels.md](docs/plans/07-speaker-labels.md) (speakers; B-D and G done, owner liked G6 / G7; next: Stage H (no jumping down, speech search settings), then E1, the v0.6.0 release).
 Plan 06 finished (suggested fixes, models in their own process, release v0.5.0 published as its
 Stage D). Plan 03 (fix a part):
 A and B2 done; B1 and C left. Plan 05 (player) done (C3 in v0.5.0).
@@ -54,8 +54,13 @@ Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
   dropped inside one window), gain is small; better levers are fewer lines and a shorter window.
 - Owner: the Whisper speed-up waits until after v0.6.0. New idea (IDEAS.md, Window): the text
   should not jump down while a file is recognised; my proposal (no following by itself, a
-  "Новый текст" button, following once the reader scrolls to the end; no setting) waits for
-  the owner's answer. Owner asked whether speakers run on the CPU or the GPU: they follow
+  "Новый текст" button, following once the reader scrolls to the end; no setting): owner "ok",
+  in v0.6.0. Speech search settings in a folded "Дополнительно" part of Настройки (2-3 plain
+  ones): owner "ok", in v0.6.0. Both are plan 07 Stage H (H1, H2), before E1.
+  Speakers CPU vs GPU quality (owner asked): CPU 2 s step AMI DER 20.9 vs GPU 1 s 19.9
+  (about 1 point worse on hard meetings), Russian set the same (0.3% words wrong, all counts
+  right); the CPU at the GPU's 1 s step would be about 2x slower (~7 min per hour, estimated:
+  voice prints are ~90% of the time and scale with the windows); not measured. Owner asked whether speakers run on the CPU or the GPU: they follow
   Settings -> device like recognition (Авто: DirectML when there is a GPU, else the CPU with
   a 2 s step).
 - Tooling: in this shell, heredocs fed to python turned "\\n" and "\\u2026" escapes into the
