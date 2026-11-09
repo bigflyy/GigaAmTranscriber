@@ -39,7 +39,11 @@ Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
   line of a turn as a paragraph). Owner chose B: plan 07 G6 (join a line to the paragraph before it
   when that one ends without . ? !, its time a small grey mark inside; a turn starting mid-line gets
   its first word's time). Mock-up: round 3 on the artifact page; owner asked for it before the build,
-  so G6 waits for the owner's look at it. Then E1.
+  so G6 waits for the owner's look at it. Round 4 (D and E, name first): owner chose D (name above,
+  time column). G7: "▶ Отсюда" on the selection bar (owner: yes). Then E1.
+- Bug (owner): the suggestion card closed whenever the search added an offer (with speakers every
+  line event redraws the whole text, and drawLines closes the card). Fixed: onLine reopens the card
+  on the same word (reopenCard); window_check step for it; window_check --whisper 118/118.
 
 ## Session 19 (2026-11-09): plan 07 B4, C, D done (speakers in the window, files, CLI)
 
