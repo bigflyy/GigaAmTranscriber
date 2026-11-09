@@ -70,15 +70,15 @@ red by confidence instead. **Копировать** copies the text as shown; it
 The **Говорящие** switch above the text finds who speaks when (on a file without
 speakers it asks how many people talk, if known) and then shows or hides the names; the
 saved files always carry them. Each turn starts with the speaker's coloured name on its
-own line; a line the recogniser cut in the middle of a sentence joins the paragraph before
-it (also in the saved txt, md and AI text), and a line of chips under the switches shows
-each speaker's share of the speech. A click on a name renames that speaker, gives the turn to another or a new
+own line, and a line of chips under the switches shows each speaker's share of the
+speech. A click on a name renames that speaker, gives the turn to another or a new
 speaker, or merges two speakers; selected words get **Говорящий** for the same.
 **Настройки** -> **Говорящие** runs the search after every file.
 
 A bar under the text plays the whole file (play / pause, seeking, speed, volume;
-Space plays and pauses) and highlights the word being spoken. **Таймкоды** shows each
-paragraph's time in a column on the left; a click on a time plays from there, Alt+click
+Space plays and pauses) and highlights the word being spoken. A line the recogniser cut in
+the middle of a sentence joins the paragraph before it (also in the saved txt, md and AI
+text). **Таймкоды** shows each paragraph's time in a column on the left; a click on a time plays from there, Alt+click
 from a word. Select words to get **▶ Слушать** (only those words), **▶ Отсюда** (from
 there on),
 **Распознать заново** (that part read again by RNNT, CTC and Whisper, shown side by
@@ -88,7 +88,8 @@ recognised on the GPU, each line with doubtful words is also read by another mod
 (Whisper checks GigaAM, RNNT checks Whisper): where it heard something else, the
 underline turns blue and a click shows the offer with **Взять** and **Оставить как
 есть**. **Настройки** -> **Варианты для сомнительных слов** chooses when to look
-(after GPU files, always, or only with **...** -> **Найти варианты**). The models
+(after GPU files, always, or only with **...** -> **Найти варианты**); **Отменить** in
+the status line stops a search. The models
 run in a separate process, so the window stays responsive while they load.
 
 Settings are saved at once to `gigaam-config.json` beside the app (the command

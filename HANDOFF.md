@@ -1,6 +1,6 @@
 # Handoff: state and findings
 
-Last updated 2026-11-09 (session 21). Current plan: [docs/plans/07-speaker-labels.md](docs/plans/07-speaker-labels.md) (speakers; B-D and G built; next: the owner looks at G6 / G7, then E1, the v0.6.0 release).
+Last updated 2026-11-09 (session 21). Current plan: [docs/plans/07-speaker-labels.md](docs/plans/07-speaker-labels.md) (speakers; B-D and G done, owner liked G6 / G7; next: E1, the v0.6.0 release).
 Plan 06 finished (suggested fixes, models in their own process, release v0.5.0 published as its
 Stage D). Plan 03 (fix a part):
 A and B2 done; B1 and C left. Plan 05 (player) done (C3 in v0.5.0).
@@ -33,6 +33,25 @@ Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
   plays past the selection's end. The run started about when the empty-line skip was added,
   so it may not include that line (the clip has no empty lines). Screens in this session's
   scratchpad wcheck/shots1 (04a, 04k-two-speakers-times).
+- Owner after G6 / G7 (2026-11-09): "yep i like it". Joining also without speakers (owner):
+  outputs.paragraphs joins for every transcript (a new turn still starts a paragraph);
+  app.js appendParagraphs joins always, appendLine joins live lines during recognition,
+  redrawLine redraws an offer's line pieces in place (full redraw only when they do not
+  match). Commit 4b6d7a2.
+- Cancel for the suggestion search (owner: before v0.6.0), commit 0b31ff2:
+  controller.cancel_suggestions (drops the lines not yet read; the line on the worker ends
+  and its offers stay; suggestions_searched stays False; a queued file is taken out),
+  _suggest_view can_cancel, "Останавливаю поиск вариантов..."; task line has #task-suggest and
+  #task-speakers, each with its Отменить. window_check --whisper 124/124 (screen
+  04g2-search-cancel in wcheck/shots2); 543 tests pass. The app.js part of the joining went
+  into the cancel commit (same file).
+- Whisper on the CPU (owner asked why so slow): the build is optimized (Release, CPU variants,
+  as fast as a native build); the model is large and every read pads to a 30 s window.
+  Padding measured on the owner's three files (scratchpad padding.py): 87-91% of lines have a
+  doubtful word (below 0.97), 14-17 s on average; padding 43-53%; packing would need only
+  1.2-1.5x fewer windows. audio_ctx research and the options are in IDEAS.md (Models). Owner
+  asked about packing and context; answered: packed lines share decoder context (cannot be
+  dropped inside one window), gain is small; better levers are fewer lines and a shorter window.
 - Tooling: in this shell, heredocs fed to python turned "\\n" and "\\u2026" escapes into the
   characters; write patch scripts with the Write tool and run "python -I script.py".
 
