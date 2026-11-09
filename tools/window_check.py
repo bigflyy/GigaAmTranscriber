@@ -34,11 +34,18 @@ import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from gigaam_app import catalog, controller as controller_module, window as window_module  # noqa: E402
+from gigaam_app import catalog, controller as controller_module, outputs, window as window_module  # noqa: E402
 from build_windows import link_model_folder  # noqa: E402  (tools/, beside this script)
 
 results = []
 confirmed_close = []   # the controller, once the scenario has confirmed closing
+
+
+def clock_text(seconds):
+    """The page's timecode (app.js clock): 00:09, 12:04, 1:02:03."""
+    hours, rest = divmod(int(seconds), 3600)
+    minutes, secs = divmod(rest, 60)
+    return f"{hours}:{minutes:02d}:{secs:02d}" if hours else f"{minutes:02d}:{secs:02d}"
 
 
 def check(name, ok, detail=""):
@@ -186,7 +193,7 @@ def fix_steps(js, control, item, short_audio, shoot):
     js("document.querySelectorAll('#files li')[1].click()")
     wait(lambda: js("$('text').querySelectorAll('.w').length") > 4, 10, "words of the short file")
     # Select words 1..3 of the first line the way a mouse drag would, then release.
-    js("(() => { const p = $('text').querySelector('p[data-seg=\"0\"]'); const r = document.createRange();"
+    js("(() => { const p = $('text').querySelector('.seg[data-seg=\"0\"]'); const r = document.createRange();"
        " r.setStart(p.querySelector('[data-w=\"1\"]').firstChild, 0);"
        " r.setEnd(p.querySelector('[data-w=\"3\"]').firstChild, 1);"
        " const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);"
@@ -204,6 +211,14 @@ def fix_steps(js, control, item, short_audio, shoot):
     stopped = js("filePlayer.currentTime")
     check("the selection stops at its end", js("filePlayer.paused") and end - 0.05 <= stopped <= end + 0.5,
           f"stopped at {stopped:.2f}, ends at {end:.2f}")
+    # G7: "Otsyuda" plays from the selection's start and goes on past its end.
+    begin = js("wordOf(selection.fileId, selection.first)[0]")
+    js("$('sel-from').click()")
+    wait(lambda: js("!filePlayer.paused && filePlayer.currentTime > " + str(end + 0.6)), 10, "playing on from the selection")
+    check("Otsyuda starts at the selection and keeps going", js("!filePlayer.paused") and js("audio.stopAt") is None
+          and js("filePlayer.currentTime") > end + 0.6,
+          f"at {js('filePlayer.currentTime'):.2f}, selection {begin:.2f}-{end:.2f}")
+    js("filePlayer.pause()")
     current = js("wordsBetween(selection.fileId, selection.first, selection.last).join(' ')")
     js("$('sel-reread').click()")
     wait(lambda: js("$('fix').open"), 5, "fix dialog")
@@ -459,8 +474,9 @@ def speaker_steps(js, control, item, shoot):
     wait(lambda: js("$('text').querySelectorAll('.spk').length") > 0, 10, "speaker labels")
     wait(lambda: js("$('task-line').hidden"), 10, "status line gone")
     labels = js("[...$('text').querySelectorAll('.spk')].map(b => b.textContent)")
-    check("labels start the turns", labels and labels[0] == "Говорящий 1:"
-          and js("$('text').querySelector('p').querySelector('.spk') !== null"), labels[:6])
+    check("labels start the turns", labels and labels[0] == "Говорящий 1"
+          and js("$('text').firstElementChild.matches('.turn-head') && !!$('text').firstElementChild.querySelector('.spk')"),
+          labels[:6])
     colour = js("(() => { const b = $('text').querySelector('.spk'); const probe = document.createElement('span');"
                 " probe.style.color = 'var(--spk-0)'; document.body.appendChild(probe);"
                 " const out = [getComputedStyle(b).color, getComputedStyle(probe).color];"
@@ -480,13 +496,27 @@ def speaker_steps(js, control, item, shoot):
     check("rename dialog has the name", js("$('speaker-name').value") == "Говорящий 1", js("$('speaker-name').value"))
     js("$('speaker-name').value = 'Anna'; $('speaker-save').click()")
     wait(lambda: item.result.speakers[0] == "Anna", 10, "renamed in Python")
-    wait(lambda: js("$('text').querySelector('.spk').textContent") == "Anna:", 10, "renamed on the page")
+    wait(lambda: js("$('text').querySelector('.spk').textContent") == "Anna", 10, "renamed on the page")
     first_labels = js("[...$('text').querySelectorAll('.spk[data-speaker=\"0\"]')].map(b => b.textContent)")
-    check("rename reaches every label of that speaker", first_labels and set(first_labels) == {"Anna:"},
+    check("rename reaches every label of that speaker", first_labels and set(first_labels) == {"Anna"},
           first_labels[:4])
     wait(lambda: js("$('speaker-chips').textContent").startswith("Anna"), 10, "renamed chip")
     check("rename closes the dialog and reaches the chip", not js("$('speaker').open")
           and js("$('speaker-chips').textContent").startswith("Anna"))
+    # G6 join rule, run by the page on lines made up for it (the clip has one line): Sonya, then
+    # Anna inside the same line, her sentence cut into the next line by a breath, then a new one.
+    made = ("[{index: 0, start: 29.9, text: '', words: [[30, 30.5, 'Меня', null, null, 0],"
+            " [30.6, 31, 'Соня.', null, null, 0], [47, 47.5, 'Мы', null, null, 1], [48, 48.6, 'могут', null, null, 1]]},"
+            " {index: 1, start: 54.9, text: '', words: [[55, 55.5, 'Решить', null, null, 1],"
+            " [55.6, 56, 'проблемы.', null, null, 1]]},"
+            " {index: 2, start: 57.9, text: '', words: [[58, 58.5, 'Подкаст', null, null, 1],"
+            " [58.6, 59, 'выходит.', null, null, 1]]}]")
+    shape = js("(() => { const f = document.createDocumentFragment(); appendParagraphs(f, " + made + ", ['Соня', 'Анна']);"
+               " return [...f.children].map(n => n.matches('.turn-head') ? 'name ' + n.textContent"
+               " : n.querySelector('time').textContent + ' ' + n.querySelector('p').textContent); })()")
+    check("a line cut mid-sentence joins the paragraph before it; a turn inside a line has its word's time",
+          shape == ["name Соня", "00:29 Меня Соня.", "name Анна", "00:47 Мы могут Решить проблемы.",
+                    "00:57 Подкаст выходит."], shape)
     # The clip has one voice: give the second half of its first line to a second speaker, as a
     # search would, to see a line drawn in two parts (one time, two labels, every word once).
     with control.lock:
@@ -497,11 +527,25 @@ def speaker_steps(js, control, item, shoot):
     control._write_again(item)
     wait(lambda: js("$('text').querySelectorAll('.spk').length") >= 2, 10, "second speaker drawn")
     labels = js("[...$('text').querySelectorAll('.spk')].map(b => b.textContent)")
-    check("a change of speaker inside a line starts a paragraph", labels[:2] == ["Anna:", "Говорящий 2:"]
-          and js("$('text').querySelectorAll('p[data-seg=\"0\"]').length") == 2
-          and js("$('text').querySelectorAll('p[data-seg=\"0\"] time').length") == 1, labels)
+    # G6 layout D: the name on its own line above the turn, the time in the left column; a turn
+    # that starts inside a line has its first word's time.
+    second_time = clock_text(item.segments[0].words[len(item.segments[0].words) // 2].start)
+    times = js("[...$('text').querySelectorAll('.para time')].map(t => t.textContent)")
+    heads = js("[...$('text').children].filter(n => n.matches('.turn-head')).length")
+    check("a change of speaker inside a line starts a turn with its name above", labels[:2] == ["Anna", "Говорящий 2"]
+          and heads >= 2 and js("$('text').querySelectorAll('.seg[data-seg=\"0\"]').length") == 2
+          and len(times) >= 2 and times[1] == second_time, f"{labels}, times {times[:3]}, expected {second_time}")
     check("every word still shown once with two speakers",
           js("$('text').querySelectorAll('.w').length") == sum(len(s.words) for s in item.segments))
+    check("the page has the saved files' paragraphs", js("$('text').querySelectorAll('.para').length")
+          == len(outputs.paragraphs(item.result)), js("$('text').querySelectorAll('.para').length"))
+    js("$('times').checked || $('times').click()")
+    columns = js("(() => { const rows = $('text').querySelectorAll('.para'); const head = $('text').querySelector('.turn-head .spk');"
+                 " return [...rows].map(r => Math.round(r.querySelector('p').getBoundingClientRect().left))"
+                 ".concat([Math.round(head.getBoundingClientRect().left + 3)]); })()")
+    check("text and names line up in one column next to the times", max(columns) - min(columns) <= 1, columns)
+    shoot("04k-two-speakers-times")
+    js("$('times').click()")
     shoot("04k-two-speakers")
     # G4: the name's menu gives the turn of speaker 2 to a new speaker.
     second_label = "$('text').querySelectorAll('.spk')[1]"
@@ -515,7 +559,7 @@ def speaker_steps(js, control, item, shoot):
     check("the turn goes to a new speaker", [w.speaker for w in item.segments[0].words[half:]] == [2] * (
         len(item.segments[0].words) - half) and item.result.speakers[2] == "Говорящий 3", item.result.speakers)
     wait(lambda: js("[...$('text').querySelectorAll('.spk')].map(b => b.textContent).join('|')").startswith(
-        "Anna:|Говорящий 3:"), 10, "new speaker on the page")
+        "Anna|Говорящий 3"), 10, "new speaker on the page")
     wait(lambda: js("$('speaker-chips').querySelectorAll('.spk-chip').length") == 2, 10, "chips follow")
     # A chip's menu merges the new speaker into Anna.
     choose(js, "$('speaker-chips').querySelectorAll('.spk-chip')[1]", "merge-0")
@@ -525,7 +569,7 @@ def speaker_steps(js, control, item, shoot):
           and "Говорящий 3" not in item.written["txt"].read_text(encoding="utf-8")
           if "txt" in item.written else True)
     # Selected words (the last two of the first line) go to a new speaker from the selection bar.
-    js("(() => { const spans = $('text').querySelectorAll('p[data-seg=\"0\"] .w'); const r = document.createRange();"
+    js("(() => { const spans = $('text').querySelectorAll('.seg[data-seg=\"0\"] .w'); const r = document.createRange();"
        " r.setStart(spans[spans.length - 2].firstChild, 0);"
        " r.setEnd(spans[spans.length - 1].firstChild, 1);"
        " const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);"
@@ -598,7 +642,7 @@ def player_steps(js, control, item, shoot):
     wait(lambda: abs(js("filePlayer.currentTime - filePlayer.duration / 2")) < 0.3, 5, "seek")
     check("seek bar moves the position", abs(js("filePlayer.currentTime - filePlayer.duration / 2")) < 0.3,
           js("[filePlayer.currentTime, filePlayer.duration]"))
-    js("$('text').querySelector('p[data-seg=\"0\"] time').click()")
+    js("$('text').querySelector('.para time').click()")
     wait(lambda: js("!filePlayer.paused"), 10, "timecode plays")
     first = item.segments[0].words[0].start
     check("a timecode plays from its line", js("!filePlayer.paused") and js("filePlayer.currentTime") < first + 1.5,

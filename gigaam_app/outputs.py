@@ -2,8 +2,10 @@
 or text for an LLM (doubtful words marked).
 
 When speakers were looked for (plan 07, Transcript.speakers), every format names them:
-a new paragraph at each change of speaker starts with "Name: ", as in the window; the
-timestamped text names the speaker on every line, subtitles on the first cue of a turn.
+a new paragraph at each change of speaker starts with "Name: "; the timestamped text names
+the speaker on every line, subtitles on the first cue of a turn. With speakers the plain
+text, Markdown and the text for an LLM also join a line cut in the middle of a sentence to
+the paragraph before it, as the window does (plan 07 G6); srt and timestamps keep each line.
 """
 
 from dataclasses import asdict, dataclass
@@ -29,6 +31,9 @@ CUE_BREAK_GAP = 1.0  # a pause this long between words always starts a new cue
 LLM_DOUBT_BELOW = 0.97
 # Punctuation that stays after the mark: "слово[?66%]," rather than "слово,[?66%]".
 TRAILING_PUNCTUATION = re.compile(r"^(.*?)([.,!?;:\u00bb\")\]]*)$", re.S)
+
+# A sentence ends with . ? ! or ..., perhaps inside closing quotes or brackets.
+SENTENCE_END = re.compile(r"[.?!\u2026][\"'\u00bb\u201d)\]]*$")
 
 # Markdown sections: a new "## MM:SS" heading after about a minute of text, or earlier
 # at a long pause once the section has some text.
@@ -94,16 +99,42 @@ def line_parts(transcript):
     return parts
 
 
-def turn_lines(transcript, render, label=lambda name: f"{name}: "):
-    """Text lines with a speaker's name at each new turn, after a blank line (as the window
-    shows it); render(part) gives a part's own text."""
-    lines = []
+def part_text(part):
+    """A part's words as the window shows them (its line's text when it has no words)."""
+    return " ".join(word.text for word in part.words) if part.words else part.text
+
+
+def ends_sentence(text):
+    """True when the text ends a sentence: . ? ! or ... at the end (app.js endsSentence)."""
+    return bool(SENTENCE_END.search(text.strip()))
+
+
+def paragraphs(transcript):
+    """The parts grouped into paragraphs, as the window draws them: [[Part, ...]]. Without
+    speakers a paragraph per line. With speakers (plan 07 G6, owner 2026-11-09) a part joins
+    the paragraph before it when it goes on with the same turn and that paragraph ended
+    without . ? ! (the VAD cuts a line at 25 s at a short breath, often mid-sentence)."""
+    groups = []
+    with_speakers = bool(transcript.speakers)
     for part in line_parts(transcript):
-        text = render(part)
-        if part.new_turn:
+        joins = with_speakers and groups and not part.new_turn and not ends_sentence(part_text(groups[-1][-1]))
+        if joins:
+            groups[-1].append(part)
+        else:
+            groups.append([part])
+    return groups
+
+
+def turn_lines(transcript, render, label=lambda name: f"{name}: "):
+    """Text lines, one per paragraph, with a speaker's name at each new turn after a blank
+    line; render(part) gives a part's own text."""
+    lines = []
+    for group in paragraphs(transcript):
+        text = " ".join(render(part) for part in group)
+        if group[0].new_turn:
             if lines:
                 lines.append("")
-            text = label(speaker_name(transcript, part.speaker)) + text
+            text = label(speaker_name(transcript, group[0].speaker)) + text
         lines.append(text)
     return lines
 
@@ -209,14 +240,20 @@ def markdown_escape(text):
 def markdown_sections(transcript):
     """Group the lines into [(start seconds, paragraphs)] sections of about a minute each.
     Without speakers a section is one paragraph of text; with speakers a paragraph per turn,
-    as (name or None, text): a section that starts inside a turn repeats no name."""
+    as (name or None, text): a section that starts inside a turn repeats no name. With
+    speakers a section does not start in the middle of a sentence (plan 07 G6), unless the
+    section has grown to three minutes."""
     sections = []
     current = []
+    with_speakers = bool(transcript.speakers)
     for part in line_parts(transcript):
         if current:
             length = part.start - current[0].start
             pause = part.start - current[-1].end
-            if length >= SECTION_SECONDS or (pause >= SECTION_PAUSE and length >= SECTION_MIN_SECONDS):
+            mid_sentence = (with_speakers and not part.new_turn and not ends_sentence(part_text(current[-1]))
+                            and length < 3 * SECTION_SECONDS)
+            due = length >= SECTION_SECONDS or (pause >= SECTION_PAUSE and length >= SECTION_MIN_SECONDS)
+            if due and not mid_sentence:
                 sections.append(current)
                 current = []
         current.append(part)
@@ -224,14 +261,14 @@ def markdown_sections(transcript):
         sections.append(current)
     result = []
     for section in sections:
-        paragraphs = []
+        blocks = []
         for part in section:
-            if part.new_turn or not paragraphs:
+            if part.new_turn or not blocks:
                 name = speaker_name(transcript, part.speaker) if part.new_turn else None
-                paragraphs.append((name, [part.text]))
+                blocks.append((name, [part.text]))
             else:
-                paragraphs[-1][1].append(part.text)
-        result.append((section[0].start, [(name, " ".join(texts)) for name, texts in paragraphs]))
+                blocks[-1][1].append(part.text)
+        result.append((section[0].start, [(name, " ".join(texts)) for name, texts in blocks]))
     return result
 
 

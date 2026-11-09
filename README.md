@@ -69,15 +69,18 @@ red by confidence instead. **Копировать** copies the text as shown; it
 
 The **Говорящие** switch above the text finds who speaks when (on a file without
 speakers it asks how many people talk, if known) and then shows or hides the names; the
-saved files always carry them. A new paragraph starts at each change of speaker with a
-coloured name, and a line of chips under the switches shows each speaker's share of the
-speech. A click on a name renames that speaker, gives the turn to another or a new
+saved files always carry them. Each turn starts with the speaker's coloured name on its
+own line; a line the recogniser cut in the middle of a sentence joins the paragraph before
+it (also in the saved txt, md and AI text), and a line of chips under the switches shows
+each speaker's share of the speech. A click on a name renames that speaker, gives the turn to another or a new
 speaker, or merges two speakers; selected words get **Говорящий** for the same.
 **Настройки** -> **Говорящие** runs the search after every file.
 
 A bar under the text plays the whole file (play / pause, seeking, speed, volume;
-Space plays and pauses) and highlights the word being spoken; a click on a line's
-time plays from there, Alt+click from a word. Select words to get **▶ Слушать**,
+Space plays and pauses) and highlights the word being spoken. **Таймкоды** shows each
+paragraph's time in a column on the left; a click on a time plays from there, Alt+click
+from a word. Select words to get **▶ Слушать** (only those words), **▶ Отсюда** (from
+there on),
 **Распознать заново** (that part read again by RNNT, CTC and Whisper, shown side by
 side; **Термины** gives Whisper names and terms as a hint) and **Исправить...** (type
 the text by hand); the saved files are written again at once. After a file is

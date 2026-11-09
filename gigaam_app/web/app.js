@@ -388,8 +388,10 @@ function drawLines(id) {
   const names = speakerNames(id);
   const withSpeakers = names.length > 0 && speakersShown(fileById(id));
   state.drawn = { id, speakers: withSpeakers };
-  if (withSpeakers) appendTurns(fragment, lines, names);
-  else for (const line of lines) fragment.appendChild(lineNode(line));
+  // The time column is as wide as the longest timecode (1:02:03 in files of an hour or more).
+  const longest = lines.length ? lines[lines.length - 1].start : 0;
+  text.style.setProperty('--time-col', longest >= 3600 ? '5.2em' : '3.6em');
+  appendParagraphs(fragment, lines, withSpeakers ? names : null);
   closeCard();
   text.appendChild(fragment);
   markOffers();
@@ -440,33 +442,65 @@ function markAllWords() {
   for (const span of $('text').querySelectorAll('.w[data-c]')) markWord(span);
 }
 
-function lineNode(line, from, to, speaker, names) {
-  // Each word is its own span (data-w = its index in the line, the line's data-seg = its index
-  // in the file), so a selection maps back to word times (plan 03).
-  // With speakers (plan 07) a line may be drawn in parts, words from..to-1: only the first
-  // part has the time, and a part where the speaker changes starts with the speaker's name.
-  const p = el('p');
-  p.dataset.seg = line.index;
-  const words = line.words || [];
-  from = from || 0;
-  if (to === undefined) to = words.length;
-  if (!from) {
-    const time = el('time', 'playable', clock(line.start));
-    time.dateTime = `PT${line.start.toFixed(1)}S`;
-    time.title = 'Прослушать эту строку';
-    p.appendChild(time);
+// Layout D (plan 07 G6, owner 2026-11-09): each paragraph is a row (.para) with its time in a
+// left column (shown with Таймкоды) and its text in one aligned column. With speakers the name
+// stands on its own line (.turn-head) above the turn, and a line cut in the middle of a
+// sentence joins the paragraph before it (the VAD cuts a line at 25 s, at a short breath).
+// Each word is its own span (data-w = its index in the line) inside the span of its line
+// (.seg, data-seg = the line's index in the file), so a selection maps back to word times.
+
+function linePieces(lines, withSpeakers) {
+  // The lines as pieces {line, from, to (words from..to-1), speaker}: one piece per line, or
+  // with speakers cut where the speaker of the words changes; speaker is the new speaker where
+  // a turn starts, else null. A word without a speaker (typed by hand where there was no
+  // neighbour) stays with the speaker before it.
+  const pieces = [];
+  let current = null;
+  for (const line of lines) {
+    const words = line.words || [];
+    let from = 0;
+    let label = null;
+    for (let index = 0; withSpeakers && index < words.length; index += 1) {
+      const speaker = words[index][5];
+      if (speaker === null || speaker === undefined || speaker === current) continue;
+      if (index > from) pieces.push({ line, from, to: index, speaker: label });
+      from = index;
+      label = speaker;
+      current = speaker;
+    }
+    pieces.push({ line, from, to: words.length, speaker: label });
   }
-  if (speaker !== null && speaker !== undefined) {
-    p.classList.add('turn-start');
-    p.appendChild(speakerLabel(speaker, names));
-  }
+  return pieces;
+}
+
+function pieceText(piece) {
+  const words = piece.line.words || [];
+  return words.length ? words.slice(piece.from, piece.to).map((word) => word[2]).join(' ') : piece.line.text;
+}
+
+function pieceStart(piece) {
+  // A piece from the start of its line has the line's time; a turn that starts inside a line
+  // has the time of its first word.
+  const words = piece.line.words || [];
+  return piece.from && words[piece.from] ? words[piece.from][0] : piece.line.start;
+}
+
+function endsSentence(text) {
+  // . ? ! or ... at the end, perhaps inside closing quotes or brackets (outputs.ends_sentence).
+  return /[.?!\u2026]["'\u00bb\u201d)\]]*$/.test(String(text || '').trim());
+}
+
+function segNode(piece) {
+  const seg = el('span', 'seg');
+  seg.dataset.seg = piece.line.index;
+  const words = piece.line.words || [];
   if (!words.length) {
-    p.appendChild(document.createTextNode(line.text));
-    return p;
+    seg.textContent = piece.line.text;
+    return seg;
   }
-  for (let index = from; index < to; index += 1) {
+  for (let index = piece.from; index < piece.to; index += 1) {
     const word = words[index];
-    if (index > from) p.appendChild(document.createTextNode(' '));
+    if (index > piece.from) seg.appendChild(document.createTextNode(' '));
     const span = el('span', 'w', word[2]);
     span.dataset.w = index;
     const confidence = word[3];
@@ -474,9 +508,53 @@ function lineNode(line, from, to, speaker, names) {
       span.dataset.c = confidence;
       markWord(span);
     }
-    p.appendChild(span);
+    seg.appendChild(span);
   }
-  return p;
+  return seg;
+}
+
+function paragraphNode(piece) {
+  // A row: the time (a click plays from it and keeps going), then the text.
+  const row = el('div', 'para');
+  const start = pieceStart(piece);
+  const time = el('time', 'playable', clock(start));
+  time.dateTime = `PT${start.toFixed(1)}S`;
+  time.dataset.seg = piece.line.index;
+  time.dataset.w = piece.from;
+  time.title = 'Слушать отсюда';
+  const body = el('p');
+  row.append(time, body);
+  return { row, body };
+}
+
+function turnHead(speaker, names) {
+  const head = el('div', 'turn-head');
+  head.appendChild(speakerLabel(speaker, names));
+  return head;
+}
+
+function appendParagraphs(fragment, lines, names) {
+  // names: the speaker names when they are shown, else null (one paragraph per line).
+  let paragraph = null;  // {row, body, last: the text of its last piece}
+  for (const piece of linePieces(lines, !!names)) {
+    if (names && !pieceText(piece)) continue;  // an empty line (outputs.line_parts skips it too)
+    if (piece.speaker !== null) fragment.appendChild(turnHead(piece.speaker, names));
+    const joins = names && piece.speaker === null && paragraph && !endsSentence(paragraph.last);
+    if (joins) paragraph.body.appendChild(document.createTextNode(' '));
+    else {
+      paragraph = paragraphNode(piece);
+      fragment.appendChild(paragraph.row);
+    }
+    paragraph.body.appendChild(segNode(piece));
+    paragraph.last = pieceText(piece);
+  }
+}
+
+function lineNode(line) {
+  // One line as its own paragraph (no speakers: text arriving while a file is recognised).
+  const paragraph = paragraphNode({ line, from: 0, to: (line.words || []).length, speaker: null });
+  paragraph.body.appendChild(segNode({ line, from: 0, to: (line.words || []).length, speaker: null }));
+  return paragraph.row;
 }
 
 // ------------------------------------------------------------------ speaker labels (plan 07)
@@ -489,7 +567,7 @@ function speakerNames(id) {
 }
 
 function speakerLabel(speaker, names) {
-  const label = el('button', 'spk', `${(names || [])[speaker] || `Говорящий ${speaker + 1}`}:`);
+  const label = el('button', 'spk', (names || [])[speaker] || `Говорящий ${speaker + 1}`);
   label.type = 'button';
   label.dataset.speaker = speaker;
   label.title = 'Переименовать, отдать реплику другому, объединить';
@@ -498,32 +576,12 @@ function speakerLabel(speaker, names) {
   return label;
 }
 
-function appendTurns(fragment, lines, names) {
-  // A new paragraph at each change of speaker; a word without a speaker (typed by hand where
-  // there was no neighbour) stays with the speaker before it.
-  let current = null;
-  for (const line of lines) {
-    const words = line.words || [];
-    let from = 0;
-    let label = null;
-    for (let index = 0; index < words.length; index += 1) {
-      const speaker = words[index][5];
-      if (speaker === null || speaker === undefined || speaker === current) continue;
-      if (index > from) fragment.appendChild(lineNode(line, from, index, label, names));
-      from = index;
-      label = speaker;
-      current = speaker;
-    }
-    fragment.appendChild(lineNode(line, from, words.length, label, names));
-  }
-}
-
 function relabelSpeakers(id) {
   // The names changed (a rename): write them into the labels already drawn.
   const names = speakerNames(id);
   for (const label of $('text').querySelectorAll('.spk')) {
     const speaker = Number(label.dataset.speaker);
-    label.textContent = `${names[speaker] || `Говорящий ${speaker + 1}`}:`;
+    label.textContent = names[speaker] || `Говорящий ${speaker + 1}`;
   }
 }
 
@@ -619,13 +677,15 @@ function nextTurn(speaker) {
 }
 
 function turnRange(fileId, label) {
-  // The words of the turn that starts at this name: until another speaker's word.
-  const paragraph = label.parentNode;
-  const firstWord = paragraph.querySelector('.w');
+  // The words of the turn that starts at this name (its line above the turn's first
+  // paragraph): until another speaker's word.
+  const head = label.closest('.turn-head');
+  const paragraph = head && head.nextElementSibling;
+  const firstWord = paragraph && paragraph.querySelector('.w');
   if (!firstWord) return null;
   const speaker = Number(label.dataset.speaker);
   const lines = state.lines.get(fileId) || [];
-  const first = [Number(paragraph.dataset.seg), Number(firstWord.dataset.w)];
+  const first = spanPosition(firstWord);
   let last = first;
   for (let index = first[0]; index < lines.length; index += 1) {
     const words = lines[index].words || [];
@@ -758,7 +818,12 @@ function onSegment(data) {
   if (placeholder) placeholder.remove();
   // Follow new text only while the reader is at the end.
   const atEnd = text.scrollHeight - text.scrollTop - text.clientHeight < 40;
-  text.appendChild(lineNode(data));
+  if (state.drawn && state.drawn.id === data.id && state.drawn.speakers) {
+    // Turns may join this line to the paragraph before: draw the text again.
+    const top = text.scrollTop;
+    drawLines(data.id);
+    text.scrollTop = top;
+  } else text.appendChild(lineNode(data));
   if (atEnd) text.scrollTop = text.scrollHeight;
 }
 
@@ -972,7 +1037,8 @@ function onLine(data) {
     drawLines(data.id);
     $('text').scrollTop = top;
   } else {
-    const old = $('text').querySelector(`p[data-seg="${data.index}"]`);
+    const seg = $('text').querySelector(`.seg[data-seg="${data.index}"]`);
+    const old = seg && seg.closest('.para');
     if (!old) return;
     if (card && old.contains(card.span)) closeCard();
     old.replaceWith(lineNode(data));
@@ -984,7 +1050,7 @@ function onLine(data) {
 
 function reopenCard(position) {
   // The card again on the word at [line, word], if that word still has offers.
-  const span = $('text').querySelector(`p[data-seg="${position[0]}"] .w[data-w="${position[1]}"]`);
+  const span = $('text').querySelector(`.seg[data-seg="${position[0]}"] .w[data-w="${position[1]}"]`);
   if (span && offersAt(span).length) openCard(span);
 }
 
@@ -1117,13 +1183,15 @@ async function playPart(fileId, first, last, button) {
 
 player.addEventListener('ended', stopPlaying);
 
-function playLine(index) {
-  // A timecode plays from its line and keeps going (plan 05 B2).
+function playLine(index, word) {
+  // A timecode plays from its paragraph's first word and keeps going (plan 05 B2); a turn
+  // that starts inside a line starts at its word.
   const file = fixableFile();
   const lines = file ? state.lines.get(file.id) || [] : [];
   const line = lines[index];
   if (!line) return;
-  const first = line.words && line.words.length ? line.words[0][0] : line.start;
+  const words = line.words || [];
+  const first = words.length ? (words[word || 0] || words[0])[0] : line.start;
   playFrom(first);
 }
 
@@ -1282,7 +1350,7 @@ function followPlayer() {
   showTime(now, filePlayer.duration || (playerFile() || {}).duration || 0);
   const word = wordAt(now);
   const span = word && word[1] + 1.0 >= now
-    ? $('text').querySelector(`p[data-seg="${word[2]}"] .w[data-w="${word[3]}"]`) : null;
+    ? $('text').querySelector(`.seg[data-seg="${word[2]}"] .w[data-w="${word[3]}"]`) : null;
   markNow(span);
   if (!filePlayer.paused) requestAnimationFrame(followPlayer);
 }
@@ -1761,7 +1829,7 @@ $('text').addEventListener('click', (event) => {
   const label = event.target.closest('.spk');
   if (label) { if (state.selected) openMenu(label, turnItems(state.selected, label)); return; }
   const time = event.target.closest('time.playable');
-  if (time && fixableFile()) playLine(Number(time.parentNode.dataset.seg));
+  if (time && fixableFile()) playLine(Number(time.dataset.seg), Number(time.dataset.w));
   else if (event.altKey) {
     // Alt+click on a word plays from that word.
     const word = event.target.closest('.w');
@@ -1781,6 +1849,11 @@ $('sel-bar').addEventListener('mousedown', (event) => event.preventDefault());
 $('sel-play').addEventListener('click', () => {
   if (!selection) return;
   playFrom(wordOf(selection.fileId, selection.first)[0], wordOf(selection.fileId, selection.last)[1]);
+});
+// "Отсюда" (plan 07 G7, owner 2026-11-09): from the selection's first word on, without a stop.
+$('sel-from').addEventListener('click', () => {
+  if (!selection) return;
+  playFrom(wordOf(selection.fileId, selection.first)[0]);
 });
 $('sel-reread').addEventListener('click', () => openFix(true));
 $('sel-edit').addEventListener('click', () => openFix(false));

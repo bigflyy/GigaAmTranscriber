@@ -291,8 +291,13 @@ button.small { height: 26px; padding: 0 10px; font-size: 12px; border-radius: 7p
 .switch input:focus-visible + .track { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .text { flex: 1; overflow-y: auto; padding: 4px 28px 24px; line-height: 1.6; min-height: 0; user-select: text; }
+/* Layout D (plan 07 G6): a paragraph is a row with its time in a left column (shown with
+   Таймкоды) and its text in one aligned column; with speakers the name has its own line. */
 .text p { margin: 0 0 12px; overflow-wrap: anywhere; }
-.text time { color: var(--faint); font-size: 13px; font-variant-numeric: tabular-nums; margin-right: 10px; user-select: none; }
+.text .para { margin: 0 0 12px; }
+.text .para p { margin: 0; min-width: 0; }
+.text.with-times .para { display: grid; grid-template-columns: var(--time-col, 3.6em) minmax(0, 1fr); column-gap: 10px; align-items: baseline; }
+.text time { color: var(--faint); font-size: 13px; font-variant-numeric: tabular-nums; user-select: none; white-space: nowrap; }
 .text:not(.with-times) time { display: none; }
 .text .placeholder { color: var(--muted); }
 
@@ -326,13 +331,15 @@ button.small { height: 26px; padding: 0 10px; font-size: 12px; border-radius: 7p
 .text.doubts-underline .w.sg.d2 { text-decoration-style: wavy; text-decoration-thickness: 1.5px; }
 .text .w.sg.open { background: var(--accent-soft); border-radius: 3px; }
 
-/* Speaker labels (plan 07): a change of speaker starts a new paragraph (turn-start) with the
-   speaker's name in their colour (--spk, set per label); a line split by a change keeps its
-   time only on its first part. Lines of one long turn stay paragraphs of their own. */
-.text p.turn-start:not(:first-child) { margin-top: 20px; }
+/* Speaker labels (plan 07): a change of speaker starts a turn: the speaker's name in their
+   colour (--spk, set per label) on its own line (.turn-head), over the text column. A turn
+   keeps a paragraph per sentence-ending line; a line cut mid-sentence joins the one before. */
+.text .turn-head { margin: 0 0 2px; line-height: 1.4; }
+.text .turn-head:not(:first-child) { margin-top: 20px; }
+.text.with-times .turn-head { padding-left: calc(var(--time-col, 3.6em) + 10px); }
 .text .spk {
-  font: inherit; font-weight: 600; color: var(--spk); background: none; border: none; padding: 0 2px 0 0;
-  margin-right: 4px; cursor: pointer; user-select: none; border-radius: 3px;
+  font: inherit; font-weight: 600; color: var(--spk); background: none; border: none; padding: 0 3px;
+  margin-left: -3px; cursor: pointer; user-select: none; border-radius: 3px;
 }
 .text .spk:hover { text-decoration: underline; }
 .text .spk:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }

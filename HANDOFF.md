@@ -1,12 +1,40 @@
 # Handoff: state and findings
 
-Last updated 2026-11-09 (session 20). Current plan: [docs/plans/07-speaker-labels.md](docs/plans/07-speaker-labels.md) (speakers; B-D and G built; next: the owner tries the new window, then E1, the v0.6.0 release).
+Last updated 2026-11-09 (session 21). Current plan: [docs/plans/07-speaker-labels.md](docs/plans/07-speaker-labels.md) (speakers; B-D and G built; next: the owner looks at G6 / G7, then E1, the v0.6.0 release).
 Plan 06 finished (suggested fixes, models in their own process, release v0.5.0 published as its
 Stage D). Plan 03 (fix a part):
 A and B2 done; B1 and C left. Plan 05 (player) done (C3 in v0.5.0).
 Plan 04 (Whisper) done: v0.4.0. Plan 02 (window) has D for later; plan 01 still
 holds B9, F (Parakeet, Qwen3-ASR, F5 for suggestions) (its E moved to plan 07).
 Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
+
+## Session 21 (2026-11-09): plan 07 G6 (layout D) and G7 (play from here)
+
+- G6 window (app.js): drawLines -> appendParagraphs. Each paragraph is a row div.para: a
+  time (time.playable, data-seg / data-w of its first word; a click plays from that word) in
+  a left column (CSS grid, --time-col 3.6em, 5.2em past an hour; only with Таймкоды) and a
+  p with the text. Words sit in span.seg[data-seg] (one per line or line piece), so
+  span.parentNode.dataset.seg still maps a word; every "p[data-seg]" selector became
+  ".seg[data-seg]". With speakers the name is a div.turn-head line (no colon) above the turn,
+  lined up with the text; a piece joins the paragraph before when that one does not end with
+  . ? ! ... (endsSentence, closing quotes / brackets allowed); a turn starting inside a line
+  shows its first word's time; empty lines are skipped. Without speakers: the same rows, a
+  paragraph per line, no joining (my choice; asked the owner). turnRange finds the turn's
+  first word in the row after the name. onSegment redraws when turns are shown.
+- G6 files (outputs.py): ends_sentence, part_text, paragraphs(); turn_lines writes a line per
+  paragraph, so txt and the AI text join; md starts no section in the middle of a sentence
+  (unless the section reached 3 min). srt, timestamps, json unchanged. Without speakers no
+  change. 7 new tests (541 pass, 2 skipped).
+- G7: #sel-from "▶ Отсюда" on the selection bar plays from the selection's first word on
+  (playFrom without stopAt). README updated (name line, joining, time column, Отсюда).
+- window_check --whisper 122/122: names without colon, layout D checks (name rows, the turn
+  inside a line has its word's time, page paragraphs = outputs.paragraphs, text and names in
+  one column), the join rule run by the page on made-up lines (the clip has one line), Отсюда
+  plays past the selection's end. The run started about when the empty-line skip was added,
+  so it may not include that line (the clip has no empty lines). Screens in this session's
+  scratchpad wcheck/shots1 (04a, 04k-two-speakers-times).
+- Tooling: in this shell, heredocs fed to python turned "\\n" and "\\u2026" escapes into the
+  characters; write patch scripts with the Write tool and run "python -I script.py".
 
 ## Session 20 (2026-11-09): plan 07 Stage G, the tidy window, speakers switch and fixes
 

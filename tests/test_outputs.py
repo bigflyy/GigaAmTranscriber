@@ -7,7 +7,7 @@ import pytest
 
 from gigaam_app.asr import Word
 from gigaam_app.engine import Segment, Transcript
-from gigaam_app.outputs import clock, json_text, llm_text, markdown_escape, markdown_text, output_paths, plain_text, \
+from gigaam_app.outputs import clock, ends_sentence, json_text, llm_text, markdown_escape, markdown_text, output_paths, plain_text, \
     srt_text, subtitle_cues, timestamped_text, write_outputs
 
 
@@ -253,3 +253,58 @@ def test_without_speakers_nothing_changes():
     transcript.speakers = None
     assert plain_text(transcript) == "Привет. Как дела? Хорошо.\nА у тебя?\nТоже.\n"
     assert "Анна" not in markdown_text(transcript, today=DAY) + srt_text(transcript) + llm_text(transcript)
+
+
+# ------------------------------------------------- lines cut mid-sentence (plan 07 G6)
+
+def cut_transcript():
+    """Sonya speaks, then Anna's turn starts inside the same line; her sentence is cut into
+    the next line by a breath (owner's example, 2026-11-09), then a line after a full stop."""
+    first = [Word(30.0, 30.5, "Меня", speaker=0), Word(30.6, 31.0, "зовут", speaker=0),
+             Word(31.1, 31.5, "Соня.", speaker=0), Word(47.0, 47.5, "Мы", speaker=1),
+             Word(47.6, 48.0, "показываем,", speaker=1), Word(48.1, 48.6, "могут", speaker=1)]
+    second = [Word(55.0, 55.5, "Решить", speaker=1), Word(55.6, 56.0, "проблемы.", speaker=1)]
+    third = [Word(58.0, 58.5, "Подкаст", speaker=1), Word(58.6, 59.0, "выходит.", speaker=1)]
+    return Transcript(source="talk.mp3", model="RNNT", device="CPU", audio_seconds=60.0,
+                      speakers=["Соня", "Анна"], segments=[
+                          Segment(29.9, 48.7, "Меня зовут Соня. Мы показываем, могут", first),
+                          Segment(54.9, 56.1, "Решить проблемы.", second),
+                          Segment(57.9, 59.1, "Подкаст выходит.", third)])
+
+
+@pytest.mark.parametrize("text, expected", [
+    ("могут", False), ("проблем.", True), ("Да?", True), ("Ура!", True), ("ну...", True),
+    ("«Да!»", True), ("(так.)", True), ("слово,", False), ("  конец.  ", True), ("", False),
+])
+def test_ends_sentence(text, expected):
+    assert ends_sentence(text) is expected
+
+
+def test_plain_text_joins_a_line_cut_mid_sentence():
+    assert plain_text(cut_transcript()) == ("Соня: Меня зовут Соня.\n\n"
+                                            "Анна: Мы показываем, могут Решить проблемы.\nПодкаст выходит.\n")
+
+
+def test_llm_text_joins_a_line_cut_mid_sentence():
+    assert llm_text(cut_transcript()).endswith(
+        "Соня: Меня зовут Соня.\n\nАнна: Мы показываем, могут Решить проблемы.\nПодкаст выходит.\n")
+
+
+def test_markdown_starts_no_section_in_the_middle_of_a_sentence():
+    # Anna's turn after a 15 s pause starts a section (Sonya's sentence ended); the 6 s pause
+    # before "Решить" would start one too, but there the sentence goes on.
+    text = markdown_text(cut_transcript(), today=DAY)
+    assert text.endswith("## 00:29\n\n**Соня:** Меня зовут Соня.\n\n## 00:47\n\n"
+                         "**Анна:** Мы показываем, могут Решить проблемы. Подкаст выходит.\n")
+
+
+def test_srt_and_timestamps_keep_each_line():
+    transcript = cut_transcript()
+    assert timestamped_text(transcript).splitlines()[2] == "[00:54.900 - 00:56.100] Анна: Решить проблемы."
+    assert "Решить проблемы." in [text for _, _, text in subtitle_cues(transcript)]
+
+
+def test_without_speakers_lines_stay_apart():
+    transcript = cut_transcript()
+    transcript.speakers = None
+    assert plain_text(transcript) == "Меня зовут Соня. Мы показываем, могут\nРешить проблемы.\nПодкаст выходит.\n"
