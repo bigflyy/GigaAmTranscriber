@@ -963,19 +963,29 @@ function onLine(data) {
   if (!lines || !lines[data.index]) return;
   lines[data.index] = data;
   if (state.selected !== data.id) return;
+  // An open card stays open while the search adds offers elsewhere (owner, 2026-11-09: it
+  // closed at every new offer): it is opened again on the same word after the redraw.
+  const cardAt = card && card.fileId === data.id ? spanPosition(card.span) : null;
   if (speakerNames(data.id).length) {
     // A line may be drawn in several parts (speaker turns): draw the whole text again in place.
     const top = $('text').scrollTop;
     drawLines(data.id);
     $('text').scrollTop = top;
-    return;
+  } else {
+    const old = $('text').querySelector(`p[data-seg="${data.index}"]`);
+    if (!old) return;
+    if (card && old.contains(card.span)) closeCard();
+    old.replaceWith(lineNode(data));
+    wordTimes = null;
+    markOffers();
   }
-  const old = $('text').querySelector(`p[data-seg="${data.index}"]`);
-  if (!old) return;
-  if (card && old.contains(card.span)) closeCard();
-  old.replaceWith(lineNode(data));
-  wordTimes = null;
-  markOffers();
+  if (cardAt && !card) reopenCard(cardAt);
+}
+
+function reopenCard(position) {
+  // The card again on the word at [line, word], if that word still has offers.
+  const span = $('text').querySelector(`p[data-seg="${position[0]}"] .w[data-w="${position[1]}"]`);
+  if (span && offersAt(span).length) openCard(span);
 }
 
 function openCard(span) {

@@ -363,6 +363,12 @@ def suggest_steps(js, control, item, shoot):
     rows = js("[...$('sg-list').querySelectorAll('.sg-item')].map(li => li.textContent)")
     check("card lists the offers", len(rows) >= 1 and all("Взять" in row for row in rows), rows)
     shoot("04g-suggestion-card")
+    # The search may add an offer while the card is open: the line is drawn again, and the card
+    # must stay open on its word (owner 2026-11-09: it closed at every new offer).
+    line = js("spanPosition(card.span)[0]")
+    control._emit("line", {"id": item.id, **control._segment_view(line, item.segments[line])})
+    time.sleep(0.5)
+    check("the card stays open when its line is drawn again", not js("$('sg-card').hidden") and js("!!card"))
     js("document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape'}))")
     check("Esc closes the card", js("$('sg-card').hidden"))
     js("$('text').querySelector('.w.sg').dispatchEvent(new MouseEvent('click', {bubbles: true}))")
