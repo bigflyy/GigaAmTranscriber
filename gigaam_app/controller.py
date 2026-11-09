@@ -841,22 +841,25 @@ class Controller:
 
     def _suggest_view(self, item):
         """The line about suggested fixes under a finished file, and whether the
-        "Найти варианты" button is offered: {"text", "can_find", "busy", "searched"}."""
+        "Найти варианты" button is offered: {"text", "can_find", "busy", "can_cancel", "searched"}."""
         searched = item.result is not None and item.result.suggestions_searched
         if item.state not in (DONE, CANCELLED) or item.result is None or not item.segments:
-            return {"text": "", "can_find": False, "busy": False, "searched": False}
+            return {"text": "", "can_find": False, "busy": False, "can_cancel": False, "searched": False}
         words = [word for segment in item.segments for word in segment.words]
         doubtful = any(word.confidence is not None and word.confidence < self.settings.doubt_light for word in words)
         can_find = bool(self._suggest_models(item))
         search = self.suggesting
         if search is not None and search["id"] == item.id:
+            if search.get("cancelled"):
+                return {"text": "Останавливаю поиск вариантов...", "can_find": False, "busy": True,
+                        "can_cancel": False, "searched": searched}
             text = f"Ищу варианты для сомнительных слов: {search['done']} из {search['total']}"
             if search.get("loading"):
                 text += f" (загрузка {search['loading']}...)"
-            return {"text": text, "can_find": False, "busy": True, "searched": searched}
+            return {"text": text, "can_find": False, "busy": True, "can_cancel": True, "searched": searched}
         if item.id in self.suggest_queue:
             return {"text": "Варианты для сомнительных слов: в очереди", "can_find": False, "busy": True,
-                    "searched": searched}
+                    "can_cancel": True, "searched": searched}
         places = sum(1 for word in words if word.suggestions)
         if places:
             text = f"Другие модели предлагают варианты: {places} {places_word(places)}"
@@ -868,7 +871,7 @@ class Controller:
             text = "На процессоре варианты ищутся долго, поэтому только по кнопке:"
         else:
             text = ""  # not searched yet, or nothing doubtful
-        return {"text": text, "can_find": can_find, "busy": False, "searched": searched}
+        return {"text": text, "can_find": can_find, "busy": False, "can_cancel": False, "searched": searched}
 
     def find_suggestions(self, file_id):
         """The "Найти варианты" button: read the file's doubtful words again with the other models."""
@@ -880,6 +883,34 @@ class Controller:
             self._queue_suggestions(item)
             self._emit_file(item)
             self._pump()
+            return True
+
+    def cancel_suggestions(self, file_id):
+        """Stop the suggestion search of a file, or take it out of the line (owner 2026-11-09:
+        "maybe we should be able to cancel jobs? like this long one looking for variants").
+        The line already on the worker is read to its end (a few seconds) and its offers are
+        kept; the lines after it are dropped. The file does not count as searched, so
+        "Найти варианты" stays offered."""
+        with self.lock:
+            item = self._find(file_id)
+            if item is None:
+                return False
+            search = self.suggesting
+            if search is not None and search["id"] == item.id:
+                if search.get("cancelled"):
+                    return False
+                search["cancelled"] = True
+                search["pieces"] = []
+                if search["request"] is None:
+                    self._end_search(item, cancelled=True)
+                    self._pump()
+                else:
+                    self._emit_file(item)
+                return True
+            if item.id not in self.suggest_queue:
+                return False
+            self.suggest_queue.remove(item.id)
+            self._emit_file(item)
             return True
 
     def _queue_suggestions(self, item):
@@ -923,7 +954,8 @@ class Controller:
         again), "pieces" (still to do: {"groups": word objects (first, last), "line": read
         the whole line}), "total" and "done" (groups), "models", "request" (the piece on the
         worker, None between pieces), "context" (that piece's words), "selected" (each
-        group's (first, last) index in context), "size" (groups in the request), "loading"}."""
+        group's (first, last) index in context), "size" (groups in the request), "loading",
+        "cancelled" (cancel_suggestions: no more pieces)}."""
         while self.suggesting is None or self.suggesting["request"] is None:
             search = self.suggesting
             if search is None:
@@ -942,7 +974,7 @@ class Controller:
                 self.suggesting = None
                 continue
             if not search["pieces"] or not search["models"]:
-                self._end_search(item)
+                self._end_search(item, cancelled=bool(search.get("cancelled")))
                 continue
             piece = search["pieces"].pop(0)
             located = []
@@ -987,10 +1019,13 @@ class Controller:
                 pieces.append({"groups": [group], "line": whole, "index": first[0]})
         return pieces
 
-    def _end_search(self, item, error=None):
+    def _end_search(self, item, error=None, cancelled=False):
+        """The search of a file ended: searched, or cancelled (the offers found so far stay),
+        or failed."""
         self.suggesting = None
         if error is None:
-            item.result.suggestions_searched = True
+            if not cancelled:
+                item.result.suggestions_searched = True
             self._write_llm_again(item)
             self._remember(item)
         else:
@@ -1033,6 +1068,8 @@ class Controller:
             search["done"] += search["size"]
             if not current:  # removed or recognised again meanwhile
                 self.suggesting = None
+            elif search.get("cancelled"):  # ends now, even when a file waits to be recognised
+                self._end_search(item, cancelled=True)
             self._pump()
         if current:
             self._emit_file(item)

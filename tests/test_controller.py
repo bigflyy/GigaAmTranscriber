@@ -827,7 +827,38 @@ def test_doubtful_words_are_read_again_by_whisper(app, searching):
     assert searching.result.suggestions_searched
     view = app._file_view(searching)["suggest"]
     assert view == {"text": "Другие модели предлагают варианты: 1 место", "can_find": True, "busy": False,
-                    "searched": True}
+                    "can_cancel": False, "searched": True}
+
+
+def test_cancel_the_search_keeps_the_offers_found_and_drops_the_rest(app, searching):
+    # Owner 2026-11-09: "maybe we should be able to cancel jobs? like this long one looking for variants".
+    [job] = suggest_jobs(app)
+    assert app._file_view(searching)["suggest"]["can_cancel"]
+    app.handle(("suggest_result", job[1], "Whisper", [Word(text="наш", start=1.0, end=1.3)] + TOOLS_READING, None))
+    assert app.cancel_suggestions(searching.id)
+    view = app._file_view(searching)["suggest"]
+    assert view["text"] == "Останавливаю поиск вариантов..." and view["busy"] and not view["can_cancel"]
+    assert not app.cancel_suggestions(searching.id)  # once is enough
+    app.handle(("suggest_done", job[1]))  # the line on the worker ends: no next line
+    assert suggest_jobs(app) == [] and app.suggesting is None
+    assert searching.segments[0].words[3].suggestions  # the offer found before the cancel stays
+    assert not searching.result.suggestions_searched  # so "Найти варианты" is still offered
+    view = app._file_view(searching)["suggest"]
+    assert view["can_find"] and not view["busy"] and view["text"] == "Другие модели предлагают варианты: 1 место"
+
+
+def test_cancel_a_search_still_in_the_line(app, media, searching):
+    [job] = suggest_jobs(app)
+    app.add_files([str(media[1])])
+    app.fake_worker.take()
+    app.handle(("suggest_done", job[1]))
+    finish(app, media[1], [doubtful_line(("да", 1.0, 1.2, 0.5))])
+    second = app.files[1]
+    assert suggest_jobs(app)[0][2] == searching.path  # the first file goes on, the second waits
+    assert app._file_view(second)["suggest"]["text"].endswith("в очереди")
+    assert app.cancel_suggestions(second.id)
+    assert second.id not in app.suggest_queue and not app._file_view(second)["suggest"]["busy"]
+    assert not app.cancel_suggestions(second.id)
 
 
 def test_take_an_offer_in_the_replaced_words_times_and_write_the_files(app, searching):
@@ -921,7 +952,8 @@ def test_search_off_in_settings_and_the_button(app, media, monkeypatch):
     item = app.files[0]
     finish(app, media[0], doubtful_lines())
     assert suggest_jobs(app) == []
-    assert app._file_view(item)["suggest"] == {"text": "", "can_find": True, "busy": False, "searched": False}
+    assert app._file_view(item)["suggest"] == {"text": "", "can_find": True, "busy": False, "can_cancel": False,
+                                                   "searched": False}
     with pytest.raises(ValueError):
         app.set_settings({"suggest": "sometimes"})
     assert app.find_suggestions(item.id)

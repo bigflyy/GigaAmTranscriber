@@ -266,6 +266,7 @@ button.small { height: 26px; padding: 0 10px; font-size: 12px; border-radius: 7p
 .task-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 28px 10px; padding: 6px 12px;
   border-radius: 8px; background: var(--accent-soft); color: var(--text-2); font-size: 13px; }
 .task-line.error { background: var(--danger-soft); color: var(--danger); }
+.task-line .task { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 
 /* The one popup menu (app.js openMenu). */
 .menu { position: fixed; z-index: 20; min-width: 220px; max-width: min(380px, calc(100vw - 16px));

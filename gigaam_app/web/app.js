@@ -354,17 +354,20 @@ function moreItems(file) {
 }
 
 function renderTasks(file) {
-  // One line only while a search runs (with its cancel), or after a speaker search failed.
-  const parts = [];
+  // One line only while a search runs, or after a speaker search failed: the suggestion
+  // search and the speaker search each with its own "Отменить".
   const suggest = file.suggest || {};
-  if (suggest.busy && suggest.text) parts.push(suggest.text);
+  const suggestTask = !!(suggest.busy && suggest.text);
+  $('task-suggest').hidden = !suggestTask;
+  $('task-suggest-text').textContent = suggestTask ? suggest.text : '';
+  $('task-suggest-cancel').hidden = !(suggestTask && suggest.can_cancel);
   const speakers = file.speakers || {};
-  const speakerTask = (speakers.busy || speakers.error) && speakers.text;
-  if (speakerTask) parts.push(speakers.text);
-  $('task-line').hidden = !parts.length;
-  $('task-line').classList.toggle('error', !!speakers.error && !speakers.busy);
-  $('task-text').textContent = parts.join(' \u00b7 ');
+  const speakerTask = !!((speakers.busy || speakers.error) && speakers.text);
+  $('task-speakers').hidden = !speakerTask;
+  $('task-text').textContent = speakerTask ? speakers.text : '';
   $('task-cancel').hidden = !(speakerTask && speakers.can_cancel);
+  $('task-line').hidden = !suggestTask && !speakerTask;
+  $('task-line').classList.toggle('error', !!speakers.error && !speakers.busy);
 }
 
 // ------------------------------------------------------------------ live text
@@ -443,9 +446,10 @@ function markAllWords() {
 }
 
 // Layout D (plan 07 G6, owner 2026-11-09): each paragraph is a row (.para) with its time in a
-// left column (shown with Таймкоды) and its text in one aligned column. With speakers the name
-// stands on its own line (.turn-head) above the turn, and a line cut in the middle of a
-// sentence joins the paragraph before it (the VAD cuts a line at 25 s, at a short breath).
+// left column (shown with Таймкоды) and its text in one aligned column. A line cut in the
+// middle of a sentence joins the paragraph before it (the VAD cuts a line at 25 s, at a short
+// breath), with or without speakers (owner). With speakers the name stands on its own line
+// (.turn-head) above the turn, and a new turn always starts a paragraph.
 // Each word is its own span (data-w = its index in the line) inside the span of its line
 // (.seg, data-seg = the line's index in the file), so a selection maps back to word times.
 
@@ -534,12 +538,12 @@ function turnHead(speaker, names) {
 }
 
 function appendParagraphs(fragment, lines, names) {
-  // names: the speaker names when they are shown, else null (one paragraph per line).
+  // names: the speaker names when they are shown, else null (no names, no turns).
   let paragraph = null;  // {row, body, last: the text of its last piece}
   for (const piece of linePieces(lines, !!names)) {
-    if (names && !pieceText(piece)) continue;  // an empty line (outputs.line_parts skips it too)
+    if (!pieceText(piece)) continue;  // an empty line (outputs.line_parts skips it too)
     if (piece.speaker !== null) fragment.appendChild(turnHead(piece.speaker, names));
-    const joins = names && piece.speaker === null && paragraph && !endsSentence(paragraph.last);
+    const joins = piece.speaker === null && paragraph && !endsSentence(paragraph.last);
     if (joins) paragraph.body.appendChild(document.createTextNode(' '));
     else {
       paragraph = paragraphNode(piece);
@@ -550,11 +554,38 @@ function appendParagraphs(fragment, lines, names) {
   }
 }
 
-function lineNode(line) {
-  // One line as its own paragraph (no speakers: text arriving while a file is recognised).
-  const paragraph = paragraphNode({ line, from: 0, to: (line.words || []).length, speaker: null });
-  paragraph.body.appendChild(segNode({ line, from: 0, to: (line.words || []).length, speaker: null }));
-  return paragraph.row;
+function appendLine(text, line) {
+  // A line arriving while a file is recognised (no speakers yet): it goes on the last
+  // paragraph when that one ends in the middle of a sentence, else starts a new one.
+  const piece = { line, from: 0, to: (line.words || []).length, speaker: null };
+  if (!pieceText(piece)) return;
+  const rows = text.querySelectorAll('.para');
+  const body = rows.length ? rows[rows.length - 1].querySelector('p') : null;
+  if (body && !endsSentence(body.textContent)) {
+    body.appendChild(document.createTextNode(' '));
+    body.appendChild(segNode(piece));
+    return;
+  }
+  const paragraph = paragraphNode(piece);
+  paragraph.body.appendChild(segNode(piece));
+  text.appendChild(paragraph.row);
+}
+
+function redrawLine(line) {
+  // An offer was added or left on a line (its words are the same): draw the line's pieces
+  // again in place. False when they do not match the words (then the caller redraws all).
+  const words = line.words || [];
+  const segs = [...$('text').querySelectorAll(`.seg[data-seg="${line.index}"]`)];
+  const ranges = segs.map((seg) => {
+    const spans = seg.querySelectorAll('.w');
+    return spans.length ? [Number(spans[0].dataset.w), Number(spans[spans.length - 1].dataset.w) + 1] : null;
+  });
+  const fits = segs.length > 0 && ranges.every((range, at) => range && range[0] === (at ? ranges[at - 1][1] : 0))
+    && ranges[ranges.length - 1][1] === words.length;
+  if (!fits) return false;
+  if (card && segs.some((seg) => seg.contains(card.span))) closeCard();
+  segs.forEach((seg, at) => seg.replaceWith(segNode({ line, from: ranges[at][0], to: ranges[at][1], speaker: null })));
+  return true;
 }
 
 // ------------------------------------------------------------------ speaker labels (plan 07)
@@ -823,7 +854,7 @@ function onSegment(data) {
     const top = text.scrollTop;
     drawLines(data.id);
     text.scrollTop = top;
-  } else text.appendChild(lineNode(data));
+  } else appendLine(text, data);
   if (atEnd) text.scrollTop = text.scrollHeight;
 }
 
@@ -1031,19 +1062,13 @@ function onLine(data) {
   // An open card stays open while the search adds offers elsewhere (owner, 2026-11-09: it
   // closed at every new offer): it is opened again on the same word after the redraw.
   const cardAt = card && card.fileId === data.id ? spanPosition(card.span) : null;
-  if (speakerNames(data.id).length) {
-    // A line may be drawn in several parts (speaker turns): draw the whole text again in place.
+  if (redrawLine(data)) {
+    wordTimes = null;
+    markOffers();
+  } else {
     const top = $('text').scrollTop;
     drawLines(data.id);
     $('text').scrollTop = top;
-  } else {
-    const seg = $('text').querySelector(`.seg[data-seg="${data.index}"]`);
-    const old = seg && seg.closest('.para');
-    if (!old) return;
-    if (card && old.contains(card.span)) closeCard();
-    old.replaceWith(lineNode(data));
-    wordTimes = null;
-    markOffers();
   }
   if (cardAt && !card) reopenCard(cardAt);
 }
@@ -1730,6 +1755,7 @@ $('show-speakers').addEventListener('change', () => {
 });
 $('speakers-again').addEventListener('click', () => state.selected && openSpeakerSearch(state.selected));
 $('task-cancel').addEventListener('click', () => state.selected && call('cancel_speakers', state.selected));
+$('task-suggest-cancel').addEventListener('click', () => state.selected && call('cancel_suggestions', state.selected));
 $('speaker-search-go').addEventListener('click', startSpeakerSearch);
 $('speaker-search-cancel').addEventListener('click', () => { searchingFile = null; $('speaker-search').close(); });
 $('speaker-search').addEventListener('close', () => { searchingFile = null; });

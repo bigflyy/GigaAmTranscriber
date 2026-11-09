@@ -230,6 +230,9 @@ class Api:
     def cancel_speakers(self, file_id):
         return self._controller.cancel_speakers(file_id)
 
+    def cancel_suggestions(self, file_id):
+        return self._controller.cancel_suggestions(file_id)
+
     def rename_speaker(self, file_id, index, name):
         return self._controller.rename_speaker(file_id, index, name)
 

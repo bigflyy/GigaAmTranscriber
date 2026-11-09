@@ -93,10 +93,12 @@
         <span id="speaker-hint" class="muted" hidden></span>
         <button id="speakers-again" class="small" type="button" title="Определить говорящих заново">Заново...</button>
       </div>
-      <!-- A running search (suggested fixes, speakers) or a failed one. -->
+      <!-- A running search (suggested fixes, speakers) or a failed one, each with its own cancel. -->
       <div id="task-line" class="task-line" role="status" hidden>
-        <span id="task-text"></span>
-        <button id="task-cancel" class="small" type="button" hidden>Отменить</button>
+        <span id="task-suggest" class="task" hidden><span id="task-suggest-text"></span>
+          <button id="task-suggest-cancel" class="small" type="button" hidden>Отменить</button></span>
+        <span id="task-speakers" class="task" hidden><span id="task-text"></span>
+          <button id="task-cancel" class="small" type="button" hidden>Отменить</button></span>
       </div>
       <div id="text" class="text" tabindex="0" aria-live="off"></div>
       <!-- The player for the whole file (plan 05): under the text of a finished or cancelled file. -->
