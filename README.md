@@ -5,6 +5,8 @@ Offline transcription of Russian speech from audio and video files, with the
 Windows and Linux (window and command line) and Linux Docker images.
 [Whisper](https://github.com/openai/whisper) large-v3-turbo can be downloaded as a
 second model for other languages and for English terms inside Russian speech.
+Since v0.6.0 it can also find who speaks when and name the speakers in the text
+(pyannote community-1 models rebuilt for ONNX Runtime, a 33 MB download).
 
 Since v0.2.0 the app runs on [ONNX Runtime](https://onnxruntime.ai/) instead of
 PyTorch: the download is a quarter of the old CUDA build, it starts in a few
@@ -14,11 +16,11 @@ and about 25 s on the CPU; see [BENCHMARK.md](BENCHMARK.md).
 
 ## Downloads
 
-- **Windows:** [`GigaAmTranscriber-v0.5.0-windows-x64.zip`](https://github.com/bigflyy/GigaAmTranscriber/releases/latest)
+- **Windows:** [`GigaAmTranscriber-v0.6.0-windows-x64.zip`](https://github.com/bigflyy/GigaAmTranscriber/releases/latest)
   (about 930 MB, 1.2 GB unpacked). Unzip it anywhere and run `GigaAmTranscriber.exe`.
   No Python, CUDA or FFmpeg is needed; both GigaAM models are inside (Whisper is a
   547 MB download the first time it is chosen).
-- **Linux:** [`GigaAmTranscriber-v0.5.0-linux-x64.tar.gz`](https://github.com/bigflyy/GigaAmTranscriber/releases/latest)
+- **Linux:** [`GigaAmTranscriber-v0.6.0-linux-x64.tar.gz`](https://github.com/bigflyy/GigaAmTranscriber/releases/latest)
   (about 840 MB, 1 GB unpacked). Unpack it and run `./GigaAmTranscriber/GigaAmTranscriber`.
   Recognition runs on the CPU. The system must have glibc 2.39 or newer (Ubuntu 24.04,
   Debian 13, Fedora 40 and later), FFmpeg and, for the window, WebKitGTK 4.1:
@@ -115,6 +117,7 @@ gigaam-cli.exe *.mp4 --formats txt,srt --out-dir C:\Transcripts
 gigaam-cli.exe lecture.m4a --model CTC --device cpu --threads 8
 gigaam-cli.exe --download Whisper
 gigaam-cli.exe interview.mp3 --model Whisper --language en
+gigaam-cli.exe meeting.m4a --speakers          # or --speakers 3 when the number is known
 gigaam-cli.exe --help
 ```
 

@@ -1,82 +1,76 @@
-# GigaAM Transcriber v0.5.0
+# GigaAM Transcriber v0.6.0
 
-Fix a part of the text, doubtful words marked, other models' suggestions for them, a text for an
-AI chat, and a player for the whole file. GigaAM recognition of a whole file is the same as in
-v0.4.0.
+Who speaks when, a tidier window, paragraphs that no longer break in the middle of a sentence,
+playing from any selected word, and three speech search settings in the window. Recognition
+itself is the same as in v0.5.0.
 
-## Fix a part of the text
+## Speakers
 
-- Select words in a finished text: a small bar above the selection offers **▶ Слушать** (plays
-  that part), **Распознать заново** and **Исправить...**.
-- **Распознать заново** reads only that part again with RNNT, CTC and Whisper (when downloaded)
-  and shows each reading beside the current text, with the changed words marked. **Взять**
-  puts a reading in, or type the text by hand and **Сохранить**. The saved files are written
-  again at once.
-- **Термины** in that dialog: a list of names and terms ("LLM, fine tuning, DeepSeek") given
-  to Whisper as a hint. On a recorded lecture every listed term came out right. GigaAM models
-  take no such hint.
-- A selection can be up to 25 seconds long.
+- The **Говорящие** switch above the text finds who speaks when. On a file without speakers it
+  first asks how many people talk (**авто** if you do not know); after a search it shows or
+  hides the names. **Настройки** -> **Говорящие** runs the search after every file by itself.
+- Each turn starts with the speaker's coloured name on its own line. A line of chips under the
+  switches shows every speaker with their share of the speech time.
+- Fixing the result: a click on a name renames that speaker everywhere ("Говорящий 1" ->
+  "Анна"), gives the turn to another or a new speaker, or merges two speakers into one; a
+  chip's menu also jumps to the speaker's next turn. Selected words get **Говорящий** to give
+  just those words to someone else. Neighbouring turns of one speaker join.
+- When you give the number yourself, the window still shows how many speakers the model
+  counted on its own.
+- The saved files carry the names: the text and the text for an AI start each turn with
+  "Анна: ", Markdown has a paragraph per turn, subtitles never mix two speakers in one cue,
+  the timestamped text names the speaker on every line, and JSON gives each word its speaker.
+  **Копировать** copies what is on screen, with or without names.
+- Command line: `gigaam-cli recording.mp3 --speakers` (or `--speakers 3` when the number is
+  known).
+- The speaker models (pyannote community-1: segmentation 3.0, WeSpeaker ResNet34 and VBx
+  clustering, rebuilt to run without PyTorch) are downloaded the first time, 33 MB. An hour
+  of audio takes about 70 s on a GPU (DirectML) and about 3.5 min on the CPU. On public
+  meeting recordings it gets about 20% of the speech time wrong (AMI, 4 meetings); on five
+  Russian recordings of official events (2 to 16 speakers) it found the right number of
+  speakers every time and gave 0.3% of the words to the wrong one. Two people talking at
+  once, noisy rooms and many short replies are harder.
 
-## Doubtful words
+## A tidier window
 
-- Every word now has the model's confidence. Words the model was not sure of are underlined:
-  dotted for "возможно ошибка", wavy for "скорее ошибка"; hovering shows the percentage.
-- **Сомнения** switches the marks on and off. In **Настройки**, under **Сомнительные слова**:
-  underline only the doubtful words, or colour every word from green to red; both thresholds
-  can be changed.
-- Files recognised by earlier versions have no marks until they are recognised again.
+- Above the text: the file name and one line of facts, then **Копировать** (its arrow:
+  **Копировать для ИИ**), **Файлы** (the saved formats, creating the missing ones, **Показать
+  в папке**) and **...** (**Найти варианты**, **Определить говорящих...**, **Распознать
+  снова**, **Убрать из списка**). One look for all of them.
+- The switches **Таймкоды**, **Сомнения** and **Говорящие** sit together over the text. A
+  status line shows only while a search runs, with its **Отменить**.
+- Paragraphs: a line the recogniser cut in the middle of a sentence (it cuts a line at about
+  25 s even without a pause) now joins the paragraph before it, with or without speakers. The
+  saved text, Markdown and the text for an AI join it the same way; subtitles and the
+  timestamped text keep their timing.
+- **Таймкоды** shows each paragraph's time in a column on the left, so the text stays in one
+  straight column. A click on a time plays from there.
 
-## Suggestions from another model
+## Smaller changes
 
-- After a file is recognised, each line with doubtful words is read again by another installed
-  model: Whisper checks GigaAM's text, RNNT checks Whisper's. Where it heard something else, the
-  doubtful word's underline turns blue; hovering shows the other reading ("Другие модели
-  слышат: Tools Calling").
-- A click on such a word opens a card with each offer: **Взять**, **▶ Слушать**,
-  **Исправить...** (the fix dialog with the offer filled in) and **Оставить как есть**.
-- Whisper is good with English names and terms in Russian speech, GigaAM with Russian, so the
-  offers are mostly for terms: on a recorded lecture about half of Whisper's offers were right
-  ("Tullz Colling" -> "Tools Calling", "файндтюнинг" -> "fine tuning").
-- When to look, in **Настройки** -> **Варианты для сомнительных слов**: right after a file
-  recognised on the GPU (the default), always, or only with the **Найти варианты** button
-  (also for files from earlier sessions). On the CPU Whisper can be slower than the recording,
-  so there the default is the button.
-
-## Text for an AI chat
-
-- **Копировать для ИИ** and the new format **Для ИИ** (`name-transcript-llm.txt`): the text with
-  a short note for the AI. Doubtful words are marked as `слово[?66%]`, and where another model
-  heard something else both versions are given:
-  `{GigaAM v3 RNNT: Tullz[?50%] Colling | Whisper large-v3-turbo (q5_0): Tools Calling}`.
-  Paste it into a chat and ask the AI to check or correct the text.
-
-## Player
-
-- A bar under the text plays the whole file: play / pause, the time, seeking, speed, volume
-  and mute; Space plays and pauses. The word being spoken is highlighted and followed unless
-  you have just scrolled.
-- A click on a line's time plays from that line; Alt+click on a word plays from that word.
-- Formats the window cannot play itself (for example some video files) get a temporary copy
-  of their sound first; it is deleted when the window closes.
-
-## Window
-
-- Models now run in a separate process. Before, the window could not be moved or resized
-  for about 4 seconds while a GigaAM model loaded; now it stays responsive. If a model library
-  ever crashes, the window shows an error and goes on instead of closing.
+- **▶ Отсюда** on the bar over selected words plays from the first selected word and keeps
+  going (**▶ Слушать** still plays only the selection).
+- **Отменить** for the search for other models' suggestions; the offers found so far stay.
+- The text no longer jumps down while a file is recognised. When new lines arrive below, a
+  **Новый текст** button takes you there; at the end of the text it keeps following the new
+  lines, and scrolling up stops that.
+- **Настройки** -> **Дополнительно** (folded) has three speech search settings, each with its
+  default a click away: the pause a line may end on (2 s), the speech threshold (50 %; lower
+  finds quiet voices, higher suits noisy recordings) and the longest line (25 s, also the
+  most). The other speech search settings stay in `gigaam-config.json`.
 
 ## Windows
 
-`GigaAmTranscriber-v0.5.0-windows-x64.zip` (about 930 MB): unzip it anywhere and
+`GigaAmTranscriber-v0.6.0-windows-x64.zip` (about 930 MB): unzip it anywhere and
 run `GigaAmTranscriber.exe`; `gigaam-cli.exe` beside it is the command line. Both
 GigaAM models and FFmpeg are inside; GigaAM uses any DirectX 12 GPU through DirectML,
 Whisper any Vulkan GPU, both with the CPU as fallback. The EXEs are not code-signed,
-so Windows SmartScreen may ask once. Downloaded Whisper models from v0.4.0 are found
+so Windows SmartScreen may ask once. Models downloaded by earlier versions (Whisper) are found
 automatically.
 
 ## Linux
 
-`GigaAmTranscriber-v0.5.0-linux-x64.tar.gz` (about 840 MB): the window and
+`GigaAmTranscriber-v0.6.0-linux-x64.tar.gz` (about 840 MB): the window and
 `gigaam-cli`, both GigaAM models inside. GigaAM and Whisper run on the CPU (the Linux app
 also carries whisper.cpp's Vulkan backend, not yet tried on a Linux GPU). Unpack it and run
 `./GigaAmTranscriber/GigaAmTranscriber`.
@@ -89,14 +83,14 @@ later), FFmpeg and, for the window, WebKitGTK 4.1:
 
 ## Downloads
 
-- `GigaAmTranscriber-v0.5.0-windows-x64.zip` - Windows app.
-- `GigaAmTranscriber-v0.5.0-linux-x64.tar.gz` - Linux app.
+- `GigaAmTranscriber-v0.6.0-windows-x64.zip` - Windows app.
+- `GigaAmTranscriber-v0.6.0-linux-x64.tar.gz` - Linux app.
 - `THIRD_PARTY_LICENSES.zip` - licences of the bundled components, one folder per app
   (`windows/`, `linux/`; also inside the app folders).
 - `FFmpeg-8.0.1-source.zip` - source of the FFmpeg build in the Windows app (GPLv3).
 - `SHA256SUMS.txt` - checksums of the files above.
 
-The Whisper model file is an asset of the separate `models-1` release; the app downloads it
-when Whisper is first chosen.
+The Whisper model and the speaker models are assets of the separate `models-1` release; the
+app downloads them when they are first needed.
 
 Notes of earlier versions: https://github.com/bigflyy/GigaAmTranscriber/releases
