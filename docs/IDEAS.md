@@ -12,6 +12,8 @@ models, Stage E speaker diarization) and plan 02 (D1-D3).
 
 - 2026-11-08: fine-tune GigaAM itself on videos that come with transcripts (kremlin.ru and similar): "would giga am transcription become better? ... i am just asking as an idea right now". Needs filtering, since the transcripts are edited (keep only stretches where GigaAM and the text agree closely); the gain may be small outside official speech, and the weak spot users hit (English terms in Russian lectures) needs lecture-style data instead. The fine-tuned model goes through experiments/onnx_runtime/export_onnx.py again; measure WER on held-out events.
 
+- 2026-11-09: Whisper on the CPU is slow in the suggestion search (owner: "why is whispercpp so slow on the CPU?"). The build is optimized (Release, CPU variants up to AVX-512, as fast as a native build in session 11); the cost is the model's size and Whisper's fixed 30 s window, so every short doubtful line costs a full 30 s encoder pass. Ways to try: pack several short lines into one 30 s window with silence between them and split the words back by time; a smaller audio_ctx (quality to measure); on the CPU let RNNT check only, or Whisper only on long doubtful runs.
+
 - 2026-11-08: OpenVINO as a faster CPU engine (an ONNX Runtime execution provider for Intel CPUs and Intel GPUs): owner: "we need to remember the openvino idea". For the speaker models' CPU fallback (plan 07) and maybe GigaAM's CPU mode too; weigh the extra download size, and check AMD CPUs.
 
 ## Languages and speakers
@@ -23,6 +25,8 @@ models, Stage E speaker diarization) and plan 02 (D1-D3).
 - 2026-11-08: other speaker-labelling engines after v0.6.0: "lets try this approach in v1 and try others in future". Candidates from session 18 (HANDOFF.md): Nemotron-3-Diarization (needs a newer NeMo or own ONNX code), newer pyannote releases, DiariZen if its licence changes; measure them with experiments/diarization on the kremlin.ru set and AMI.
 
 ## Window
+
+- 2026-11-09: cancel running jobs: "maybe we should be able to cancel jobs? like this long one looking for variants". Today only the speaker search has Отменить in the task line; the suggestion search (Найти варианты) has none, and a whole-file job can be cancelled only from the file itself.
 
 - 2026-11-09: side panels that can be hidden, for small screens: "we could make both panels hideable, to fix the small monitor problem". Said about the file list and a speakers panel (mock-up A1); the owner chose a speaker line instead (A2), so for now this is about hiding the file list.
 
