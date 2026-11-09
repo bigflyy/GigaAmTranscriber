@@ -26,6 +26,8 @@ models, Stage E speaker diarization) and plan 02 (D1-D3).
 
 ## Window
 
+- 2026-11-09: speech search (VAD) settings in the window: "are vad params not in settings? could they be?" Today 8 keys are only in gigaam-config.json and CLI flags (--vad-threshold ...; README table). Proposed (session 21, waiting for the owner): a folded "Дополнительно" part of Настройки with 2-3 of them in plain words (how long a pause ends a line, how sensitive the speech search is, the longest line, capped at 25 s because GigaAM and Whisper's 30 s window need it), each with "по умолчанию"; the rest stay in the file.
+
 - 2026-11-09: the text should not jump down by itself while a file is recognised: "maybe it shouldnt auto go down when transcribing? what if person is reading the top? wdyt? configurable?" Today (app.js onSegment) the text follows new lines while the reader is at its end, and stops once they scroll up; but before the text fills the window the reader counts as "at the end", so the first overflow pushes the top away. Proposed (session 21, waiting for the owner): no following by itself; a small "Новый текст" button at the bottom when text arrives below; following starts when the reader scrolls to the end or clicks it, and stops when they scroll up. No setting.
 
 - 2026-11-09: side panels that can be hidden, for small screens: "we could make both panels hideable, to fix the small monitor problem". Said about the file list and a speakers panel (mock-up A1); the owner chose a speaker line instead (A2), so for now this is about hiding the file list.
