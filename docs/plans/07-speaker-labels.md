@@ -91,7 +91,7 @@ Owner's ideas (docs/IDEAS.md, Started), both "ok" for v0.6.0 with the proposals 
 
 ### Stage E: Release v0.6.0
 
-- [ ] **E1** Builds (Windows, Linux), smoke tests, release notes, README; publishing waits for the owner's go-ahead
+- [x] **E1** Builds (Windows, Linux), smoke tests, release notes, README; publishing waits for the owner's go-ahead. Done 2026-11-10 (session 23, owner: "Publish now"): main pushed, annotated tag v0.6.0, https://github.com/bigflyy/GigaAmTranscriber/releases/tag/v0.6.0 with the five assets and RELEASE_NOTES.md; GitHub's digests equal SHA256SUMS.txt
 
 ### Stage F: Voice library (later, owner: not in v0.6.0)
 

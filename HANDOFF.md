@@ -1,12 +1,24 @@
 # Handoff: state and findings
 
-Last updated 2026-11-10 (session 22). Current plan: [docs/plans/07-speaker-labels.md](docs/plans/07-speaker-labels.md) (speakers; B-D, G and H done; E1: v0.6.0 built and tested, waiting for the owner's go-ahead to push and publish).
+Last updated 2026-11-10 (session 23). Plan 07 (speakers) finished up to its Stage E: v0.6.0
+published; only Stage F (voice library) is left, for later. Next: the Whisper CPU speed-up
+(docs/IDEAS.md, Models) or another idea, as the owner chooses.
 Plan 06 finished (suggested fixes, models in their own process, release v0.5.0 published as its
 Stage D). Plan 03 (fix a part):
 A and B2 done; B1 and C left. Plan 05 (player) done (C3 in v0.5.0).
 Plan 04 (Whisper) done: v0.4.0. Plan 02 (window) has D for later; plan 01 still
 holds B9, F (Parakeet, Qwen3-ASR, F5 for suggestions) (its E moved to plan 07).
 Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
+
+## Session 23 (2026-11-10): v0.6.0 published
+
+- Owner: "Publish now"; the "Новый текст" button keeps today's behaviour (stays after the file
+  finishes while unread text is below), no change.
+- Ticked H2 (done in session 22, box was missed; 93fe020). Pushed main (sessions 18-23), annotated
+  tag v0.6.0, release https://github.com/bigflyy/GigaAmTranscriber/releases/tag/v0.6.0 (not draft,
+  not prerelease) with the five assets from build/v0.6.0/release and RELEASE_NOTES.md as notes.
+  GitHub's digests equal SHA256SUMS.txt for all four files; the published SHA256SUMS.txt is
+  byte-equal to the local one. E1 ticked; the speaker ideas moved to Finished in IDEAS.md.
 
 ## Session 22 (2026-11-09/10): plan 07 Stage H, v0.6.0 builds
 
