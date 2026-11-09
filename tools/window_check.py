@@ -236,10 +236,16 @@ def fix_steps(js, control, item, short_audio, shoot):
     js("stopPlaying()")
     shoot("04b-fix-dialog")
     # A click on the backdrop closes the dialog; with the text changed by hand it does not.
-    click_outside = "$('fix').dispatchEvent(new MouseEvent('click', {bubbles: true, clientX: 2, clientY: 2}))"
+    press_outside = "$('fix').dispatchEvent(new PointerEvent('pointerdown', {bubbles: true, clientX: 2, clientY: 2}));"
+    click_outside = press_outside + "$('fix').dispatchEvent(new MouseEvent('click', {bubbles: true, clientX: 2, clientY: 2}))"
     js("$('fix-text').value = 'check fix words'; " + click_outside)
     check("click outside keeps an edited dialog", js("$('fix').open"))
-    js("$('fix-text').value = fix.current; " + click_outside)
+    # Selecting in the text field and letting go outside: the press was inside (owner 2026-11-10).
+    js("$('fix-text').value = fix.current;"
+       " $('fix-text').dispatchEvent(new PointerEvent('pointerdown', {bubbles: true, clientX: 300, clientY: 300}));"
+       " $('fix').dispatchEvent(new MouseEvent('click', {bubbles: true, clientX: 2, clientY: 2}))")
+    check("a selection that ends outside keeps the dialog", js("$('fix').open"))
+    js(click_outside)
     check("click outside closes the dialog", not js("$('fix').open"))
     js("$('fix').showModal()")
     js("$('fix-text').value = 'check fix words'; $('fix-save').click()")

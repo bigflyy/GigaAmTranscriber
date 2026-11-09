@@ -1992,14 +1992,24 @@ $('fix-cancel').addEventListener('click', () => $('fix').close());
 $('fix-save').addEventListener('click', () => saveFix($('fix-text').value, null));
 $('fix').addEventListener('close', () => { stopPlaying(); fix.request = null; });
 // A click outside the dialog (on its backdrop) closes it, unless the text was changed by hand:
-// a stray click must not lose an edit (Esc and "Otmena" still close it).
-$('fix').addEventListener('click', (event) => {
-  if (event.target !== $('fix')) return;
+// a stray click must not lose an edit (Esc and "Otmena" still close it). The press must start
+// outside too: selecting text with the mouse and letting go outside the dialog also ends in a
+// "click" on the dialog (owner 2026-11-10: it closed the dialog while selecting).
+function outsideFixBox(event) {
   const box = $('fix').getBoundingClientRect();
-  const outside = event.clientX < box.left || event.clientX > box.right
+  return event.clientX < box.left || event.clientX > box.right
     || event.clientY < box.top || event.clientY > box.bottom;
+}
+let fixPressOutside = false;
+$('fix').addEventListener('pointerdown', (event) => {
+  fixPressOutside = event.target === $('fix') && outsideFixBox(event);
+});
+$('fix').addEventListener('click', (event) => {
+  const pressedOutside = fixPressOutside;
+  fixPressOutside = false;
+  if (event.target !== $('fix') || !pressedOutside || !outsideFixBox(event)) return;
   const edited = $('fix-text').value.trim().split(/\s+/).join(' ') !== fix.current;
-  if (outside && !edited) $('fix').close();
+  if (!edited) $('fix').close();
 });
 
 $('confirm-close-no').addEventListener('click', () => $('confirm-close').close());
