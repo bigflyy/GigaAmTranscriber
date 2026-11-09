@@ -52,6 +52,12 @@ Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
   1.2-1.5x fewer windows. audio_ctx research and the options are in IDEAS.md (Models). Owner
   asked about packing and context; answered: packed lines share decoder context (cannot be
   dropped inside one window), gain is small; better levers are fewer lines and a shorter window.
+- Owner: the Whisper speed-up waits until after v0.6.0. New idea (IDEAS.md, Window): the text
+  should not jump down while a file is recognised; my proposal (no following by itself, a
+  "Новый текст" button, following once the reader scrolls to the end; no setting) waits for
+  the owner's answer. Owner asked whether speakers run on the CPU or the GPU: they follow
+  Settings -> device like recognition (Авто: DirectML when there is a GPU, else the CPU with
+  a 2 s step).
 - Tooling: in this shell, heredocs fed to python turned "\\n" and "\\u2026" escapes into the
   characters; write patch scripts with the Write tool and run "python -I script.py".
 
