@@ -15,8 +15,9 @@ Steps:
 4. smoke test the console EXE on a silent file with ffmpeg removed from PATH, check that
    it loads whisper.cpp (gigaam-cli --devices), transcribe a short speech file with Whisper
    on the GPU and the CPU (a downloaded model folder linked in, --whisper-model and
-   --whisper-audio; defaults in build/whisper-test), and start the windowed EXE off screen
-   (tools/gui_smoke_test.py);
+   --whisper-audio; defaults in build/whisper-test), find the speakers of the same file on
+   the GPU and the CPU (the downloaded speaker models linked in, --speaker-model), and start
+   the windowed EXE off screen (tools/gui_smoke_test.py);
 5. pack the release assets into build/release/:
        GigaAmTranscriber-v<version>-windows-x64.zip   the app folder
        THIRD_PARTY_LICENSES.zip                      the licences folder alone, under windows/
@@ -43,6 +44,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from gigaam_app import __version__  # noqa: E402
+from gigaam_app.paths import downloads_dir  # noqa: E402
 
 APP_NAME = "GigaAmTranscriber"
 BUNDLED_MODELS = ("v3_e2e_rnnt", "v3_e2e_ctc")
@@ -339,9 +341,52 @@ def whisper_smoke_test(cli, model_folder, audio, env, device):
               f"{time.perf_counter() - started:.1f} s: {' '.join(words[:8])} ...", flush=True)
 
 
-def smoke_test(app, whisper=None):
+def speaker_test_files(model_folder, audio, skip):
+    """(speaker model folder, audio) for the speaker smoke test, or None when it is skipped.
+
+    Like the Whisper test, it uses models downloaded before (by default the app's own
+    download folder) instead of downloading them during the build."""
+    if skip:
+        print("Speaker smoke test skipped (--no-speaker-test)", flush=True)
+        return None
+    model_folder, audio = Path(model_folder).expanduser().resolve(), Path(audio).expanduser().resolve()
+    if not (model_folder / "model.json").is_file():
+        fail(f"no speaker model folder at {model_folder}; pass --speaker-model (a downloaded "
+             "speakers_community1 folder) or --no-speaker-test")
+    if not audio.is_file():
+        fail(f"{audio} not found; pass --whisper-audio (a short Russian speech file) or --no-speaker-test")
+    return model_folder, audio
+
+
+def speaker_smoke_test(cli, model_folder, audio, env, device):
+    """Find who speaks in a short speech file through the built CLI (plan 07, new in v0.6.0).
+
+    The speaker models are linked into a temporary download folder, so this also checks
+    that the app finds them and runs them on DEVICE (DirectML, or the CPU with its 2 s
+    step). The text file must start with a speaker's name."""
+    with tempfile.TemporaryDirectory() as temporary:
+        downloads = Path(temporary) / "downloads"
+        downloads.mkdir()
+        link_model_folder(model_folder, downloads)
+        copy = Path(temporary) / audio.name
+        shutil.copy2(audio, copy)
+        started = time.perf_counter()
+        run = subprocess.run([cli, str(copy), "--speakers", "2", "--device", device, "--formats", "txt"],
+                             capture_output=True, text=True, encoding="utf-8",
+                             env={**env, "GIGAAM_DOWNLOADS": str(downloads)}, cwd=temporary)
+        text_path = copy.with_name(copy.stem + "-transcript.txt")
+        text = text_path.read_text(encoding="utf-8") if text_path.is_file() else ""
+        found = [line for line in run.stdout.splitlines() if "speaker(s) found" in line]
+        if run.returncode != 0 or not found or not text.startswith("Говорящий 1:"):
+            fail(f"speaker smoke test on {device} failed:\n{run.stdout}\n{run.stderr}\ntext: {text!r}")
+        print(f"smoke test speakers {device}: {found[0].strip()}; {time.perf_counter() - started:.1f} s in all: "
+              f"{text[:60]!r} ...", flush=True)
+
+
+def smoke_test(app, whisper=None, speakers=None):
     """Run the console EXE on 2 s of silence, with no ffmpeg on PATH and no Python around;
-    with whisper = (model folder, audio), also transcribe the audio with Whisper."""
+    with whisper = (model folder, audio), also transcribe the audio with Whisper; with
+    speakers = (model folder, audio), also find who speaks in it."""
     with tempfile.TemporaryDirectory() as temporary:
         audio = Path(temporary) / "silence.wav"
         subprocess.run([str(app / "ffmpeg.exe"), "-v", "error", "-f", "lavfi", "-i", "anullsrc=r=16000:cl=mono",
@@ -369,6 +414,9 @@ def smoke_test(app, whisper=None):
     if whisper:
         for device in ("auto", "cpu"):
             whisper_smoke_test(cli, *whisper, env, device)
+    if speakers:
+        for device in ("auto", "cpu"):
+            speaker_smoke_test(cli, *speakers, env, device)
     # The windowed EXE: start it off screen, let the model load, close it.
     import gui_smoke_test  # tools/gui_smoke_test.py, beside this script
     timings = gui_smoke_test.run(app, log=lambda message: None)
@@ -437,6 +485,10 @@ def add_whisper_arguments(parser):
     parser.add_argument("--whisper-audio", type=Path, default=test_area / "clips" / "lecture-4.mp3",
                         help="a short Russian speech file for it (default: build/whisper-test/clips/lecture-4.mp3)")
     parser.add_argument("--no-whisper-test", action="store_true", help="do not transcribe with Whisper")
+    parser.add_argument("--speaker-model", type=Path, default=downloads_dir() / "speakers_community1",
+                        help="a downloaded speaker model folder for the speaker smoke test, run on "
+                             "--whisper-audio (default: the app's download folder)")
+    parser.add_argument("--no-speaker-test", action="store_true", help="do not look for speakers")
 
 
 def main():
@@ -452,6 +504,7 @@ def main():
     check_models(args.models)
     check_whisper_cpp()
     whisper = whisper_test_files(args.whisper_model, args.whisper_audio, args.no_whisper_test)
+    speakers = speaker_test_files(args.speaker_model, args.whisper_audio, args.no_speaker_test)
     ffmpeg, ffmpeg_notices = find_ffmpeg(args.ffmpeg)
     out = args.out.resolve()
     dist = out / "app"
@@ -465,7 +518,7 @@ def main():
     collect_licences(app, ffmpeg_notices)
     print(f"App folder {app}: {folder_size(app) / 1024 ** 2:.0f} MiB "
           f"(program {code_size / 1024 ** 2:.0f} MiB), built in {time.perf_counter() - started:.0f} s", flush=True)
-    smoke_test(app, whisper)
+    smoke_test(app, whisper, speakers)
     if not args.no_zip:
         print("Release assets:", flush=True)
         make_assets(app, out / "release")

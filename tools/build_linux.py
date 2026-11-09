@@ -49,8 +49,8 @@ sys.path.insert(0, str(ROOT / "tools"))
 from gigaam_app import __version__  # noqa: E402
 from build_windows import (APP_NAME, BUNDLED_MODELS, REPO_LICENCES, VAD_MODEL,  # noqa: E402
                            add_whisper_arguments, check_models, check_no_torch, check_whisper_cpp,
-                           distribution_licences, folder_size, sha256, whisper_smoke_test,
-                           whisper_test_files)
+                           distribution_licences, folder_size, sha256, speaker_smoke_test,
+                           speaker_test_files, whisper_smoke_test, whisper_test_files)
 
 WHISPER_CPP = ROOT / "third_party" / "whisper.cpp" / "linux-x64"  # tools/build_whisper_cpp.py
 
@@ -200,8 +200,9 @@ def clean_env():
     return env
 
 
-def smoke_cli(app, speech, whisper=None):
-    """The CLI on silence, on SPEECH if given, and with Whisper (model folder, audio) if given."""
+def smoke_cli(app, speech, whisper=None, speakers=None):
+    """The CLI on silence, on SPEECH if given, with Whisper (model folder, audio) if given,
+    and finding speakers (model folder, audio) if given."""
     with tempfile.TemporaryDirectory() as temporary:
         audio = Path(temporary) / "silence.wav"
         subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "anullsrc=r=16000:cl=mono", "-t", "2",
@@ -234,6 +235,8 @@ def smoke_cli(app, speech, whisper=None):
                   flush=True)
     if whisper:
         whisper_smoke_test(str(app / "gigaam-cli"), *whisper, clean_env(), "cpu")  # no Vulkan GPU in WSL
+    if speakers:
+        speaker_smoke_test(str(app / "gigaam-cli"), *speakers, clean_env(), "cpu")
 
 
 def window_titles(env):
@@ -396,6 +399,7 @@ def main():
     check_models(args.models)
     check_whisper_cpp(WHISPER_CPP)
     whisper = whisper_test_files(args.whisper_model, args.whisper_audio, args.no_whisper_test)
+    speakers = speaker_test_files(args.speaker_model, args.whisper_audio, args.no_speaker_test)
     out = args.out.expanduser().resolve()
     dist = out / "app"
     if dist.exists():
@@ -410,7 +414,7 @@ def main():
     print(f"App folder {app}: {folder_size(app) / 1024 ** 2:.0f} MiB "
           f"(program {code_size / 1024 ** 2:.0f} MiB), built in {time.perf_counter() - started:.0f} s", flush=True)
     speech = args.speech.resolve() if args.speech else None
-    smoke_cli(app, speech, whisper)
+    smoke_cli(app, speech, whisper, speakers)
     smoke_missing_webkit(app)
     smoke_window(app, speech, args.shots)
     if not args.no_tar:
