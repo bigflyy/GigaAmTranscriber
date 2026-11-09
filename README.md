@@ -32,7 +32,10 @@ and about 25 s on the CPU; see [BENCHMARK.md](BENCHMARK.md).
 Add files with **+ Добавить** or drag them (or a folder) onto the window. They
 are transcribed one at a time, in the order added: the list on the left shows
 which are done, running and waiting, and the right side shows the selected
-file's progress and its text as it is recognised. **Отмена** stops the running
+file's progress and its text as it is recognised. The text stays where the reader
+is: when new lines arrive below, a **Новый текст** button takes you there, and the
+text keeps following the new lines while you stay at its end (scroll up and it stops).
+**Отмена** stops the running
 file and keeps the finished part. Each file names the model that recognised it
 in the line under its name (the list line says RNNT, CTC or Whisper), also after the
 settings choose another. The model loads in the background as soon as
@@ -92,6 +95,11 @@ underline turns blue and a click shows the offer with **Взять** and **Ос�
 the status line stops a search. The models
 run in a separate process, so the window stays responsive while they load.
 
+**Настройки** -> **Дополнительно** (folded) holds three speech search settings, each with
+its default a click away: the pause a line may end on (2 s; shorter pauses give more places
+to end a line), the speech threshold (50 %; lower finds quiet voices, higher suits noisy
+recordings) and the longest line (25 s, also the most: GigaAM reads about 25 s at once).
+
 Settings are saved at once to `gigaam-config.json` beside the app (the command
 line reads the same file); **Сбросить настройки** goes back to the defaults. The window follows the system's light or dark theme.
 
@@ -117,8 +125,10 @@ the command line. [`gigaam-config.example.json`](gigaam-config.example.json)
 lists every key; `language` (`"auto"` or a code such as `"en"`) is used only by
 Whisper. Files saved by v0.1 still load (`"CUDA"` now means GPU; the v0.1 multilingual
 models are gone, and settings that chose one get RNNT).
-Speech search and chunking settings are only in this file and in command-line
-flags such as `--vad-threshold`:
+Speech search and chunking settings are in this file and in command-line flags such as
+`--vad-threshold`; the window's **Дополнительно** shows `vad_min_silence_ms`, `vad_threshold`
+and `max_duration` (which also sets `vad_max_speech_s`, at most 25 s), and **Сбросить
+настройки** puts those three back, not the others:
 
 | Key | Default | Meaning |
 | --- | ---: | --- |

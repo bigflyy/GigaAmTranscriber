@@ -69,6 +69,11 @@ WAITING, RUNNING, DONE, CANCELLED, FAILED = "waiting", "running", "done", "cance
 REREAD_MODELS = ("RNNT", "CTC", "Whisper")
 # The most speakers the window lets the user name as the known count (plan 07 C3).
 MAX_SPEAKERS = 20
+# Plan 07 H2: the speech search settings the window shows under "Дополнительно", with the
+# range each may take. A line is at most 25 s: GigaAM reads about 25 s per call and Whisper
+# hears a 30 s window. "max_duration" also sets vad_max_speech_s (a longer stretch of speech
+# without a pause is cut there). The other speech search keys stay in the settings file.
+SPEECH_LIMITS = {"vad_min_silence_ms": (100, 10000), "vad_threshold": (0.05, 0.95), "max_duration": (5.0, 25.0)}
 
 
 # ---------------------------------------------------------------------- texts
@@ -411,9 +416,16 @@ class Controller:
             "cpu_count": os.cpu_count() or 8,
             "max_speakers": MAX_SPEAKERS,
             "speaker_download": size_text(catalog.SPEAKER_MODEL.download_size),
-            "config_note": f"Параметры поиска речи (порог, длина фрагментов) задаются в файле "
+            "speech_defaults": self._speech_view(config.Settings()),
+            "speech_limits": {key: list(limits) for key, limits in SPEECH_LIMITS.items()},
+            "config_note": f"Остальные параметры поиска речи задаются в файле "
                            f"{self.settings_path or config.default_path()}.",
         }
+
+    @staticmethod
+    def _speech_view(settings):
+        """The speech search settings the window shows (plan 07 H2)."""
+        return {key: getattr(settings.vad, key) for key in SPEECH_LIMITS}
 
     def _settings_view(self):
         s = self.settings
@@ -421,7 +433,8 @@ class Controller:
                 "outputs": list(s.outputs), "include_timestamps": s.include_timestamps,
                 "terms": s.terms, "doubt_marks": s.doubt_marks, "doubt_style": s.doubt_style,
                 "doubt_light": s.doubt_light, "doubt_strong": s.doubt_strong, "player_volume": s.player_volume,
-                "suggest": s.suggest, "speakers": s.speakers, "show_speakers": s.show_speakers}
+                "suggest": s.suggest, "speakers": s.speakers, "show_speakers": s.show_speakers,
+                **self._speech_view(s)}
 
     # ------------------------------------------------------------------ page calls
 
@@ -1427,6 +1440,16 @@ class Controller:
                 s.doubt_style = change["doubt_style"]
             if "player_volume" in change:
                 s.player_volume = min(1.0, max(0.0, float(change["player_volume"])))
+            for key, (low, high) in SPEECH_LIMITS.items():
+                if key in change:
+                    # Out of range is pulled into it; the page shows the value that was kept.
+                    value = min(high, max(low, float(change[key])))
+                    if key == "vad_min_silence_ms":
+                        s.vad.vad_min_silence_ms = int(round(value))
+                    elif key == "vad_threshold":
+                        s.vad.vad_threshold = round(value, 2)
+                    else:
+                        s.vad.max_duration = s.vad.vad_max_speech_s = value
             if "doubt_light" in change or "doubt_strong" in change:
                 light = float(change.get("doubt_light", s.doubt_light))
                 strong = float(change.get("doubt_strong", s.doubt_strong))
@@ -1444,8 +1467,9 @@ class Controller:
             return True
 
     def reset_settings(self):
-        """Back to the default model, device, threads, formats and text view. The speech search
-        settings, which only the settings file holds, stay as they are."""
+        """Back to the default model, device, threads, formats, text view and the speech search
+        settings the window shows. The other speech search keys, which only the settings file
+        holds, stay as they are."""
         defaults = config.Settings()
         return self.set_settings({"model": defaults.model, "device": defaults.device,
                                   "cpu_threads": defaults.cpu_threads, "outputs": list(defaults.outputs),
@@ -1453,7 +1477,8 @@ class Controller:
                                   "doubt_marks": defaults.doubt_marks, "doubt_style": defaults.doubt_style,
                                   "suggest": defaults.suggest, "speakers": defaults.speakers,
                                   "show_speakers": defaults.show_speakers,
-                                  "doubt_light": defaults.doubt_light, "doubt_strong": defaults.doubt_strong})
+                                  "doubt_light": defaults.doubt_light, "doubt_strong": defaults.doubt_strong,
+                                  **self._speech_view(defaults)})
 
     def _save_settings(self):
         """Every change is kept for the next start (gigaam-config.json, also read by the CLI)."""

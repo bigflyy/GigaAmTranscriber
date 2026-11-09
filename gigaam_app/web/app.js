@@ -156,6 +156,7 @@ function updateOneFile(file) {
 function onStarted(file) {
   // A new file started: show it unless the user is reading another file on purpose.
   state.lines.set(file.id, []);
+  if (file.id === state.selected) stopFollowingText();  // recognised again: from the top
   if (state.followRunning || !state.selected) select(file.id, false);
 }
 
@@ -374,6 +375,7 @@ function renderTasks(file) {
 
 async function showLines(id) {
   const text = $('text');
+  stopFollowingText();
   text.textContent = '';
   if (!id) return;
   const answer = await call('segments', id);
@@ -847,15 +849,46 @@ function onSegment(data) {
   const text = $('text');
   const placeholder = text.querySelector('.placeholder');
   if (placeholder) placeholder.remove();
-  // Follow new text only while the reader is at the end.
-  const atEnd = text.scrollHeight - text.scrollTop - text.clientHeight < 40;
   if (state.drawn && state.drawn.id === data.id && state.drawn.speakers) {
     // Turns may join this line to the paragraph before: draw the text again.
     const top = text.scrollTop;
     drawLines(data.id);
     text.scrollTop = top;
   } else appendLine(text, data);
-  if (atEnd) text.scrollTop = text.scrollHeight;
+  // Plan 07 H1: follow only when the reader asked for it, else say that text came below.
+  if (followText) text.scrollTop = text.scrollHeight;
+  else if (!textAtEnd(text)) $('new-text').hidden = false;
+}
+
+// Plan 07 H1 (owner 2026-11-09: "what if person is reading the top?"): while a file is
+// recognised the text never follows new lines by itself. Following starts when the reader
+// clicks "Новый текст" or scrolls to the end of a text longer than the window, and stops
+// when they scroll up. A text shorter than the window is "at the end" too, so that alone
+// does not start following.
+let followText = false;
+
+function textAtEnd(text) {
+  return text.scrollHeight - text.scrollTop - text.clientHeight < 40;
+}
+
+function stopFollowingText() {
+  // A new file on screen: start at its top, not following.
+  followText = false;
+  $('new-text').hidden = true;
+}
+
+function onTextScroll() {
+  const text = $('text');
+  if (!textAtEnd(text)) { followText = false; return; }
+  if (text.scrollHeight > text.clientHeight + 40) followText = true;
+  $('new-text').hidden = true;
+}
+
+function goToNewText() {
+  const text = $('text');
+  followText = true;
+  $('new-text').hidden = true;
+  text.scrollTop = text.scrollHeight;
 }
 
 function applyTimes(on) {
@@ -1591,6 +1624,7 @@ function renderSettings() {
     formats.appendChild(label);
   }
   $('config-note').textContent = options.config_note || '';
+  renderSpeechFields(settings, options);
   applyTimes(!!settings.include_timestamps);
   const style = settings.doubt_style || 'underline';
   for (const input of document.querySelectorAll('input[name="doubt-style"]')) input.checked = input.value === style;
@@ -1615,6 +1649,49 @@ function renderSettings() {
   }
   markAllWords();
   renderMain();  // the speaker switch follows Settings.show_speakers (also after a reset)
+}
+
+// Plan 07 H2: the speech search settings under "Дополнительно". The page shows seconds and
+// percent; the settings keep milliseconds and 0..1 (the keys of gigaam-config.json).
+const SPEECH_FIELDS = [
+  { id: 'vad-pause', key: 'vad_min_silence_ms', unit: 'с',
+    show: (value) => Math.round(value / 100) / 10, keep: (shown) => Math.round(shown * 1000) },
+  { id: 'vad-threshold', key: 'vad_threshold', unit: '%',
+    show: (value) => Math.round(value * 100), keep: (shown) => shown / 100 },
+  { id: 'max-line', key: 'max_duration', unit: 'с',
+    show: (value) => Math.round(value * 10) / 10, keep: (shown) => shown },
+];
+
+function renderSpeechFields(settings, options) {
+  // Each field shows its value; "по умолчанию" is a note at the default and a link elsewhere.
+  const defaults = options.speech_defaults || {};
+  const limits = options.speech_limits || {};
+  for (const field of SPEECH_FIELDS) {
+    const input = $(field.id);
+    const range = limits[field.key];
+    if (range) { input.min = field.show(range[0]); input.max = field.show(range[1]); }
+    if (settings[field.key] === undefined) continue;
+    input.value = field.show(settings[field.key]);
+    const atDefault = defaults[field.key] === undefined || field.show(settings[field.key]) === field.show(defaults[field.key]);
+    const back = $(`${field.id}-default`);
+    back.hidden = atDefault;
+    if (!atDefault) back.textContent = `вернуть по умолчанию (${String(field.show(defaults[field.key])).replace('.', ',')} ${field.unit})`;
+    $(`${field.id}-note`).hidden = !atDefault;
+  }
+}
+
+for (const field of SPEECH_FIELDS) {
+  $(field.id).addEventListener('change', () => {
+    const shown = Number($(field.id).value);
+    if ($(field.id).value === '' || !Number.isFinite(shown)) {
+      renderSpeechFields(state.settings, state.options);  // nothing usable typed: show the value kept
+      return;
+    }
+    changeSetting({ [field.key]: field.keep(shown) });  // Python keeps it in range
+  });
+  $(`${field.id}-default`).addEventListener('click', () => {
+    changeSetting({ [field.key]: (state.options.speech_defaults || {})[field.key] });
+  });
 }
 
 async function changeSetting(change) {
@@ -1803,6 +1880,8 @@ document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && card) { event.preventDefault(); closeCard(); }
 });
 $('text').addEventListener('scroll', placeCard);
+$('text').addEventListener('scroll', onTextScroll);
+$('new-text').addEventListener('click', goToNewText);
 for (const id of ['doubt-light', 'doubt-strong']) {
   $(id).addEventListener('change', () => {
     // Percent in the fields, 0..1 in the settings; the wavy threshold stays below the dotted one.

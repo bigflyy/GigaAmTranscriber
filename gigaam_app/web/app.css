@@ -301,6 +301,13 @@ button.small { height: 26px; padding: 0 10px; font-size: 12px; border-radius: 7p
 .text time { color: var(--faint); font-size: 13px; font-variant-numeric: tabular-nums; user-select: none; white-space: nowrap; }
 .text:not(.with-times) time { display: none; }
 .text .placeholder { color: var(--muted); }
+/* Plan 07 H1: "Новый текст" over the bottom of the text while a file is recognised. */
+.new-text-wrap { position: relative; height: 0; }
+.new-text {
+  position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 4;
+  height: 30px; padding: 0 14px; border-radius: 15px; font-size: 13px;
+  background: var(--card); border: 1px solid var(--card-line); box-shadow: var(--shadow); color: var(--link);
+}
 
 .text time.playable { cursor: pointer; }
 .text time.playable:hover { color: var(--link); text-decoration: underline; }
@@ -456,6 +463,13 @@ input[type="number"], select {
   background: var(--card); color: var(--text); font: inherit;
 }
 input[type="number"] { width: 72px; }
+/* Plan 07 H2: the folded speech search settings. */
+.advanced { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 10px; }
+.advanced summary { cursor: pointer; font-weight: 600; padding: 4px 0; color: var(--text-2); }
+.advanced summary:hover { color: var(--text); }
+.advanced > .hint:first-of-type { margin: 6px 0 14px; }
+.speech-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.speech-row input { width: 76px; }
 .settings-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
 
 /* ------------------------------------------------------------------ overlays */

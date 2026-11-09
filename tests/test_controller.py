@@ -384,7 +384,8 @@ def test_settings_apply_to_the_next_file_and_reload_the_model(app, media):
                                           "outputs": ["txt", "srt"], "include_timestamps": False, "terms": "",
                                           "doubt_marks": True, "doubt_style": "underline",
                                           "doubt_light": 0.97, "doubt_strong": 0.80, "player_volume": 1.0,
-                                          "suggest": "gpu", "speakers": False, "show_speakers": True}
+                                          "suggest": "gpu", "speakers": False, "show_speakers": True,
+                                          "vad_min_silence_ms": 2000, "vad_threshold": 0.5, "max_duration": 25.0}
     assert app.fake_worker.take() == [("load", ("RNNT", "cpu", 4))]
     app.add_files([str(media[0])])
     job = app.fake_worker.take()[0]
@@ -450,17 +451,46 @@ def test_unknown_device_is_refused(app):
         app.set_settings({"device": "TPU"})
 
 
-def test_settings_are_saved_at_once_and_reset_keeps_the_speech_search(app, tmp_path):
+def test_settings_are_saved_at_once_and_reset_keeps_the_file_only_speech_keys(app, tmp_path):
     path = tmp_path / "settings.json"
     app.set_settings({"model": "CTC", "include_timestamps": True, "outputs": ["srt"]})
     saved = config.load(path)
     assert saved.model == "CTC" and saved.include_timestamps and saved.outputs == ["srt"]
-    app.settings.vad.vad_threshold = 0.7  # only the file sets these
+    app.settings.vad.vad_speech_pad_ms = 400  # only the file sets this one
+    app.set_settings({"vad_threshold": 0.7})  # the window shows this one (plan 07 H2)
     assert app.reset_settings()
     saved = config.load(path)
     assert (saved.model, saved.include_timestamps, saved.outputs) == ("RNNT", False, ["txt", "timestamps"])
-    assert saved.vad.vad_threshold == 0.7
+    assert saved.vad.vad_speech_pad_ms == 400 and saved.vad.vad_threshold == 0.5
     assert last(app.sent, "settings")["model"] == "RNNT"
+
+
+def test_speech_search_settings_from_the_window(app, tmp_path):
+    # Plan 07 H2: the pause that ends a line, the sensitivity, the longest line (both keys).
+    view = app.snapshot
+    assert view["options"]["speech_defaults"] == {"vad_min_silence_ms": 2000, "vad_threshold": 0.5,
+                                                  "max_duration": 25.0}
+    assert view["settings"]["vad_min_silence_ms"] == 2000
+    app.set_settings({"vad_min_silence_ms": 800, "vad_threshold": 0.35, "max_duration": 15})
+    saved = config.load(tmp_path / "settings.json")
+    assert (saved.vad.vad_min_silence_ms, saved.vad.vad_threshold) == (800, 0.35)
+    assert saved.vad.max_duration == saved.vad.vad_max_speech_s == 15.0
+    assert saved.vad.strict_limit_duration == 25.0  # not shown, not changed
+    shown = last(app.sent, "settings")
+    assert (shown["vad_min_silence_ms"], shown["vad_threshold"], shown["max_duration"]) == (800, 0.35, 15.0)
+    # Out of range is pulled into it: never a line over 25 s (GigaAM, Whisper's window).
+    app.set_settings({"max_duration": 60, "vad_min_silence_ms": 5, "vad_threshold": 1})
+    assert app.settings.vad.max_duration == app.settings.vad.vad_max_speech_s == 25.0
+    assert (app.settings.vad.vad_min_silence_ms, app.settings.vad.vad_threshold) == (100, 0.95)
+
+
+def test_the_next_file_gets_the_new_speech_search_settings(app, media):
+    app.fake_worker.take()
+    app.set_settings({"vad_min_silence_ms": 700})
+    assert app.fake_worker.take() == []  # no reload: the options go with each file
+    app.add_files([str(media[0])])
+    job = app.fake_worker.take()[0]
+    assert job[0] == "transcribe" and job[3].vad_min_silence_ms == 700
 
 
 def test_a_settings_file_that_cannot_be_written_shows_an_error(app, tmp_path):

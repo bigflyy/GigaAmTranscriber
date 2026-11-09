@@ -22,6 +22,7 @@ Whisper and a chosen language too. Without it only the language choice is checke
 import argparse
 import functools
 import hashlib
+import json
 import shutil
 import http.server
 import os
@@ -274,8 +275,10 @@ def doubt_steps(js, control, item, shoot):
     check("dotted and wavy underlines", looks == ["underline dotted", "underline wavy"], looks)
     title = js("(() => { const w = $('text').querySelector('.w.d1, .w.d2'); if (!w) return 'none';"
                " w.dispatchEvent(new MouseEvent('mouseover', {bubbles: true})); return w.title; })()")
-    check("hover names the confidence", title == "none" or ("ошибка: уверенность модели" in title and title.endswith("%")),
-          title)
+    # The suggestion search may have finished by now: then a second line names the offer.
+    first_line = title.split("\n")[0]
+    check("hover names the confidence", title == "none" or ("ошибка: уверенность модели" in title
+                                                             and first_line.endswith("%")), title)
     # A higher dotted threshold in Settings marks more words at once.
     js("$('doubt-light').value = 99; $('doubt-light').dispatchEvent(new Event('change'))")
     more = sum(1 for word in known if word.confidence < 0.99)
@@ -306,6 +309,84 @@ def doubt_steps(js, control, item, shoot):
     shoot("04e-doubt-colours")
     js("document.querySelector('input[name=doubt-style][value=underline]').click()")
     wait(lambda: js("$('text').classList.contains('doubts-underline')"), 5, "underline style again")
+
+
+def follow_steps(js, item, shoot):
+    """Plan 07 H1: new lines never pull the text down by themselves.
+
+    The page gets made-up lines through its own onSegment (a real file is too short to fill
+    the window), then the shown file is fetched again, so later steps see its real text."""
+    fid = json.dumps(item.id)
+    js(f"select({fid}, true)")
+    wait(lambda: js("$('text').querySelectorAll('.para').length") > 0, 10, "text for the follow steps")
+
+    def feed(count):
+        # Each made-up line ends a sentence, so it is a paragraph of its own (ASCII only).
+        js(f"""(() => {{ const lines = state.lines.get({fid});
+            for (let k = 0; k < {count}; k += 1) {{ const at = lines.length;
+              onSegment({{id: {fid}, index: at, start: 100 + at * 4, end: 103 + at * 4,
+                          text: 'Made-up line ' + at + ' that arrives while the file is read.', words: []}}); }}
+          }})()""")
+
+    def at_end():
+        return js("textAtEnd($('text'))")
+
+    js("$('text').scrollTop = 0")
+    feed(40)
+    time.sleep(0.3)
+    check("new lines do not pull the text down", js("$('text').scrollTop") == 0 and not at_end(),
+          js("[$('text').scrollTop, $('text').scrollHeight, $('text').clientHeight]"))
+    check("a 'Novyi tekst' button shows when text came below", not js("$('new-text').hidden"))
+    shoot("02c-new-text")
+    js("$('new-text').click()")
+    time.sleep(0.3)
+    check("the button takes the reader to the end and hides", at_end() and js("$('new-text').hidden"))
+    feed(3)
+    time.sleep(0.3)
+    check("at the end the text follows new lines", at_end() and js("$('new-text').hidden"))
+    js("$('text').scrollTop = 0")
+    wait(lambda: not js("followText"), 5, "scrolling up stops following")
+    feed(3)
+    time.sleep(0.3)
+    check("after scrolling up new lines leave the text where it is",
+          js("$('text').scrollTop") == 0 and not js("$('new-text').hidden"))
+    js("$('text').scrollTop = $('text').scrollHeight")
+    wait(lambda: js("followText"), 5, "scrolling to the end starts following")
+    feed(2)
+    time.sleep(0.3)
+    check("scrolling to the end by hand follows again", at_end() and js("$('new-text').hidden"))
+    js(f"refreshLines({fid})")
+    wait(lambda: js(f"(state.lines.get({fid}) || []).length") == len(item.segments), 10, "real text again")
+
+
+def speech_steps(js, shoot):
+    """Plan 07 H2: the folded speech search settings save at once and go back to the default."""
+    check("the advanced part starts folded", js("$('advanced').open") is False)
+    js("$('advanced').open = true; $('advanced').scrollIntoView()")
+    shown = js("[$('vad-pause').value, $('vad-threshold').value, $('max-line').value]")
+    check("speech settings show the defaults", shown == ["2", "50", "25"], shown)
+    check("at the default a note, no link", not js("$('vad-pause-note').hidden") and js("$('vad-pause-default').hidden"))
+
+    def put(field, value):
+        js(f"$('{field}').value = '{value}'; $('{field}').dispatchEvent(new Event('change'))")
+
+    put("vad-pause", "0.8")
+    wait(lambda: '"vad_min_silence_ms": 800' in settings_text(), 10, "pause saved")
+    wait(lambda: not js("$('vad-pause-default').hidden"), 10, "default link")
+    link = js("$('vad-pause-default').textContent")
+    check("a changed pause offers its default", "2 с" in link and js("$('vad-pause-note').hidden"), link)
+    put("vad-threshold", "35")
+    wait(lambda: '"vad_threshold": 0.35' in settings_text(), 10, "threshold saved")
+    put("max-line", "40")
+    wait(lambda: '"vad_max_speech_s": 25.0' in settings_text() and js("$('max-line').value") == "25", 10,
+         "longest line kept at 25 s")
+    put("max-line", "15")
+    wait(lambda: '"max_duration": 15.0' in settings_text(), 10, "longest line saved")
+    check("the longest line sets both keys", '"vad_max_speech_s": 15.0' in settings_text())
+    shoot("05a-advanced")
+    js("$('vad-pause-default').click()")
+    wait(lambda: '"vad_min_silence_ms": 2000' in settings_text(), 10, "pause back to the default")
+    check("the default link puts the default back", js("$('vad-pause').value") == "2" and js("$('vad-pause-default').hidden"))
 
 
 def open_menu(js, anchor):
@@ -751,6 +832,7 @@ def scenario(window, control, long_audio, short_audio, shoot, whisper=False):
         copy_menu = menu_texts(js, "$('copy-more')")
         check("copy for an LLM in the copy menu", list(copy_menu) == ["copy-llm"], copy_menu)
         shoot("04-done")
+        follow_steps(js, control.files[1], shoot)
         doubt_steps(js, control, control.files[1], shoot)
         suggest_steps(js, control, control.files[1], shoot)
         speaker_steps(js, control, control.files[1], shoot)
@@ -771,6 +853,7 @@ def scenario(window, control, long_audio, short_audio, shoot, whisper=False):
         js("$('open-settings').click()")
         check("settings view", not js("$('view-settings').hidden"))
         shoot("05-settings")
+        speech_steps(js, shoot)
         js("document.querySelector('#devices input[value=CPU]').click()")
         # Wait for the page, not only the controller: its message can arrive a moment later.
         wait(lambda: "процессор" in js("$('engine-text').textContent"), 60, "CPU model")
@@ -781,6 +864,9 @@ def scenario(window, control, long_audio, short_audio, shoot, whisper=False):
         wait(lambda: js("$('reset-note').textContent") != "", 10, "reset note")
         check("reset to defaults", js("document.querySelector('#devices input[value=Auto]').checked")
               and '"device": "Auto"' in settings_text())
+        check("reset puts the speech settings back",
+              wait(lambda: '"vad_threshold": 0.5' in settings_text() and '"max_duration": 25.0' in settings_text()
+                   and js("$('max-line').value") == "25", 10, "speech settings reset"))
         time.sleep(0.5)
         wait(lambda: control.engine["state"] == "ready", 60, "model with Auto")
 

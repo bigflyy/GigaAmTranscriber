@@ -101,6 +101,9 @@
           <button id="task-cancel" class="small" type="button" hidden>Отменить</button></span>
       </div>
       <div id="text" class="text" tabindex="0" aria-live="off"></div>
+      <!-- Plan 07 H1: while a file is recognised the text does not follow new lines by itself;
+           this button shows when text arrived below the view and takes the reader there. -->
+      <div class="new-text-wrap"><button id="new-text" class="new-text" type="button" hidden>Новый текст &#8595;</button></div>
       <!-- The player for the whole file (plan 05): under the text of a finished or cancelled file. -->
       <div id="audio-bar" class="audio-bar" hidden>
         <button id="audio-play" class="audio-play" type="button" title="Слушать (пробел)" aria-label="Слушать">&#9654;</button>
@@ -210,7 +213,44 @@
           <button id="reset-settings" type="button">Сбросить настройки</button>
           <span id="reset-note" class="muted"></span>
         </div>
-        <p id="config-note" class="hint"></p>
+        <!-- Plan 07 H2 (owner 2026-11-09): three speech search settings in plain words, folded. -->
+        <details id="advanced" class="advanced">
+          <summary>Дополнительно</summary>
+          <p class="hint">Как программа находит речь в записи и делит её на строки. Обычно менять не нужно.
+            Изменения действуют со следующего файла или после «Распознать снова».</p>
+          <fieldset>
+            <legend>Пауза, на которой кончается строка</legend>
+            <div class="speech-row">
+              <label class="inline">Не короче <input id="vad-pause" type="number" step="0.1"> с</label>
+              <button id="vad-pause-default" class="link" type="button"></button>
+              <span id="vad-pause-note" class="muted">по умолчанию</span>
+            </div>
+            <p class="hint">Строка кончается только на паузе такой длины. Если её нет дольше самой длинной
+              строки, строка режется на самой длинной паузе внутри (часто это вдох), иногда посреди фразы. Короче: больше мест,
+              где строка может кончиться. Длиннее: строки кончаются только на долгих паузах.</p>
+          </fieldset>
+          <fieldset>
+            <legend>Порог речи</legend>
+            <div class="speech-row">
+              <label class="inline"><input id="vad-threshold" type="number" step="1"> %</label>
+              <button id="vad-threshold-default" class="link" type="button"></button>
+              <span id="vad-threshold-note" class="muted">по умолчанию</span>
+            </div>
+            <p class="hint">Насколько уверенно звук должен быть похож на речь. Ниже: находятся тихие и далёкие
+              голоса, но шум может попасть в текст. Выше: для шумных записей, хотя тихие слова могут пропасть.</p>
+          </fieldset>
+          <fieldset>
+            <legend>Самая длинная строка</legend>
+            <div class="speech-row">
+              <label class="inline">До <input id="max-line" type="number" step="1"> с</label>
+              <button id="max-line-default" class="link" type="button"></button>
+              <span id="max-line-note" class="muted">по умолчанию</span>
+            </div>
+            <p class="hint">Столько звука модель слушает за один раз. Больше 25 с нельзя: GigaAM слушает
+              до 25 с, Whisper до 30 с. Короче: строки короче, но чаще режутся посреди фразы.</p>
+          </fieldset>
+          <p id="config-note" class="hint"></p>
+        </details>
       </div>
     </section>
   </main>
