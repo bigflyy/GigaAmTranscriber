@@ -1,12 +1,46 @@
 # Handoff: state and findings
 
-Last updated 2026-11-09 (session 21). Current plan: [docs/plans/07-speaker-labels.md](docs/plans/07-speaker-labels.md) (speakers; B-D and G done, owner liked G6 / G7; next: Stage H (no jumping down, speech search settings), then E1, the v0.6.0 release).
+Last updated 2026-11-10 (session 22). Current plan: [docs/plans/07-speaker-labels.md](docs/plans/07-speaker-labels.md) (speakers; B-D, G and H done; E1: v0.6.0 built and tested, waiting for the owner's go-ahead to push and publish).
 Plan 06 finished (suggested fixes, models in their own process, release v0.5.0 published as its
 Stage D). Plan 03 (fix a part):
 A and B2 done; B1 and C left. Plan 05 (player) done (C3 in v0.5.0).
 Plan 04 (Whisper) done: v0.4.0. Plan 02 (window) has D for later; plan 01 still
 holds B9, F (Parakeet, Qwen3-ASR, F5 for suggestions) (its E moved to plan 07).
 Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
+
+## Session 22 (2026-11-09/10): plan 07 Stage H, v0.6.0 builds
+
+- Owner: speakers on the CPU keep the 2 s step ("ok keep"; recorded at plan 07 A4).
+- H1 (6c36975): app.js followText / onTextScroll / goToNewText; #new-text over the bottom of
+  the text. A text shorter than the window counts as "at the end", so following starts only at
+  the end of a text longer than the window (scrollHeight > clientHeight + 40). showLines and a
+  new run of the shown file stop following. The button stays after the file finishes while
+  unread text is below (my choice; it hides at the end of the text or on another file).
+- H2 (6c36975): controller.SPEECH_LIMITS (vad_min_silence_ms 100-10000, vad_threshold
+  0.05-0.95, max_duration 5-25; out of range is pulled in, no error); max_duration also sets
+  vad_max_speech_s; options speech_defaults / speech_limits; reset_settings now resets these
+  three (other speech keys stay). Page: details#advanced at the bottom of Настройки, SPEECH_FIELDS
+  in app.js (seconds and percent on the page), "вернуть по умолчанию (2 с)" link or a
+  "по умолчанию" note. Note: a shorter pause does not make lines shorter by itself; regions are
+  still packed into lines up to max_duration (vad.ChunkFinder._group), it only gives more places
+  where a line may end (the hint says so).
+- window_check: follow_steps (40 made-up lines through onSegment), speech_steps; the hover check
+  now reads only the first line of the title (the suggestion search may already have added
+  "Другие модели слышат"). --whisper 137/137; 545 tests.
+- Builds: build_windows.py / build_linux.py got a speaker smoke test (CLI --speakers 2 on
+  lecture-4.mp3, --speaker-model default downloads_dir()/speakers_community1, linked like
+  Whisper; --no-speaker-test). Version 0.6.0 (5889a11), notes and README (f13bffe).
+- E1 (not ticked: publishing waits): assets in `C:\MyProjects\GigaAmTranscriber\build\v0.6.0\release`
+  (Windows zip 933.6 MiB, Linux tar.gz 843.1 MiB, licences zip with windows/ and linux/, FFmpeg
+  source, SHA256SUMS; `sha256sum -c` OK). Windows app build/v0.6.0/app/GigaAmTranscriber
+  (1234 MiB): CLI CPU and DirectML, Whisper Vulkan 2.2 s and CPU 11.5 s, speakers DirectML 6.2 s
+  (first load) and CPU 0.3 s, window; gui_smoke_test --audio on the 455 s lecture: window 1.5 s,
+  transcript after 10 s, no process left. Linux ~/gigaam-build-060 in WSL (1026 MiB): CLI,
+  Whisper CPU 16.5 s, speakers CPU, missing-WebKit message, window wrote the file. WSL script:
+  this session's scratchpad wsl/build.sh. Screens for the owner: scratchpad release/screens.
+- Next: on the owner's go-ahead, push main (sessions 18-22) and publish v0.6.0 as v0.5.0 was
+  (annotated tag, release with the five assets, notes from RELEASE_NOTES.md, check GitHub's
+  digests against SHA256SUMS), then tick E1. After that: the Whisper CPU speed-up (IDEAS, Models).
 
 ## Session 21 (2026-11-09): plan 07 G6 (layout D) and G7 (play from here)
 
