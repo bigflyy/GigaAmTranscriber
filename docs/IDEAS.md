@@ -26,6 +26,7 @@ models, Stage E speaker diarization) and plan 02 (D1-D3).
 
 ## Window
 
+- 2026-11-10: which file to show after adding files: "when we add a file/ files maybe we should come to the first of them? focus on it? auto open it? or not? wdyt? discuss?" Today adding does not switch at once; the window shows a file when it starts, so with a file already running it jumps later, also while you read another. Discussed in session 22 (my proposal: open the first added file at once, then no switching by itself while you read).
 - 2026-11-09: side panels that can be hidden, for small screens: "we could make both panels hideable, to fix the small monitor problem". Said about the file list and a speakers panel (mock-up A1); the owner chose a speaker line instead (A2), so for now this is about hiding the file list.
 
 ## Links and summaries
