@@ -24,9 +24,7 @@ models, Stage E speaker diarization) and plan 02 (D1-D3).
 
 ## Window
 
-- 2026-11-09: the window is cluttered and inconsistent after speakers: "i feel like the gui is very cluttered now ... you need to organize it somehow and declutter i guess. some buttons are showed one way and some are the other way". Planned as plan 07 Stage G (before the v0.6.0 release).
-- 2026-11-09: a switch to show or hide the speakers once a file has them: "there is no switch on / off when we segmented". Plan 07 Stage G.
-- 2026-11-09: a way to fix wrong speaker results: "no way to fix segmentation results" (for example give a paragraph or selected words to another speaker, merge two speakers, split one). Plan 07 Stage G.
+- 2026-11-09: side panels that can be hidden, for small screens: "we could make both panels hideable, to fix the small monitor problem". Said about the file list and a speakers panel (mock-up A1); the owner chose a speaker line instead (A2), so for now this is about hiding the file list.
 
 ## Links and summaries
 
@@ -36,6 +34,9 @@ models, Stage E speaker diarization) and plan 02 (D1-D3).
 
 ## Started
 
+- 2026-11-09: the window is cluttered and inconsistent after speakers: "i feel like the gui is very cluttered now ... you need to organize it somehow and declutter i guess. some buttons are showed one way and some are the other way". Started 2026-11-09 (session 20): docs/plans/07-speaker-labels.md Stage G (owner chose layout A2).
+- 2026-11-09: a switch to show or hide the speakers once a file has them: "there is no switch on / off when we segmented". Started 2026-11-09 (session 20): docs/plans/07-speaker-labels.md Stage G (owner chose layout A2).
+- 2026-11-09: a way to fix wrong speaker results: "no way to fix segmentation results" (for example give a paragraph or selected words to another speaker, merge two speakers, split one). Started 2026-11-09 (session 20): docs/plans/07-speaker-labels.md Stage G (owner chose layout A2).
 - 2026-11-06: speaker segments somehow, somewhere ("idea for now").
   2026-11-08: owner: speaker labels are the next big task after suggested fixes (plan 06): "we are going to want this really", probably for v0.6.0, "unless something you or i think of something cool and better". Plan 01 Stage E holds the earlier diarization work. Started 2026-11-08 (session 18): docs/plans/07-speaker-labels.md.
 - 2026-11-07: merge the two models' strengths: "gigaam does bad with english namings and whisper is good with english namings. idk if we can merge these capabilities, but if we could it d be nice. somehow. in the future." (On the lecture GigaAM wrote "tullz colling", "deps", "umail" where Whisper wrote "tools calling", "deepsync", "uml".) For now only Whisper as a model you can choose and run (plan 04). Started 2026-11-08 as suggested fixes for doubtful words: docs/plans/06-suggested-fixes.md.

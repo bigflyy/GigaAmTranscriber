@@ -1,12 +1,38 @@
 # Handoff: state and findings
 
-Last updated 2026-11-09 (session 19). Current plan: [docs/plans/07-speaker-labels.md](docs/plans/07-speaker-labels.md) (speakers; B-D done; next Stage G, owner 2026-11-09: tidy the window, a speakers switch, fixing speakers; then E1).
+Last updated 2026-11-09 (session 20). Current plan: [docs/plans/07-speaker-labels.md](docs/plans/07-speaker-labels.md) (speakers; B-D and G built; next: the owner tries the new window, then E1, the v0.6.0 release).
 Plan 06 finished (suggested fixes, models in their own process, release v0.5.0 published as its
 Stage D). Plan 03 (fix a part):
 A and B2 done; B1 and C left. Plan 05 (player) done (C3 in v0.5.0).
 Plan 04 (Whisper) done: v0.4.0. Plan 02 (window) has D for later; plan 01 still
 holds B9, F (Parakeet, Qwen3-ASR, F5 for suggestions) (its E moved to plan 07).
 Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
+
+## Session 20 (2026-11-09): plan 07 Stage G, the tidy window, speakers switch and fixes
+
+- G1/G2: mock-ups at https://claude.ai/artifact/DeRDh7s7NayNWyu8M1K2PG (current screen, Recorder /
+  Otter / MacWhisper, layouts A-C, round 2 A1-A3, the fix menus). Owner chose A, then A2 (answers in
+  the plan's Stage G). Files always carry the names; all three fixes; session 19 choices kept; the
+  model's own count as a hint. Hideable side panels went to IDEAS (Window).
+- G4 (3221ad0): controller.set_words_speaker (None = new; a number left without words is used
+  again), merge_speakers (the source number stays unused), speakers view "list" with share of
+  speech time, "found" (Transcript.speakers_found: with a given count the VBx count from the
+  worker's "diarize_found" event, else the speakers found; not in the JSON file), "error";
+  Settings.show_speakers (also in set_settings / reset / view); copy_text(..., with_speakers).
+- G3/G5 page: head = name + one meta line (status · model), buttons Копировать (+ arrow: для ИИ),
+  Файлы (saved formats, + creates, Показать в папке), "..." (Найти варианты with its status as
+  hint, Определить говорящих..., Распознать снова, Убрать из списка); "Распознать снова" stays in
+  sight only for a file without text. Switches Таймкоды / Сомнения / Говорящие (on a file without
+  speakers it opens the count dialog #speaker-search with "модель насчитала" hint). Speaker chips
+  line (#speaker-line: name, share %, menu: rename, next turn, merge; "Заново..."; hint "модель
+  насчитала N" when it differs). #task-line only while a search runs (with Отменить) or after a
+  speaker search failed. One popup #menu (app.js openMenu: arrows, Esc, click outside). A name in
+  the text opens: rename, "Эту реплику сказал" (whole turn) other / new, merge. Selection bar gets
+  "Говорящий". No undo (text edits have none either). README updated for the new head.
+- window_check: menu helpers open_menu / menu_texts / choose; speaker steps cover the switch,
+  dialog, chips, give turn, merge, selected words, hide / show; screens 04i-04n and 04-files-menu.
+  First run 116/118 (set_settings ignored show_speakers: fixed); second run --whisper 117/117;
+  526 tests pass. Waiting for the owner to try it; then E1.
 
 ## Session 19 (2026-11-09): plan 07 B4, C, D done (speakers in the window, files, CLI)
 
