@@ -1,7 +1,8 @@
 # Handoff: state and findings
 
-Last updated 2026-11-10 (session 24). Plan 08 (faster suggestion search on the CPU): Stage A
-measured, A6 waits for the owner's choice. Plan 07 (speakers) finished up to its Stage E: v0.6.0
+Last updated 2026-11-11 (session 24). Plan 08 (faster suggestion search on the CPU): Stage A
+done, C1 (language from GigaAM's text) built; next C2 (faster-whisper int8 as a CPU option,
+ready-made upload), B1 measured on top. Plan 07 (speakers) finished up to its Stage E: v0.6.0
 published; only Stage F (voice library) is left, for later.
 Plan 06 finished (suggested fixes, models in their own process, release v0.5.0 published as its
 Stage D). Plan 03 (fix a part):
@@ -47,6 +48,17 @@ Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
 - Tooling: sherpa-onnx gives NeMo tokens with a plain space as the word mark (not U+2581). The
   dev venv has no psutil, so whisper.cpp RAM is not in the tables. The network gave about
   0.4-1 MB/s from Hugging Face this session.
+- Owner (A6, 2026-11-11): the language hint "is weird but ok", only when Settings.language is
+  auto; faster-whisper "should be an option if it is that faster", from a ready-made upload,
+  downloaded only when chosen. Note for C2: on top of C1 faster-whisper is 1.6x (one piece at a
+  time, 6.3 vs 9.9 s) to 2.0x (batch 8, 5.0 s, +0.9 GB RAM), not the 3-3.9x measured against today.
+- C1 (866d145): fix.language_hint(words) ("ru" under 15% Latin letters, else None) and
+  controller._suggest_language: Settings.language other than auto is used as it is; Whisper's own
+  text (read by RNNT) is passed on unchanged. 548 tests pass. Not yet seen in a window_check run
+  or a build (C3).
+- C2 candidate upload: Zoont/faster-whisper-large-v3-turbo-int8-ct2 (MIT, model.bin 814054531
+  bytes, lfs sha256 7482f978f9493b93...; voxta/faster-whisper-large-v3-turbo-int8 has the same
+  file). Not downloaded or checked yet.
 
 ## Session 23 (2026-11-10): v0.6.0 published
 

@@ -44,5 +44,5 @@ file is about 0.8 GB). Results in HANDOFF.md, session 24.
 ### Stage C: In the app
 
 - [x] **C1** Language from GigaAM's text for the search's Whisper readings when Settings.language is auto (fix.py, controller); tests
-- [ ] **C2** faster-whisper int8 as a CPU option: an int8 model file (about 0.8 GB; own conversion or a ready upload, owner to choose), catalog entry and download, an engine next to whisper_model.py, the choice in Настройки, search pieces read in batches; tests
+- [ ] **C2** faster-whisper int8 as a CPU option: a ready-made int8 upload (owner 2026-11-11: "i d use a ready made upload if possible. users dont have to download all the models all at once", so it is downloaded only when chosen); candidate Zoont/faster-whisper-large-v3-turbo-int8-ct2 (MIT, model.bin 814 MB, sha256 starts 7482f978f9493b93; voxta/faster-whisper-large-v3-turbo-int8 has the same file); check it gives the A3 offers; catalog entry and download, an engine next to whisper_model.py, the choice in Настройки, search pieces read in batches; tests
 - [ ] **C3** Packaging of C2 (CTranslate2 in the Windows and Linux builds), window_check, builds, release notes
