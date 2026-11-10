@@ -7,3 +7,8 @@ onnxruntime==1.23.0; sys_platform != "win32"
 # The window: Edge WebView2 on Windows (through pythonnet), the system WebKitGTK on Linux
 # (PyGObject and gir1.2-webkit2-4.1 come from the system packages there).
 pywebview==6.2.1
+# faster-whisper on the CPU (plan 08 C2; the package itself is vendored in
+# gigaam_app/faster_whisper, see its README). tokenizers also installs huggingface_hub,
+# which the app never imports.
+ctranslate2==4.8.5
+tokenizers==0.23.3
