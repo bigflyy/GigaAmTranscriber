@@ -1,8 +1,8 @@
 # Handoff: state and findings
 
-Last updated 2026-11-11 (session 24). Plan 08 (faster suggestion search on the CPU): Stage A
-done, C1 (language from GigaAM's text) built; next C2 (faster-whisper int8 as a CPU option,
-ready-made upload), B1 measured on top. Plan 07 (speakers) finished up to its Stage E: v0.6.0
+Last updated 2026-11-11 (session 25). Plan 08 (faster suggestion search on the CPU): Stage A,
+C1 and C2 (faster-whisper int8 as a CPU option for the search) built; next C4 (measure
+faster-whisper for the main text), then C5, C3 (packaging), B1. Plan 07 (speakers) finished up to its Stage E: v0.6.0
 published; only Stage F (voice library) is left, for later.
 Plan 06 finished (suggested fixes, models in their own process, release v0.5.0 published as its
 Stage D). Plan 03 (fix a part):
@@ -10,6 +10,44 @@ A and B2 done; B1 and C left. Plan 05 (player) done (C3 in v0.5.0).
 Plan 04 (Whisper) done: v0.4.0. Plan 02 (window) has D for later; plan 01 still
 holds B9, F (Parakeet, Qwen3-ASR, F5 for suggestions) (its E moved to plan 07).
 Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
+
+## Session 25 (2026-11-11): plan 08 C2, faster-whisper for the search on the CPU
+
+- Owner: C2 still wanted at 1.6-2x on top of C1 ("yes"). Mock-up
+  https://claude.ai/artifact/BWNUwoCShj5L21Gmpqe2Zv (A checkbox, my recommendation; B two cards):
+  owner chose B. Scope: "search and main text but check first the quality and etc" -> new
+  plan tasks C4 (measure the main text) and C5 (build it if good); decisions in the plan.
+- C2a: Zoont/faster-whisper-large-v3-turbo-int8-ct2 at commit 846f747 (MIT) downloaded to
+  build/cpu-asr-test/models/fw-turbo-int8 (model.json written there for tests and
+  window_check). SHA-256 as published. Same speed as A3, RAM one at a time 1185 MB (A3 1879),
+  offers equal A3's in 82% (one) / 86% (batch) of groups, the rest noise in both directions
+  (numbers in the plan). Script: this session's scratchpad fwq_diff.py.
+- C2b (91c55ca): faster-whisper 1.2.1 vendored in gigaam_app/faster_whisper (README lists the
+  patches): pip's package would install onnxruntime (CPU) over onnxruntime-directml. New
+  requirements ctranslate2 4.8.5, tokenizers 0.23.3 (tokenizers pulls huggingface_hub; never
+  imported). Dev venv got them with uv (it has no pip).
+- C2b-d (d3db213): catalog.FAST_WHISPER_MODEL (key "faster-whisper", folder
+  faster_whisper_large_v3_turbo_int8, 5 files, 780 MB; release first, HF mirror; find() knows
+  it, not in CATALOG); faster_whisper_model.py; Settings.whisper_cpu; controller._fast_search
+  (chosen, downloaded, device CPU or Auto with the file recognised on the CPU);
+  _next_part / "held" batching (up to 8 lines of one known language; "auto" lines alone);
+  worker._suggest (job gets "more" pieces, suggest_result gets the piece index). Offers keep
+  the label "Whisper". faster-whisper downloads restore the status line (engine_before).
+  572 tests (569 passed, 3 skipped); real-model test passed (GIGAAM_FW_MODEL).
+- C2e: Настройки cards in the "Варианты для сомнительных слов" block (#whisper-cpu, options
+  whisper_cpu from controller._whisper_cpu_options). window_check.py --fast-whisper FOLDER
+  (links the model in as faster_whisper_large_v3_turbo_int8, chooses it, device CPU, real
+  search on the short clip: 7.5 s, "fine tuning" offered). Runs: --whisper 146/146 (download
+  question, "Не сейчас" back to whisper.cpp); --whisper --fast-whisper 147/147. One earlier
+  run failed "Otmenit stops the search" once: a race on the short clip (the search can end
+  before the cancel click; window_check.py:591 accepts either), passed on the rerun.
+  Screens: this session's scratchpad wcheck/c/shots (05b-whisper-cpu), wcheck/a/shots
+  (05b-whisper-cpu-ask).
+- Size note: the mock-up said 776 МБ (model.bin only); the app says 780 МБ (all five files).
+- Not done: our release models-1 has no faster-whisper assets yet (the HF mirror serves them;
+  uploading is outward-facing, ask at C3). Spare engines: whisper.cpp and faster-whisper may
+  both stay loaded in the model process after switching (about 1-2 GB).
+- Disk: C: had about 20 GB free after the download.
 
 ## Session 24 (2026-11-10): plan 08 Stage A, CPU runtimes compared
 
