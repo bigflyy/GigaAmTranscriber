@@ -1,14 +1,52 @@
 # Handoff: state and findings
 
-Last updated 2026-11-10 (session 23). Plan 07 (speakers) finished up to its Stage E: v0.6.0
-published; only Stage F (voice library) is left, for later. Next: the Whisper CPU speed-up
-(docs/IDEAS.md, Models) or another idea, as the owner chooses.
+Last updated 2026-11-10 (session 24). Plan 08 (faster suggestion search on the CPU): Stage A
+measured, A6 waits for the owner's choice. Plan 07 (speakers) finished up to its Stage E: v0.6.0
+published; only Stage F (voice library) is left, for later.
 Plan 06 finished (suggested fixes, models in their own process, release v0.5.0 published as its
 Stage D). Plan 03 (fix a part):
 A and B2 done; B1 and C left. Plan 05 (player) done (C3 in v0.5.0).
 Plan 04 (Whisper) done: v0.4.0. Plan 02 (window) has D for later; plan 01 still
 holds B9, F (Parakeet, Qwen3-ASR, F5 for suggestions) (its E moved to plan 07).
 Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
+
+## Session 24 (2026-11-10): plan 08 Stage A, CPU runtimes compared
+
+- Owner asked why faster-whisper and other runtimes were never checked; plan 04 had ruled
+  faster-whisper out for the GPU only (CUDA only). Published numbers first (IDEAS.md, Started),
+  then measured on the owner's files ("1. yes"). Plan docs/plans/08-whisper-cpu.md; scripts
+  experiments/cpu_asr/ (README there); data, models and readings in build/cpu-asr-test/ (about
+  3.1 GB, gitignored); venv ~/.venvs/cpu-asr-exp (faster-whisper 1.2.1, ctranslate2 4.8.5,
+  sherpa-onnx 2.0.1). Results page (local, quotes the owner's recordings, not published):
+  `C:\MyProjects\GigaAmTranscriber\build\cpu-asr-test\results.html`.
+- Pieces: cut as the app cuts them (dump_pieces.py): lecture 18, call2023 63, interview 260,
+  Аудиозапись 362 (703 in all, below 0.97). Every runtime read the same sample: all 18 lecture
+  pieces and 40 evenly spread from each other file (138).
+- whisper.cpp 1.9.5 with language "auto" runs the encoder twice per piece: once to detect the
+  language (src/whisper.cpp:4177, whisper_lang_auto_detect_internal) and again to transcribe
+  (:7215). faster-whisper's detect_language also encodes separately.
+- Clean timing (lecture, 16 cores reserved, 8 threads), s per piece: whisper.cpp q5_0 auto 19.2
+  (today), ru 9.9; faster-whisper large-v3-turbo int8 one 6.3 (1879 MB peak), batch 8 5.0
+  (2754 MB); Parakeet TDT 0.6B v3 int8 1.25 (1195 MB). With other jobs on the PC: auto 22-26,
+  ru 10.4-11.3, fw one 6.1-6.5, fw batch 5.0-5.4, Parakeet 1.1-1.8.
+- whisper.cpp ru gives the same offers as auto on lecture, call2023 and interview (every group).
+  Аудиозапись has real English speech (Nigerian speaker): auto took 17 of 40 pieces as en; a fixed
+  "ru" makes Whisper translate English into Russian. So the language comes from GigaAM's text per
+  piece (common.hint_language: under 15% Latin letters -> "ru", else Whisper detects): 122 of 138
+  pieces got ru, Whisper's own detection agreed on 121; offers equal auto's on 106 of 110 groups
+  of Аудиозапись.
+- Lecture: both Whisper runtimes give all nine terms of plan 06 A5 (faster-whisper splits words at
+  hyphens, fixed in read_fw.py and compare.joined_rows). faster-whisper also skips "стандартные
+  идеи". Owner's files: whisper.cpp and faster-whisper differ in about 30-40% of groups, neither
+  clearly better (fw: ARP, задержек; wcpp: ARPA, sociable); both noisy on the calls.
+- Parakeet: terms in Cyrillic (файн тюнинг, бим-модели), LM агентов, many wrong endings (сотнями,
+  специальной, принятию, положен); LingoFlip build worse (тулсколлинг, Индорсофт). Not a
+  replacement for Whisper as the second reader.
+- Stricter threshold (B1, not measured for quality yet): below 0.80 keeps 10 of 18, 41 of 63,
+  199 of 260, 299 of 362 pieces.
+- Tooling: sherpa-onnx gives NeMo tokens with a plain space as the word mark (not U+2581). The
+  dev venv has no psutil, so whisper.cpp RAM is not in the tables. The network gave about
+  0.4-1 MB/s from Hugging Face this session.
 
 ## Session 23 (2026-11-10): v0.6.0 published
 

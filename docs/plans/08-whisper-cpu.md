@@ -27,7 +27,7 @@ experiments/cpu_asr/. Data and models: build/cpu-asr-test/ (gitignored).
 - [x] **A2** Baseline: the app's whisper.cpp q5_0 on the CPU, 8 threads, language auto (as now) and language "ru" (one encoder pass); time per piece and the offers
 - [x] **A3** faster-whisper large-v3-turbo int8 on the CPU (own venv): one piece at a time and batched (8 per batch); greedy, no previous text, word times; time, RAM, offers
 - [x] **A4** Parakeet TDT 0.6B v3 on sherpa-onnx: the usual int8 build and the selective int8 build (LingoFlip); time, RAM, offers
-- [ ] **A5** compare.py: offers of each runtime against the baseline, lecture terms checked by hand (the A5 list of plan 06: LLM-агентов, fine tuning, Tools Calling, Prompt Engineering ...); results page for the owner
+- [x] **A5** compare.py: offers of each runtime against the baseline, lecture terms checked by hand (the A5 list of plan 06: LLM-агентов, fine tuning, Tools Calling, Prompt Engineering ...); results page for the owner
 - [ ] **A6** Owner chooses what goes on (a runtime, language once per file, or nothing)
 
 ### Stage B: Less work per file
