@@ -446,6 +446,9 @@ legend { font-size: 12px; font-weight: 600; color: var(--muted); text-transform:
 .choice input { margin: 3px 0 0; accent-color: var(--accent); }
 .choice .choice-title { font-weight: 600; }
 .choice .choice-note { font-size: 13px; color: var(--muted); }
+/* Plan 08 C2: a smaller choice inside a fieldset ("Whisper на процессоре"). */
+.sub-choice { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.sub-choice .choice-label { font-size: 13px; color: var(--text-2); }
 
 .segmented { display: inline-flex; border: 1px solid var(--card-line); border-radius: 10px; overflow: hidden; align-self: flex-start; }
 .segmented label { padding: 7px 14px; cursor: pointer; font-size: 13px; background: var(--card); border-right: 1px solid var(--card-line); }

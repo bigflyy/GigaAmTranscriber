@@ -17,6 +17,11 @@ Set GIGAAM_THEME=light or dark to fix the theme.
 --whisper FOLDER names a downloaded Whisper model folder (whisper_large_v3_turbo_q5_0);
 it is linked into the temporary download folder, and SHORT_AUDIO is transcribed with
 Whisper and a chosen language too. Without it only the language choice is checked.
+
+--fast-whisper FOLDER names a downloaded faster-whisper model folder (plan 08 C2, with its
+model.json); it is linked in as faster_whisper_large_v3_turbo_int8, chosen in Настройки, and
+the suggestion search reads the short file with it on the CPU. Without it the choice asks
+the download question and "Не сейчас" is checked.
 """
 
 import argparse
@@ -393,6 +398,51 @@ def speech_steps(js, shoot):
     js("$('vad-pause-default').click()")
     wait(lambda: '"vad_min_silence_ms": 2000' in settings_text(), 10, "pause back to the default")
     check("the default link puts the default back", js("$('vad-pause').value") == "2" and js("$('vad-pause-default').hidden"))
+
+
+def whisper_cpu_steps(js, control, shoot, fast):
+    """Plan 08 C2: "Whisper на процессоре" in Настройки (layout B, two cards). Without a
+    faster-whisper model, choosing it asks the download question and "Не сейчас" goes back
+    to whisper.cpp. With --fast-whisper (a downloaded model linked in) it is chosen at once,
+    and with the device "Процессор" the search reads the shown file with it."""
+    keys = js("[...document.querySelectorAll('#whisper-cpu input')].map((input) => input.value)")
+    check("two Whisper engines are offered", keys == ["whisper.cpp", "faster-whisper"], keys)
+    check("whisper.cpp is the default", js("document.querySelector('#whisper-cpu input[value=\"whisper.cpp\"]').checked"))
+    note = js("$('whisper-cpu').querySelectorAll('.choice-note')[1].textContent")
+    js("$('whisper-cpu').scrollIntoView()")
+    if not fast:
+        check("faster-whisper says it is downloaded separately", "Скачивается отдельно, 780 МБ" in note, note)
+        js("document.querySelector('#whisper-cpu input[value=\"faster-whisper\"]').click()")
+        wait(lambda: js("$('download').open"), 10, "faster-whisper download question")
+        check("the question names faster-whisper", js("$('download-title').textContent") == "Скачать модель faster-whisper"
+              and "780 МБ" in js("$('download-text').textContent"), js("$('download-text').textContent"))
+        shoot("05b-whisper-cpu-ask")
+        js("$('download-no').click()")
+        wait(lambda: js("document.querySelector('#whisper-cpu input[value=\"whisper.cpp\"]').checked"), 10,
+             "whisper.cpp again")
+        check("\"Не сейчас\" goes back to whisper.cpp", '"whisper_cpu": "whisper.cpp"' in settings_text()
+              and control.engine["state"] == "ready")
+        return
+    check("faster-whisper is downloaded", note.endswith("Скачана."), note)
+    js("document.querySelector('#whisper-cpu input[value=\"faster-whisper\"]').click()")
+    wait(lambda: '"whisper_cpu": "faster-whisper"' in settings_text(), 10, "faster-whisper saved")
+    check("no question for a downloaded model", not js("$('download').open"))
+    shoot("05b-whisper-cpu")
+    js("document.querySelector('#devices input[value=CPU]').click()")
+    wait(lambda: control.engine["state"] == "ready" and "процессор" in js("$('engine-text').textContent"), 60, "CPU model")
+    item = control.files[0]
+    check("the search would use faster-whisper", control._suggest_models(item) == [catalog.FAST_WHISPER_MODEL.key],
+          control._suggest_models(item))
+    began = time.perf_counter()
+    errors, notice = [], control._notice
+    control._notice = lambda text: (errors.append(text), notice(text))  # a failed search says so here
+    control.find_suggestions(item.id)
+    wait(lambda: item.result.suggestions_searched and control.suggesting is None, 600, "faster-whisper search")
+    control._notice = notice
+    offered = [(word.text, offer["models"], [row[2] for row in offer["words"]])
+               for segment in item.segments for word in segment.words for offer in word.suggestions or []]
+    check("faster-whisper searched the file without an error", item.result.suggestions_searched and not errors,
+          f"{time.perf_counter() - began:.1f} s; offers {offered}; notices {errors}")
 
 
 def add_steps(js, control, long_audio, short_audio, shoot):
@@ -790,7 +840,7 @@ def player_steps(js, control, item, shoot):
     js("filePlayer.pause()")
 
 
-def scenario(window, control, long_audio, short_audio, shoot, whisper=False):
+def scenario(window, control, long_audio, short_audio, shoot, whisper=False, fast=False):
     js = window.evaluate_js
     try:
         wait(lambda: js("typeof state !== 'undefined' && state.booted"), 30, "page ready")
@@ -897,6 +947,7 @@ def scenario(window, control, long_audio, short_audio, shoot, whisper=False):
         check("settings view", not js("$('view-settings').hidden"))
         shoot("05-settings")
         speech_steps(js, shoot)
+        whisper_cpu_steps(js, control, shoot, fast)
         js("document.querySelector('#devices input[value=CPU]').click()")
         # Wait for the page, not only the controller: its message can arrive a moment later.
         wait(lambda: "процессор" in js("$('engine-text').textContent"), 60, "CPU model")
@@ -1001,6 +1052,8 @@ def main():
     parser.add_argument("short_audio", type=Path)
     parser.add_argument("--out", type=Path, default=Path("."), help="folder for the PNGs")
     parser.add_argument("--whisper", type=Path, help="a downloaded Whisper model folder to transcribe with")
+    parser.add_argument("--fast-whisper", type=Path,
+                        help="a downloaded faster-whisper model folder (faster_whisper_large_v3_turbo_int8) to search with")
     args = parser.parse_args()
     # The log is usually redirected to a file, whose default encoding (cp1251 here) has no
     # arrow and other page symbols: write UTF-8 so a check line never stops the scenario.
@@ -1020,10 +1073,12 @@ def main():
         if args.whisper:
             # Linked, not copied (574 MB): hard links, or symbolic ones across drives (WSL).
             link_model_folder(args.whisper.resolve(), downloads)
+        if args.fast_whisper:
+            link_model_folder(args.fast_whisper.resolve(), downloads, catalog.FAST_WHISPER_MODEL.folder)
         shoot_again = screenshot_function(args.out)
         run = functools.partial(scenario, long_audio=args.long_audio.resolve(),
                                 short_audio=args.short_audio.resolve(), shoot=shoot_again,
-                                whisper=args.whisper is not None)
+                                whisper=args.whisper is not None, fast=args.fast_whisper is not None)
         window_module.main([], scenario=run)
         if confirmed_close:
             window_module.main([], scenario=functools.partial(second_session, short_audio=args.short_audio.resolve(),

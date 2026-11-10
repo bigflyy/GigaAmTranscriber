@@ -1651,6 +1651,27 @@ function renderSettings() {
   $('doubt-light').value = Math.round((settings.doubt_light || 0.97) * 100);
   $('doubt-strong').value = Math.round((settings.doubt_strong || 0.80) * 100);
   $('suggest').value = settings.suggest || 'gpu';
+  // Plan 08 C2: whisper.cpp or faster-whisper for the search on the processor. Choosing
+  // faster-whisper before it is downloaded asks the download question (Python decides).
+  const engines = $('whisper-cpu');
+  engines.textContent = '';
+  for (const engine of options.whisper_cpu || []) {
+    const label = el('label', 'choice');
+    const input = el('input');
+    input.type = 'radio';
+    input.name = 'whisper-cpu';
+    input.value = engine.key;
+    input.checked = (settings.whisper_cpu || 'whisper.cpp') === engine.key;
+    input.addEventListener('change', async () => {
+      // Refused (another model is downloading): show the choice that is kept.
+      if (!(await changeSetting({ whisper_cpu: engine.key }))) renderSettings();
+    });
+    const body = el('div');
+    body.appendChild(el('div', 'choice-title', engine.title));
+    body.appendChild(el('div', 'choice-note', engine.note));
+    label.append(input, body);
+    engines.appendChild(label);
+  }
   $('speakers').checked = !!settings.speakers;
   $('speakers-size').textContent = options.speaker_download
     ? `Модели для этого (${options.speaker_download}) скачиваются при первом использовании.` : '';
@@ -1714,7 +1735,7 @@ for (const field of SPEECH_FIELDS) {
 
 async function changeSetting(change) {
   $('reset-note').textContent = '';
-  await call('set_settings', change);
+  return await call('set_settings', change);
 }
 
 // ------------------------------------------------------------------ download dialog

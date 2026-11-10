@@ -191,10 +191,16 @@
             <option value="always">Искать сразу всегда</option>
             <option value="off">Только по кнопке «Найти варианты»</option>
           </select>
+          <!-- Plan 08 C2 (owner 2026-11-11, layout B): what runs Whisper for the search on the processor. -->
+          <div class="sub-choice">
+            <div class="choice-label">Whisper на процессоре</div>
+            <div id="whisper-cpu" class="choices"></div>
+          </div>
           <p class="hint">Строки с сомнительными словами слушает ещё раз Whisper (с терминами), а текст
             Whisper проверяет GigaAM. Если они слышат иначе, слово подчёркивается синим; щелчок по нему
             показывает вариант, «Взять» ставит его в текст. На процессоре Whisper работает медленнее
-            самой записи, поэтому там поиск по умолчанию запускается кнопкой под именем файла.</p>
+            самой записи, поэтому там поиск по умолчанию запускается кнопкой под именем файла.
+            faster-whisper ищет на процессоре быстрее; на видеокарте всегда работает whisper.cpp.</p>
         </fieldset>
         <fieldset>
           <legend>Говорящие</legend>

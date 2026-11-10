@@ -283,11 +283,11 @@ def check_no_torch(app):
         fail(f"torch files ended up in the build: {leftovers[:5]}")
 
 
-def link_model_folder(source, downloads):
+def link_model_folder(source, downloads, name=None):
     """Put a downloaded model folder into a download folder without copying 574 MB:
     hard links where the drive allows them, else symbolic links (WSL: /mnt/c to /tmp),
-    else a copy."""
-    target = Path(downloads) / source.name
+    else a copy. name: the folder name there, when it differs from the source's."""
+    target = Path(downloads) / (name or source.name)
     target.mkdir()
     for item in source.iterdir():
         try:
