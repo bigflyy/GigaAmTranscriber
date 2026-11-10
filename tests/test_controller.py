@@ -872,6 +872,18 @@ def test_doubtful_words_are_read_again_by_whisper(app, searching):
                     "can_cancel": False, "searched": True}
 
 
+def test_whisper_is_told_russian_for_a_cyrillic_line_unless_a_language_is_set(app, searching):
+    # Plan 08 C1: with language "auto" a line GigaAM wrote in Cyrillic is read as "ru", which
+    # spares whisper.cpp its detection pass; a line with much Latin text is left to detection.
+    [first] = suggest_jobs(app)
+    assert first[7] == "auto"  # "наш любимый механизм Tullz Colling, и": 39% Latin letters
+    app.handle(("suggest_done", first[1]))
+    [second] = suggest_jobs(app)
+    assert second[7] == "ru"  # "вся мозаика."
+    app.settings.language = "en"  # chosen in Настройки: used as it is
+    assert app._suggest_language(searching, searching.segments[1].words) == "en"
+
+
 def test_cancel_the_search_keeps_the_offers_found_and_drops_the_rest(app, searching):
     # Owner 2026-11-09: "maybe we should be able to cancel jobs? like this long one looking for variants".
     [job] = suggest_jobs(app)

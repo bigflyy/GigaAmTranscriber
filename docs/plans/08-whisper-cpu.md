@@ -28,7 +28,13 @@ experiments/cpu_asr/. Data and models: build/cpu-asr-test/ (gitignored).
 - [x] **A3** faster-whisper large-v3-turbo int8 on the CPU (own venv): one piece at a time and batched (8 per batch); greedy, no previous text, word times; time, RAM, offers
 - [x] **A4** Parakeet TDT 0.6B v3 on sherpa-onnx: the usual int8 build and the selective int8 build (LingoFlip); time, RAM, offers
 - [x] **A5** compare.py: offers of each runtime against the baseline, lecture terms checked by hand (the A5 list of plan 06: LLM-агентов, fine tuning, Tools Calling, Prompt Engineering ...); results page for the owner
-- [ ] **A6** Owner chooses what goes on (a runtime, language once per file, or nothing)
+- [x] **A6** Owner chooses what goes on (a runtime, language once per file, or nothing)
+
+Owner's decision (2026-11-11, after the results page build/cpu-asr-test/results.html): the language
+from GigaAM's text ("it is weird but ok lets do that. unless configured otherwise in settings"):
+only when Settings.language is auto; a language set in Settings is used as now. faster-whisper:
+"i guess it should be an option if it is that faster" (its 1.6 GB file is turbo in fp16; an int8
+file is about 0.8 GB). Results in HANDOFF.md, session 24.
 
 ### Stage B: Less work per file
 
@@ -37,4 +43,6 @@ experiments/cpu_asr/. Data and models: build/cpu-asr-test/ (gitignored).
 
 ### Stage C: In the app
 
-- [ ] **C1** Build what the owner chose in A6 and B; tests; window_check; Windows and Linux builds
+- [x] **C1** Language from GigaAM's text for the search's Whisper readings when Settings.language is auto (fix.py, controller); tests
+- [ ] **C2** faster-whisper int8 as a CPU option: an int8 model file (about 0.8 GB; own conversion or a ready upload, owner to choose), catalog entry and download, an engine next to whisper_model.py, the choice in Настройки, search pieces read in batches; tests
+- [ ] **C3** Packaging of C2 (CTranslate2 in the Windows and Linux builds), window_check, builds, release notes

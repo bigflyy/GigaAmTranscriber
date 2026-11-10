@@ -186,6 +186,29 @@ def word_key(text):
     return "".join(_WORD_KEY.findall(text.lower().replace("ё", "е")))
 
 
+# Plan 08: below this share of Latin letters GigaAM's text of a piece counts as Russian.
+HINT_LATIN_BELOW = 0.15
+_LATIN = re.compile("[A-Za-z]")
+_CYRILLIC = re.compile("[Ѐ-ӿ]")
+
+
+def language_hint(words):
+    """The language Whisper is told for a piece of GigaAM's text, or None to let it detect one.
+
+    With no language whisper.cpp runs its encoder twice per piece: once only to detect the
+    language, then again to recognise (plan 08 A2: 19.2 s per piece instead of 9.9 s on the
+    CPU). GigaAM knows only Russian and writes English speech in Latin letters, so a piece
+    that is almost all Cyrillic is Russian ("ru"); any other piece (English speech, or many
+    English terms) is left to Whisper's detection. Measured on the owner's files: 122 of 138
+    pieces got "ru", and Whisper's own detection agreed on 121 of them.
+    """
+    text = " ".join(word.text for word in words)
+    latin, cyrillic = len(_LATIN.findall(text)), len(_CYRILLIC.findall(text))
+    if latin + cyrillic == 0:
+        return None
+    return "ru" if latin / (latin + cyrillic) < HINT_LATIN_BELOW else None
+
+
 def same_words(a, b):
     """True if two texts have the same words, ignoring case, punctuation and ё/е."""
     def keys(text):

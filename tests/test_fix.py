@@ -95,6 +95,20 @@ def test_same_words():
     assert not fix.same_words("Tools Calling", "Tullz Colling")
 
 
+def plain_words(text):
+    return [Word(0.0, 0.1, piece) for piece in text.split()]
+
+
+def test_language_hint_from_gigaams_script():
+    # Plan 08 C1: almost all Cyrillic -> Russian; English speech in Latin letters, or a line
+    # full of English terms, is left to Whisper's own detection.
+    assert fix.language_hint(plain_words("Вдруг самое лучшее техническое задание для агента, вроде той же DepS,")) == "ru"
+    assert fix.language_hint(plain_words("Like university ivents for walenturing.")) is None
+    assert fix.language_hint(plain_words("наш любимый механизм Tullz Colling, и")) is None  # 39% Latin
+    assert fix.language_hint(plain_words("93 20 24. —")) is None  # no letters at all
+    assert fix.language_hint([]) is None
+
+
 def test_spread_words():
     found = fix.spread_words("ab abcd", 1.0, 4.0)
     assert [(w.text, w.start, w.end) for w in found] == [("ab", 1.0, 2.0), ("abcd", 2.0, 4.0)]

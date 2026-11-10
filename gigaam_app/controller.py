@@ -1017,8 +1017,21 @@ class Controller:
             search["request"] = next(self.suggest_ids)
             self.worker.jobs.put(("suggest", search["request"], item.path, windows, search["models"],
                                   self.settings.engine_device, self.settings.cpu_threads,
-                                  self.settings.language, self.settings.terms or None))
+                                  self._suggest_language(item, search["context"]), self.settings.terms or None))
             self._emit_file(item)
+
+    def _suggest_language(self, item, words):
+        """The language Whisper is told for one piece of the search (plan 08 C1).
+
+        A language chosen in Настройки is used as it is. With "auto" (the default) the
+        language comes from GigaAM's own text of the piece (fix.language_hint), which spares
+        Whisper its detection pass on the CPU; owner 2026-11-11: "ok lets do that. unless
+        configured otherwise in settings". Whisper's own text is read by RNNT, which needs no
+        language, so it is passed on unchanged."""
+        language = self.settings.language
+        if language not in (None, "", "auto") or self._own_model(item) == "Whisper":
+            return language
+        return fix.language_hint(words) or language
 
     @staticmethod
     def _suggest_pieces(segments, groups):
