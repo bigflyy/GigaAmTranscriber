@@ -24,6 +24,7 @@ from .audio import SAMPLE_RATE, decode_audio
 from .catalog import ModelNotInstalled
 from .paths import models_dir
 from .vad import WINDOW, ChunkFinder, SileroVad, VadOptions
+from .faster_whisper_model import FasterWhisperModel, is_fast_whisper_folder
 from .whisper_model import WhisperModel, is_whisper_folder
 
 # Model key -> exported model folder, for every model in the catalog.
@@ -96,6 +97,8 @@ class Transcriber:
         self.model_label = model
         if is_whisper_folder(folder):
             self.asr = WhisperModel(folder, device=device, cpu_threads=cpu_threads, language=language)
+        elif is_fast_whisper_folder(folder):
+            self.asr = FasterWhisperModel(folder, device=device, cpu_threads=cpu_threads, language=language)
         else:
             self.asr = AsrModel(folder, device=device, cpu_threads=cpu_threads)
         # Silero does tiny sequential steps; one CPU thread is fastest.

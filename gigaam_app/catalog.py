@@ -105,6 +105,30 @@ SPEAKER_MODEL = ModelInfo(
     title="pyannote community-1 (ONNX)", model_type="speakers")
 
 
+# Whisper large-v3-turbo for faster-whisper (CTranslate2), quantised to int8 (plan 08 C2):
+# about 1.6x faster than whisper.cpp q5_0 on the CPU one piece at a time, 2x in batches of
+# 8 (HANDOFF.md, session 24). Used only when Настройки choose it for Whisper on the
+# processor; downloaded only then (owner 2026-11-11: "users dont have to download all the
+# models all at once"). The files are Zoont's ready-made conversion (MIT, made with
+# ct2-transformers-converter --quantization int8 from openai/whisper-large-v3-turbo),
+# pinned to one commit; our release is tried first, as for Whisper.
+FAST_WHISPER_HF = "https://huggingface.co/Zoont/faster-whisper-large-v3-turbo-int8-ct2/resolve/846f74797293e5f605d509a6ab5395a1f2f2874e"
+FAST_WHISPER_MODEL = ModelInfo(
+    "faster-whisper", "faster_whisper_large_v3_turbo_int8",
+    "Whisper large-v3-turbo for faster-whisper (CTranslate2 int8): faster on the CPU",
+    files=tuple(RemoteFile(name, size, sha256, role=role, mirrors=(f"{FAST_WHISPER_HF}/{name}",))
+                for name, size, sha256, role in (
+                    ("model.bin", 814_054_531, "7482f978f9493b93b3d0bf68a148a1a62ca02547e8ee981358ff8ef2de8a9418", "model"),
+                    ("config.json", 2_487, "27ec8ecb8ba05f3ac81522a7a035bd5ab19a5b567640bf68ccec90ded4fc1726", "config"),
+                    ("preprocessor_config.json", 340,
+                     "7ccc62c6f2765af1f3b46c00c9b5894426835a05021c8b9c01eecb6dfb542711", "preprocessor"),
+                    ("tokenizer.json", 2_710_337,
+                     "297b13372ac43916285644fb9687add3cc62ee2a1adb60da3dc25cc94c1871fd", "tokenizer"),
+                    ("vocabulary.json", 1_119_981,
+                     "697ee5a65726e46b4d294d1a243d98e1878f5d81caba17891b1c5ebab7a912a9", "vocabulary"))),
+    title="Whisper large-v3-turbo (faster-whisper int8)", model_type="faster-whisper")
+
+
 def model_title(key):
     """Full model name for a settings key ("RNNT" -> "GigaAM v3 RNNT"); unknown keys stay as they are."""
     info = BY_KEY.get(key)
@@ -128,7 +152,10 @@ class ModelNotInstalled(RuntimeError):
 
 
 def find(key):
-    """ModelInfo for a key or a v0.1 name; ValueError for unknown names."""
+    """ModelInfo for a key or a v0.1 name, or FAST_WHISPER_MODEL (not in the window's model
+    list, but downloaded and loaded by its key); ValueError for unknown names."""
+    if key == FAST_WHISPER_MODEL.key:
+        return FAST_WHISPER_MODEL
     info = BY_KEY.get(ALIASES.get(key, key))
     if info is None:
         raise ValueError(f"Unknown model {key!r}; expected one of {', '.join(BY_KEY)}")

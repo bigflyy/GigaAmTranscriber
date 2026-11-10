@@ -384,7 +384,8 @@ def test_settings_apply_to_the_next_file_and_reload_the_model(app, media):
                                           "outputs": ["txt", "srt"], "include_timestamps": False, "terms": "",
                                           "doubt_marks": True, "doubt_style": "underline",
                                           "doubt_light": 0.97, "doubt_strong": 0.80, "player_volume": 1.0,
-                                          "suggest": "gpu", "speakers": False, "show_speakers": True,
+                                          "suggest": "gpu", "whisper_cpu": "whisper.cpp", "speakers": False,
+                                          "show_speakers": True,
                                           "vad_min_silence_ms": 2000, "vad_threshold": 0.5, "max_duration": 25.0}
     assert app.fake_worker.take() == [("load", ("RNNT", "cpu", 4))]
     app.add_files([str(media[0])])
@@ -846,8 +847,8 @@ def suggest_jobs(app):
 
 def test_doubtful_words_are_read_again_by_whisper(app, searching):
     [job] = suggest_jobs(app)
-    kind, request, path, windows, models, device, threads, language, terms = job
-    assert (path, models) == (searching.path, ["Whisper"])  # not CTC (plan 06 A5), not RNNT (made the text)
+    kind, request, path, windows, models, device, threads, language, terms, more = job
+    assert (path, models, more) == (searching.path, ["Whisper"], ())  # one line per job for whisper.cpp  # not CTC (plan 06 A5), not RNNT (made the text)
     # The whole first line is read: the cuts lie before "наш" and after "и".
     (left_lo, left_hi), (right_lo, right_hi) = windows
     assert left_hi <= 1.0 and right_lo >= 3.7
@@ -1084,6 +1085,118 @@ def test_a_line_longer_than_whisper_hears_is_read_by_groups(app, media, monkeypa
     app.handle(("suggest_done", job[1]))
     [second] = suggest_jobs(app)
     assert second[3][0][0] > 15
+
+
+# ---------------------------------------------------------------------- faster-whisper (plan 08 C2)
+
+FAST = catalog.FAST_WHISPER_MODEL.key
+
+
+def cyrillic_lines(count):
+    """count lines 4 s apart, each with one doubtful word, all in Cyrillic (read as "ru")."""
+    return [doubtful_line(("слово", i * 4.0, i * 4.0 + 0.5, 0.99), ("мозаика", i * 4.0 + 0.6, i * 4.0 + 1.2, 0.5))
+            for i in range(count)]
+
+
+@pytest.fixture
+def fast(app, monkeypatch):
+    """faster-whisper chosen and downloaded, recognition on the processor, search after every file."""
+    monkeypatch.setattr(app, "_model_installed", lambda key: key in ("RNNT", "Whisper", FAST))
+    app.set_settings({"whisper_cpu": "faster-whisper", "device": "CPU", "suggest": "always"})
+    app.fake_worker.take()
+    return app
+
+
+def test_faster_whisper_reads_up_to_eight_russian_lines_at_once(fast, media):
+    fast.add_files([str(media[0])])
+    item = fast.files[0]
+    finish(fast, media[0], cyrillic_lines(10), device="CPU")
+    [job] = suggest_jobs(fast)
+    assert job[4] == [FAST] and job[7] == "ru"
+    assert len(job[9]) == 7 and all(language == "ru" for _, language in job[9])
+    assert fast._file_view(item)["suggest"]["text"] == "Ищу варианты для сомнительных слов: 0 из 10"
+    # A reading of the third piece of the batch goes to the third line, kept as Whisper's offer.
+    fast.handle(("suggest_result", job[1], FAST, heard_words(("слово", 8.0, 8.5), ("мозаики", 8.6, 9.2)), None, 2))
+    offers = item.segments[2].words[1].suggestions
+    assert offers[0]["models"] == ["Whisper"] and offers[0]["words"][0][2] == "мозаики"
+    assert item.segments[0].words[1].suggestions is None
+    fast.handle(("suggest_done", job[1]))
+    assert fast._file_view(item)["suggest"]["text"] == "Ищу варианты для сомнительных слов: 8 из 10"
+    [second] = suggest_jobs(fast)
+    assert len(second[9]) == 1  # the last two lines
+    fast.handle(("suggest_done", second[1]))
+    assert fast.suggesting is None and item.result.suggestions_searched
+
+
+def test_a_line_whisper_must_detect_is_read_on_its_own(fast, media):
+    lines = cyrillic_lines(3)
+    lines[1] = doubtful_line(("Tools", 4.0, 4.5, 0.5), ("Calling", 4.6, 5.2, 0.99))  # Latin: Whisper detects
+    fast.add_files([str(media[0])])
+    item = fast.files[0]
+    finish(fast, media[0], lines, device="CPU")
+    [first] = suggest_jobs(fast)
+    assert first[7] == "ru" and first[9] == ()  # the next line has another language: it waits
+    fast.handle(("suggest_done", first[1]))
+    [second] = suggest_jobs(fast)
+    assert second[7] == "auto" and second[9] == ()
+    # A cancel also drops the line made ready for the next job.
+    assert fast.cancel_suggestions(item.id)
+    fast.handle(("suggest_done", second[1]))
+    assert suggest_jobs(fast) == [] and fast.suggesting is None and not item.result.suggestions_searched
+
+
+def test_whisper_cpp_reads_on_a_video_card_or_when_faster_whisper_is_missing(app, media, monkeypatch):
+    installed = {"RNNT", "Whisper", FAST}
+    monkeypatch.setattr(app, "_model_installed", lambda key: key in installed)
+    app.set_settings({"whisper_cpu": "faster-whisper"})  # device "Авто"
+    app.add_files([str(media[0])])
+    finish(app, media[0], cyrillic_lines(3))  # recognised on the video card
+    [job] = suggest_jobs(app)
+    assert job[4] == ["Whisper"] and job[9] == ()
+    item = app.files[0]
+    item.result.device = "CPU"  # "Авто" on a PC without a video card
+    assert app._suggest_models(item) == [FAST]
+    installed.discard(FAST)
+    assert app._suggest_models(item) == ["Whisper"]
+    app.set_settings({"device": "GPU"})
+    installed.add(FAST)
+    assert app._suggest_models(item) == ["Whisper"]
+
+
+def test_choosing_faster_whisper_asks_to_download_it_and_not_now_goes_back(app, monkeypatch):
+    monkeypatch.setattr(app, "_model_installed", lambda key: key in ("RNNT", "Whisper"))
+    cards = app._options()["whisper_cpu"]
+    assert [card["key"] for card in cards] == ["whisper.cpp", "faster-whisper"]
+    assert cards[1]["note"].endswith("Скачивается отдельно, 780 МБ.") and not cards[1]["installed"]
+    app.set_settings({"whisper_cpu": "faster-whisper"})
+    question = last(app.sent, "download")
+    assert question["phase"] == "ask" and question["model"] == FAST and "780 МБ" in question["text"]
+    assert app.settings.whisper_cpu == "faster-whisper"
+    app.decline_download()
+    assert app.settings.whisper_cpu == "whisper.cpp" and last(app.sent, "settings")["whisper_cpu"] == "whisper.cpp"
+    with pytest.raises(ValueError):
+        app.set_settings({"whisper_cpu": "vosk"})
+
+
+def test_faster_whisper_download_keeps_the_status_line_and_a_stop_goes_back(app, monkeypatch, tmp_path):
+    installed = {"RNNT", "Whisper"}
+    monkeypatch.setattr(app, "_model_installed", lambda key: key in installed)
+    status = dict(app.engine)
+    app.set_settings({"whisper_cpu": "faster-whisper"})
+    assert app.download()
+    assert ("download", FAST) in app.fake_worker.take()
+    assert app.engine["state"] == "busy"
+    app.handle(("download_done", FAST, None))  # stopped
+    assert app.engine == status and app.settings.whisper_cpu == "whisper.cpp"
+    app.set_settings({"whisper_cpu": "faster-whisper"})
+    assert app.download()
+    installed.add(FAST)
+    app.handle(("download_done", FAST, tmp_path))
+    assert app.engine == status and app.settings.whisper_cpu == "faster-whisper"
+    assert last(app.sent, "download")["phase"] == "done"
+    assert last(app.sent, "options")["whisper_cpu"][1]["note"].endswith("Скачана.")
+    app.reset_settings()
+    assert app.settings.whisper_cpu == "whisper.cpp"
 
 
 def test_a_failed_search_says_so_and_ends(app, searching):

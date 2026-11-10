@@ -25,7 +25,7 @@ import tempfile
 import threading
 import time
 
-from . import audio as audio_module, catalog, config, diarize, fix
+from . import audio as audio_module, catalog, config, diarize, faster_whisper_model, fix
 from .audio import wav_clip
 from .audio_server import AudioServer
 from .engine import MODELS, Transcript
@@ -53,6 +53,9 @@ MODEL_NOTES = {
     "CTC": "Русский язык, пунктуация и заглавные буквы. Немного быстрее RNNT.",
     "Whisper": "Whisper large-v3-turbo: 99 языков, английские термины пишет латиницей. "
                "Медленнее GigaAM примерно в 2,5 раза; на русском GigaAM обычно точнее.",
+    # The download question of plan 08 C2 (the mock-up the owner saw).
+    "faster-whisper": "Whisper large-v3-turbo в формате faster-whisper (int8): ищет варианты для "
+                      "сомнительных слов на процессоре в 1,6-2 раза быстрее. На видеокарте не используется.",
 }
 # Speech languages offered in the window for Whisper: (code, Russian name). The settings
 # file and --language take any code Whisper knows; a code not listed here is still shown.
@@ -258,6 +261,7 @@ class Controller:
         self.diarize_ids = itertools.count(1)
         self.speaker_download = None  # {"done", "total"} bytes while the speaker models download
         self.engine = {"state": "idle", "text": "Запуск...", "detail": ""}
+        self.engine_before = dict(self.engine)  # the status line before a download (faster-whisper)
         # The player (plan 05): files reach the page through a local server; formats the
         # page cannot play get a temporary copy, made once per file.
         self.audio_server = AudioServer()
@@ -416,11 +420,22 @@ class Controller:
             "cpu_count": os.cpu_count() or 8,
             "max_speakers": MAX_SPEAKERS,
             "speaker_download": size_text(catalog.SPEAKER_MODEL.download_size),
+            "whisper_cpu": self._whisper_cpu_options(),
             "speech_defaults": self._speech_view(config.Settings()),
             "speech_limits": {key: list(limits) for key, limits in SPEECH_LIMITS.items()},
             "config_note": f"Остальные параметры поиска речи задаются в файле "
                            f"{self.settings_path or config.default_path()}.",
         }
+
+    def _whisper_cpu_options(self):
+        """The two cards of "Whisper на процессоре" (plan 08 C2): key, title, note."""
+        info = catalog.FAST_WHISPER_MODEL
+        installed = self._model_installed(info.key)
+        fast_note = "В 1,6-2 раза быстрее на процессоре. " + (
+            "Скачана." if installed else f"Скачивается отдельно, {size_text(info.download_size)}.")
+        return [{"key": "whisper.cpp", "title": "whisper.cpp", "note": "Входит в программу вместе с Whisper."},
+                {"key": "faster-whisper", "title": "faster-whisper (int8)", "note": fast_note,
+                 "installed": installed}]
 
     @staticmethod
     def _speech_view(settings):
@@ -433,8 +448,8 @@ class Controller:
                 "outputs": list(s.outputs), "include_timestamps": s.include_timestamps,
                 "terms": s.terms, "doubt_marks": s.doubt_marks, "doubt_style": s.doubt_style,
                 "doubt_light": s.doubt_light, "doubt_strong": s.doubt_strong, "player_volume": s.player_volume,
-                "suggest": s.suggest, "speakers": s.speakers, "show_speakers": s.show_speakers,
-                **self._speech_view(s)}
+                "suggest": s.suggest, "whisper_cpu": s.whisper_cpu, "speakers": s.speakers,
+                "show_speakers": s.show_speakers, **self._speech_view(s)}
 
     # ------------------------------------------------------------------ page calls
 
@@ -840,9 +855,25 @@ class Controller:
         """The installed model that reads the doubtful words again: Whisper for GigaAM's text,
         GigaAM RNNT for Whisper's. Measured on the 455 s lecture (plan 06 A5, 2026-11-08):
         Whisper's offers were right in about half the places (the English terms), CTC's in 1
-        of 11 (half-Latin words like "Lнt 4."), so CTC is not asked."""
-        wanted = "RNNT" if self._own_model(item) == "Whisper" else "Whisper"
+        of 11 (half-Latin words like "Lнt 4."), so CTC is not asked.
+        Whisper on the processor is faster-whisper when Настройки choose it and it is
+        downloaded (plan 08 C2); on a video card it stays whisper.cpp."""
+        if self._own_model(item) == "Whisper":
+            wanted = "RNNT"
+        elif self._fast_search(item):
+            wanted = catalog.FAST_WHISPER_MODEL.key
+        else:
+            wanted = "Whisper"
         return [wanted] if self._model_installed(wanted) else []
+
+    def _fast_search(self, item):
+        """True when faster-whisper reads the search's pieces: chosen in Настройки, downloaded,
+        and Whisper runs on the processor (the device is "Процессор", or "Авто" and the file
+        was recognised on the processor, so there is no video card for whisper.cpp either)."""
+        return (self.settings.whisper_cpu == "faster-whisper"
+                and self._model_installed(catalog.FAST_WHISPER_MODEL.key)
+                and (self.settings.engine_device == "cpu"
+                     or (self.settings.engine_device == "auto" and not self._on_gpu(item))))
 
     def _on_gpu(self, item):
         """True when the file was recognised on a video card, so Whisper most likely runs on one
@@ -917,6 +948,7 @@ class Controller:
                     return False
                 search["cancelled"] = True
                 search["pieces"] = []
+                search.pop("held", None)
                 if search["request"] is None:
                     self._end_search(item, cancelled=True)
                     self._pump()
@@ -968,9 +1000,9 @@ class Controller:
 
         self.suggesting: {"id", "transcript" (the search ends if the file is recognised
         again), "pieces" (still to do: {"groups": word objects (first, last), "line": read
-        the whole line}), "total" and "done" (groups), "models", "request" (the piece on the
-        worker, None between pieces), "context" (that piece's words), "selected" (each
-        group's (first, last) index in context), "size" (groups in the request), "loading",
+        the whole line}), "total" and "done" (groups), "models", "request" (the job on the
+        worker, None between jobs), "parts" (the job's pieces, from _next_part: one, or up to
+        8 for faster-whisper), "held" (a piece made ready that starts the next job), "loading",
         "cancelled" (cancel_suggestions: no more pieces)}."""
         while self.suggesting is None or self.suggesting["request"] is None:
             search = self.suggesting
@@ -989,9 +1021,43 @@ class Controller:
             if item is None or item.result is not search["transcript"]:  # removed or recognised again
                 self.suggesting = None
                 continue
-            if not search["pieces"] or not search["models"]:
+            if not (search["pieces"] or search.get("held")) or not search["models"]:
                 self._end_search(item, cancelled=bool(search.get("cancelled")))
                 continue
+            first = self._next_part(item, search)
+            if first is None:
+                continue  # every group of those pieces changed meanwhile
+            parts = [first]
+            # faster-whisper reads up to BATCH_SIZE pieces at once (plan 08 C2). Only pieces
+            # of one known language go together: the batch is told a single language, and a
+            # piece whose language Whisper must detect is read on its own.
+            if search["models"] == [catalog.FAST_WHISPER_MODEL.key] and first["language"] not in (None, "", "auto"):
+                while len(parts) < faster_whisper_model.BATCH_SIZE:
+                    part = self._next_part(item, search)
+                    if part is None:
+                        break
+                    if part["language"] != first["language"]:
+                        search["held"] = part  # it starts the next batch
+                        break
+                    parts.append(part)
+            search["parts"] = parts
+            search["request"] = next(self.suggest_ids)
+            more = tuple((part["windows"], part["language"]) for part in parts[1:])
+            self.worker.jobs.put(("suggest", search["request"], item.path, first["windows"], search["models"],
+                                  self.settings.engine_device, self.settings.cpu_threads,
+                                  first["language"], self.settings.terms or None, more))
+            self._emit_file(item)
+
+    def _next_part(self, item, search):
+        """The next piece of the search, made ready to send: {"context" (its words),
+        "selected" (each group's (first, last) index in context), "size" (groups), "windows",
+        "language"}. Pieces whose groups all changed since (a fix taken meanwhile) are skipped
+        and counted as done. None when no piece is left."""
+        held = search.pop("held", None)
+        if held is not None:
+            return held
+        segments = item.segments
+        while search["pieces"]:
             piece = search["pieces"].pop(0)
             located = []
             for first_word, last_word in piece["groups"]:
@@ -999,7 +1065,6 @@ class Controller:
                 last_located = self._locate(item, search, [last_word])
                 if first_located is not None and last_located is not None:  # else changed meanwhile
                     located.append((first_located[0], last_located[0]))
-            segments = item.segments
             line = located[0][0][0] if located else None
             located = [(first, last) for first, last in located if first[0] == last[0] == line]
             search["done"] += len(piece["groups"]) - len(located)
@@ -1010,15 +1075,13 @@ class Controller:
             else:
                 context_first, context_last = fix.context_bounds(segments, *located[0])
             context = fix.positions_between(segments, context_first, context_last)
-            search["context"] = [fix.word_at(segments, position) for position in context]
-            search["selected"] = [(context.index(first), context.index(last)) for first, last in located]
-            search["size"] = len(located)
-            windows = fix.search_windows(segments, context_first, context_last, item.result.audio_seconds)
-            search["request"] = next(self.suggest_ids)
-            self.worker.jobs.put(("suggest", search["request"], item.path, windows, search["models"],
-                                  self.settings.engine_device, self.settings.cpu_threads,
-                                  self._suggest_language(item, search["context"]), self.settings.terms or None))
-            self._emit_file(item)
+            words = [fix.word_at(segments, position) for position in context]
+            return {"context": words,
+                    "selected": [(context.index(first), context.index(last)) for first, last in located],
+                    "size": len(located),
+                    "windows": fix.search_windows(segments, context_first, context_last, item.result.audio_seconds),
+                    "language": self._suggest_language(item, words)}
+        return None
 
     def _suggest_language(self, item, words):
         """The language Whisper is told for one piece of the search (plan 08 C1).
@@ -1072,14 +1135,19 @@ class Controller:
             search["loading"] = args[0]
         elif kind == "suggest_result":
             search["loading"] = None
-            model, words, _error = args  # a model that fails here just offers nothing
-            found = [fix.suggestion_from(words, search["context"], *selected) for selected in search["selected"]]
+            # A model that fails here just offers nothing. The last field, when present, is
+            # the piece of a batch the reading is for (plan 08 C2); a single piece has none.
+            model, words, _error, *rest = args
+            part = search["parts"][rest[0] if rest else 0]
+            # Offers read by faster-whisper are Whisper's, as for the reader of the window.
+            label = "Whisper" if model == catalog.FAST_WHISPER_MODEL.key else model
+            found = [fix.suggestion_from(words, part["context"], *selected) for selected in part["selected"]]
             found = [offer for offer in found if offer is not None] if words else []
-            positions = self._locate(item, search, search["context"]) if found and current else None
+            positions = self._locate(item, search, part["context"]) if found and current else None
             if positions is not None:
                 changed = set()
                 for index, count, new_words in found:
-                    fix.add_suggestion(item.segments, positions[index], count, new_words, model)
+                    fix.add_suggestion(item.segments, positions[index], count, new_words, label)
                     changed.add(positions[index][0])
                 for segment_index in sorted(changed):
                     self._emit("line", {"id": item.id,
@@ -1094,7 +1162,7 @@ class Controller:
             return
         elif kind == "suggest_done":
             search["request"] = None
-            search["done"] += search["size"]
+            search["done"] += sum(part["size"] for part in search["parts"])
             if not current:  # removed or recognised again meanwhile
                 self.suggesting = None
             elif search.get("cancelled"):  # ends now, even when a file waits to be recognised
@@ -1446,6 +1514,8 @@ class Controller:
                 if change["suggest"] not in config.SUGGEST_MODES:
                     raise ValueError(f"Unknown suggest mode {change['suggest']!r}")
                 s.suggest = change["suggest"]
+            if "whisper_cpu" in change:
+                self._choose_whisper_cpu(change["whisper_cpu"])
             if "speakers" in change:
                 s.speakers = bool(change["speakers"])
             if "show_speakers" in change:
@@ -1491,7 +1561,8 @@ class Controller:
                                   "cpu_threads": defaults.cpu_threads, "outputs": list(defaults.outputs),
                                   "include_timestamps": defaults.include_timestamps,
                                   "doubt_marks": defaults.doubt_marks, "doubt_style": defaults.doubt_style,
-                                  "suggest": defaults.suggest, "speakers": defaults.speakers,
+                                  "suggest": defaults.suggest, "whisper_cpu": defaults.whisper_cpu,
+                                  "speakers": defaults.speakers,
                                   "show_speakers": defaults.show_speakers,
                                   "doubt_light": defaults.doubt_light, "doubt_strong": defaults.doubt_strong,
                                   **self._speech_view(defaults)})
@@ -1515,6 +1586,7 @@ class Controller:
             self.download_started = self.clock()
             self.worker.cancel.clear()
             self.worker.jobs.put(("download", model))
+            self.engine_before = dict(self.engine)  # put back after a download of faster-whisper
             self._set_engine("busy", f"Скачивание модели {model}...")
             self._emit("download", {"phase": "progress", "model": model, "fraction": 0.0,
                                     "status": "Подключение..."})
@@ -1524,9 +1596,33 @@ class Controller:
         with self.lock:
             if self.asking:
                 self.declined.add(self.asking)
+                if self.asking == catalog.FAST_WHISPER_MODEL.key:
+                    self._whisper_cpu_back()
                 self.asking = None
                 self._emit_files()
             return True
+
+    def _choose_whisper_cpu(self, engine):
+        """Настройки -> "Whisper на процессоре" (plan 08 C2, layout B chosen by the owner on
+        2026-11-11). Choosing faster-whisper before it is downloaded asks the usual download
+        question; "Не сейчас", a stopped or failed download set whisper.cpp again."""
+        if engine not in config.WHISPER_CPU_ENGINES:
+            raise ValueError(f"Unknown Whisper engine {engine!r}")
+        key = catalog.FAST_WHISPER_MODEL.key
+        if engine == "faster-whisper" and not self._model_installed(key):
+            if self.downloading:
+                raise ValueError(f"Сейчас скачивается модель {self.downloading}; "
+                                 "выберите faster-whisper, когда она скачается")
+            self.declined.discard(key)
+            self.asking = None  # a question about the main model gives way to this one
+            self._ask_download(key)
+        self.settings.whisper_cpu = engine
+
+    def _whisper_cpu_back(self):
+        """faster-whisper is not on disk after all: Whisper on the processor is whisper.cpp again."""
+        self.settings.whisper_cpu = "whisper.cpp"
+        self._save_settings()
+        self._emit("settings", self._settings_view())
 
     def cancel_download(self):
         with self.lock:
@@ -1785,7 +1881,11 @@ class Controller:
         elif self.downloading:
             model, self.downloading = self.downloading, None
             self.declined.add(model)
-            self._set_engine("error", f"{model} - не скачана", text)
+            if model == catalog.FAST_WHISPER_MODEL.key:
+                self._whisper_cpu_back()
+                self._set_engine(**self.engine_before)
+            else:
+                self._set_engine("error", f"{model} - не скачана", text)
             self._emit("download", {"phase": "failed", "model": model, "text": ""})
             self._error(f"Не удалось скачать модель {model}: {text}")
         elif self.running:
@@ -1819,9 +1919,15 @@ class Controller:
             self._speaker_download_done(folder)
             return
         self.downloading = None
+        fast = model == catalog.FAST_WHISPER_MODEL.key
+        if fast:  # not the chosen model: its status line comes back
+            self._set_engine(**self.engine_before)
         if folder is None:
             self.declined.add(model)
-            self._set_engine("missing", f"{model} - не скачана")
+            if fast:
+                self._whisper_cpu_back()
+            else:
+                self._set_engine("missing", f"{model} - не скачана")
             self._emit("download", {"phase": "cancelled", "model": model,
                                     "text": "Скачивание остановлено. В следующий раз оно продолжится с того же места."})
             self._emit_files()

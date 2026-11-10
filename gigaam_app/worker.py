@@ -18,7 +18,9 @@ for each model, and ("reread_done", request); when the audio cannot be read,
 
 Looking for suggested fixes (plan 06) recognises one group of doubtful words the same way:
 the job "suggest" sends the same events named suggest_range, suggest_loading, suggest_result
-suggest_failed and suggest_done.
+suggest_failed and suggest_done. A "suggest" job may carry more pieces at its end (plan 08
+C2, faster-whisper reads them in one batch); each suggest_result then ends with the index of
+its piece.
 
 Looking for speakers (plan 07, diarize.py), job ("diarize", request, path, device, threads,
 num_speakers), sends ("diarize_loading", request) when the speaker models load,
@@ -80,7 +82,7 @@ class Worker(threading.Thread):
                 elif job[0] == "reread":
                     self._reread(*job[1:])
                 elif job[0] == "suggest":
-                    self._reread(*job[1:], prefix="suggest")
+                    self._suggest(*job[1:])
                 elif job[0] == "diarize":
                     self._diarize(*job[1:])
             except Exception as error:  # every failure is shown in the window
@@ -182,18 +184,13 @@ class Worker(threading.Thread):
         the others still run. prefix names the events: "reread" for a selection,
         "suggest" for a group of doubtful words (plan 06).
         """
-        (left, right) = windows
         try:
-            offset = max(0.0, left[0] - REREAD_MARGIN)
-            samples = decode_range(path, offset, right[1] + REREAD_MARGIN - offset)
+            piece, start = self._cut(path, windows)
         except Exception as error:  # the file is gone or unreadable: no model can run
             self.events.put((prefix + "_failed", request, str(error) or type(error).__name__))
             self.events.put((prefix + "_done", request))
             return
-        start = fix.quietest_point(samples, offset, *left)
-        end = fix.quietest_point(samples, offset, *right)
-        piece = samples[int(round((start - offset) * SAMPLE_RATE)):int(round((end - offset) * SAMPLE_RATE))]
-        self.events.put((prefix + "_range", request, start, end))
+        self.events.put((prefix + "_range", request, start, start + len(piece) / SAMPLE_RATE))
         for model in models:
             try:
                 engine = self._engine_for((model, device, threads),
@@ -205,6 +202,59 @@ class Worker(threading.Thread):
             except Exception as error:  # one model failing must not hide the others' readings
                 self.events.put((prefix + "_result", request, model, None, str(error) or type(error).__name__))
         self.events.put((prefix + "_done", request))
+
+    @staticmethod
+    def _cut(path, windows):
+        """The audio between the quietest points of the two windows of fix.search_windows
+        -> (samples, start in seconds)."""
+        (left, right) = windows
+        offset = max(0.0, left[0] - REREAD_MARGIN)
+        samples = decode_range(path, offset, right[1] + REREAD_MARGIN - offset)
+        start = fix.quietest_point(samples, offset, *left)
+        end = fix.quietest_point(samples, offset, *right)
+        return samples[int(round((start - offset) * SAMPLE_RATE)):int(round((end - offset) * SAMPLE_RATE))], start
+
+    def _suggest(self, request, path, windows, models, device, threads, language=None, prompt=None, more=()):
+        """Read pieces with doubtful words again for the suggestion search (plan 06).
+
+        The first piece is windows / language; more holds (windows, language) of further
+        pieces of a batch (plan 08 C2: faster-whisper reads up to 8 at once, all with one
+        language). A model with read_many reads the batch in one call; any other reads the
+        pieces one by one. Events: suggest_range and suggest_loading, suggest_result
+        (request, model, words or None, error, piece index), suggest_failed when the file
+        cannot be read, suggest_done at the end."""
+        parts = [(windows, language)] + list(more)
+        pieces = []
+        try:
+            for part_windows, _ in parts:
+                pieces.append(self._cut(path, part_windows))
+        except Exception as error:  # the file is gone or unreadable: no model can run
+            self.events.put(("suggest_failed", request, str(error) or type(error).__name__))
+            self.events.put(("suggest_done", request))
+            return
+        for samples, start in pieces:
+            self.events.put(("suggest_range", request, start, start + len(samples) / SAMPLE_RATE))
+        for model in models:
+            try:
+                engine = self._engine_for((model, device, threads),
+                                          on_load=lambda: self.events.put(("suggest_loading", request, model)))
+                hint = prompt if engine.uses_language else None
+                if len(pieces) > 1 and hasattr(engine.asr, "read_many"):
+                    engine.set_language(language)
+                    readings = engine.asr.read_many([samples for samples, _ in pieces],
+                                                    [start for _, start in pieces], prompt=hint)
+                    for index, words in enumerate(readings):
+                        self.events.put(("suggest_result", request, model, words, None, index))
+                    continue
+                for index, ((samples, start), (_, part_language)) in enumerate(zip(pieces, parts)):
+                    if engine.uses_language:
+                        engine.set_language(part_language)
+                    words = fix.reread_piece(engine.asr, samples, start, prompt=hint)
+                    self.events.put(("suggest_result", request, model, words, None, index))
+            except Exception as error:  # one model failing must not hide the others' readings
+                for index in range(len(pieces)):
+                    self.events.put(("suggest_result", request, model, None, str(error) or type(error).__name__, index))
+        self.events.put(("suggest_done", request))
 
     def _diarize(self, request, path, device, threads, num_speakers=None):
         """Find who speaks when in a whole file (plan 07)."""

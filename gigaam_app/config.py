@@ -33,6 +33,10 @@ DOUBT_STYLES = ("underline", "colors")
 # recording: 699 s for the 455 s lecture, against 15 s on the GPU), "always", or "off" (only
 # the "Найти варианты" button).
 SUGGEST_MODES = ("gpu", "always", "off")
+# What runs Whisper on the processor for the suggestion search (plan 08 C2): the app's
+# whisper.cpp, or faster-whisper int8 (a separate download, 1.6-2x faster on the CPU).
+# On a video card Whisper always runs on whisper.cpp (Vulkan).
+WHISPER_CPU_ENGINES = ("whisper.cpp", "faster-whisper")
 
 
 @dataclass
@@ -49,6 +53,7 @@ class Settings:
     doubt_strong: float = 0.80        # and below this likely wrong (wavy); 0 < strong < light <= 1
     player_volume: float = 1.0        # the window's player, 0..1
     suggest: str = "gpu"              # one of SUGGEST_MODES: look for other readings after each file
+    whisper_cpu: str = "whisper.cpp"  # one of WHISPER_CPU_ENGINES: Whisper on the processor for the search
     speakers: bool = False            # find who speaks when after each file (plan 07)
     show_speakers: bool = True        # the window shows the speaker names (switch "Говорящие"); files always have them
     outputs: list = field(default_factory=lambda: list(DEFAULT_FORMATS))
@@ -118,6 +123,10 @@ def parse(data):
             if value not in SUGGEST_MODES:
                 raise ValueError(f"suggest: expected one of {', '.join(SUGGEST_MODES)}")
             settings.suggest = value
+        elif key == "whisper_cpu":
+            if value not in WHISPER_CPU_ENGINES:
+                raise ValueError(f"whisper_cpu: expected one of {', '.join(WHISPER_CPU_ENGINES)}")
+            settings.whisper_cpu = value
         elif key in ("speakers", "show_speakers"):
             if type(value) is not bool:
                 raise ValueError(f"{key}: expected true or false")
