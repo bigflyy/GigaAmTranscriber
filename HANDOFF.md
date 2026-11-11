@@ -37,6 +37,12 @@ Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
   no Linux transcription run yet (the C3 frozen smoke test does one).
 - Tests: 584 passed, 4 skipped (2 new: patches match the pinned source once; a stale patch stops
   the build). Not run: window_check, app builds (C3).
+- After the session (2026-11-12): owner asked if the 1.4x was the PC's load. No: both ran back to
+  back, load slowed both by about 15%; quiet-PC estimate 263 / 175 s = 1.5x. Owner: card stays
+  "1,4", no new measurement. Disk: owner approved deleting build/v0.4.0, v0.5.0, next, try,
+  whisper-frozen, whisper-test/ort-model and src, whisper-cpp-c6, whisper-cpp; C: then 27.3 GB
+  free. Kept: whisper-test app-models, clips, audio (C3 smoke test, plan 08 test set),
+  cpu-asr-test, diar-data, v0.6.0.
 
 ## Session 27 (2026-11-11): plan 08 C5, faster-whisper reads the main text on the CPU
 
