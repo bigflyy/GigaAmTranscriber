@@ -39,6 +39,23 @@ download (one folder per app, `windows/` and `linux/`), and at the sources below
   that script: with the language "auto", the audio is encoded once instead of twice (the language
   is found from the same encoder pass the transcription uses). The Vulkan loader comes with the
   GPU driver and is not bundled.
+- **Whisper large-v3-turbo for faster-whisper (downloaded on request, not bundled):** the int8
+  CTranslate2 conversion [Zoont/faster-whisper-large-v3-turbo-int8-ct2](https://huggingface.co/Zoont/faster-whisper-large-v3-turbo-int8-ct2)
+  (MIT, the Whisper weights' license, `licenses/whisper-model/LICENSE.txt`), downloaded unchanged.
+- **faster-whisper 1.2.1:** [SYSTRAN/faster-whisper](https://github.com/SYSTRAN/faster-whisper), MIT
+  (`licenses/faster-whisper/LICENSE.txt`); reads Whisper on the processor when "Whisper на
+  процессоре" is set to faster-whisper. Its Python files are copied into `gigaam_app/faster_whisper`
+  with small marked changes (listed in the README there).
+- **CTranslate2 4.8.5:** [OpenNMT/CTranslate2](https://github.com/OpenNMT/CTranslate2), MIT; the
+  engine of faster-whisper, from the PyPI wheel, unchanged. Its library has Intel oneMKL built in
+  and, on Windows, comes with the Intel OpenMP runtime `libiomp5md.dll` (Intel Simplified Software
+  License), and also contains oneDNN (Apache 2.0), spdlog with fmt (MIT), cpu_features (Apache 2.0),
+  NVIDIA's Thrust/CCCL (Apache 2.0) and CUTLASS (BSD-3-Clause), and the NVIDIA CUDA runtime (CUDA
+  EULA, used only on NVIDIA video cards, which the app does not use for it). Linux: also GCC's
+  OpenMP runtime `libgomp` (GPL-3 with the GCC runtime library exception). Details and texts in
+  `licenses/ctranslate2` (and `licenses/libgomp` on Linux). The wheel's cuDNN loader is left out.
+- **tokenizers 0.23.3:** [huggingface/tokenizers](https://github.com/huggingface/tokenizers),
+  Apache 2.0 (`licenses/tokenizers`, with the list of the Rust crates built into it).
 - **NumPy:** [numpy.org](https://numpy.org/), BSD-3-Clause, with the licenses of the libraries it bundles.
 - **Python:** [Python licensing](https://docs.python.org/3/license.html). Windows: libraries that
   Python loads (zlib, OpenSSL, libffi, xz, bzip2 and others) are listed with their licenses under

@@ -21,7 +21,8 @@ Steps:
    whisper.cpp libraries into _internal/whisper_cpp/, then check that every bundled library resolves;
 4. smoke test the CLI on a silent file (and on --speech FILE if given), check that it loads
    whisper.cpp (gigaam-cli --devices), transcribe a short speech file with Whisper on the CPU
-   (a downloaded model folder linked in, see build_windows.py --whisper-model), and open the window
+   (a downloaded model folder linked in, see build_windows.py --whisper-model), read it with
+   faster-whisper (--fast-whisper-model), and open the window
    under Xvfb (with --speech it must also write the transcript);
 5. pack <release>/GigaAmTranscriber-v<version>-linux-x64.tar.gz and add it to SHA256SUMS.txt;
    put the licences under linux/ in <release>/THIRD_PARTY_LICENSES.zip, beside the windows/
@@ -48,11 +49,16 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tools"))
 from gigaam_app import __version__  # noqa: E402
 from build_windows import (APP_NAME, BUNDLED_MODELS, REPO_LICENCES, VAD_MODEL,  # noqa: E402
-                           add_whisper_arguments, check_models, check_no_torch, check_whisper_cpp,
-                           distribution_licences, folder_size, sha256, speaker_smoke_test,
-                           speaker_test_files, whisper_smoke_test, whisper_test_files)
+                           add_whisper_arguments, check_faster_whisper_files, check_faster_whisper_packages,
+                           check_models, check_no_torch, check_whisper_cpp, distribution_licences,
+                           fast_whisper_test_files, folder_size, put_faster_whisper_licences, sha256,
+                           speaker_smoke_test, speaker_test_files, whisper_smoke_test, whisper_test_files)
 
 WHISPER_CPP = ROOT / "third_party" / "whisper.cpp" / "linux-x64"  # tools/build_whisper_cpp.py
+# CTranslate2's wheel brings GCC's OpenMP runtime (libgomp, GPL-3 with the GCC runtime library
+# exception); the build machine's own libgomp1 package holds the same licence texts.
+GOMP_COPYRIGHT = Path("/usr/share/doc/libgomp1/copyright")
+GPL3 = Path("/usr/share/common-licenses/GPL-3")
 
 SYSTEM_GI = Path("/usr/lib/python3/dist-packages/gi")
 TITLE_START = "GigaAM - "
@@ -85,6 +91,10 @@ def check_environment(gi_dir):
     for tool in ("ffmpeg", "ldd", "dpkg"):
         if not shutil.which(tool):
             fail(f"{tool} not found")
+    check_faster_whisper_packages()
+    for licence in (GOMP_COPYRIGHT, GPL3):
+        if not licence.is_file():
+            fail(f"{licence} not found (the licence of the libgomp that comes with CTranslate2)")
 
 
 # ------------------------------------------------------------------ build
@@ -172,6 +182,9 @@ def collect_licences(app, gi_dir):
     put(WHISPER_CPP / "LICENSE.txt", "whisper.cpp/LICENSE.txt")  # whisper.cpp and ggml: MIT
     put(REPO_LICENCES / "whisper-LICENSE.txt", "whisper-model/LICENSE.txt")  # Whisper weights (downloaded): MIT
     put(REPO_LICENCES / "speaker-models-LICENSE.txt", "speaker-models/LICENSE.txt")  # downloaded: MIT, CC BY 4.0
+    put_faster_whisper_licences(put)
+    put(GOMP_COPYRIGHT, "libgomp/copyright")  # GCC's copyright file, with the runtime library exception
+    put(GPL3, "libgomp/GPL-3")
     # PyGObject (LGPL-2.1-or-later), copied from the system package with its copyright file.
     gi_copyright = Path("/usr/share/doc/python3-gi/copyright")
     if gi_dir.resolve() == SYSTEM_GI and not gi_copyright.is_file():
@@ -200,9 +213,10 @@ def clean_env():
     return env
 
 
-def smoke_cli(app, speech, whisper=None, speakers=None):
+def smoke_cli(app, speech, whisper=None, speakers=None, fast_whisper=None):
     """The CLI on silence, on SPEECH if given, with Whisper (model folder, audio) if given,
-    and finding speakers (model folder, audio) if given."""
+    finding speakers (model folder, audio) if given, and with faster-whisper (model folder,
+    audio) if given."""
     with tempfile.TemporaryDirectory() as temporary:
         audio = Path(temporary) / "silence.wav"
         subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "anullsrc=r=16000:cl=mono", "-t", "2",
@@ -235,6 +249,8 @@ def smoke_cli(app, speech, whisper=None, speakers=None):
                   flush=True)
     if whisper:
         whisper_smoke_test(str(app / "gigaam-cli"), *whisper, clean_env(), "cpu")  # no Vulkan GPU in WSL
+    if fast_whisper:
+        whisper_smoke_test(str(app / "gigaam-cli"), *fast_whisper, clean_env(), "cpu", fast=True)
     if speakers:
         speaker_smoke_test(str(app / "gigaam-cli"), *speakers, clean_env(), "cpu")
 
@@ -400,6 +416,7 @@ def main():
     check_whisper_cpp(WHISPER_CPP)
     whisper = whisper_test_files(args.whisper_model, args.whisper_audio, args.no_whisper_test)
     speakers = speaker_test_files(args.speaker_model, args.whisper_audio, args.no_speaker_test)
+    fast_whisper = fast_whisper_test_files(args.fast_whisper_model, args.whisper_audio, args.no_fast_whisper_test)
     out = args.out.expanduser().resolve()
     dist = out / "app"
     if dist.exists():
@@ -407,6 +424,8 @@ def main():
     started = time.perf_counter()
     app = run_pyinstaller(out / "pyinstaller", dist, args.gi)
     check_no_torch(app)
+    check_faster_whisper_files(app, [r"libctranslate2.*\.so[.\d]*", r"libgomp.*\.so[.\d]*", r"_ext\..*\.so",
+                                     r"tokenizers.*\.so"])
     code_size = folder_size(app)
     copy_payload(app, args.models)
     check_libraries(app)  # after the copy, so the whisper.cpp libraries are checked too
@@ -414,7 +433,7 @@ def main():
     print(f"App folder {app}: {folder_size(app) / 1024 ** 2:.0f} MiB "
           f"(program {code_size / 1024 ** 2:.0f} MiB), built in {time.perf_counter() - started:.0f} s", flush=True)
     speech = args.speech.resolve() if args.speech else None
-    smoke_cli(app, speech, whisper, speakers)
+    smoke_cli(app, speech, whisper, speakers, fast_whisper)
     smoke_missing_webkit(app)
     smoke_window(app, speech, args.shots)
     if not args.no_tar:

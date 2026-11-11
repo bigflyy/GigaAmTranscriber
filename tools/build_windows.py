@@ -15,7 +15,8 @@ Steps:
 4. smoke test the console EXE on a silent file with ffmpeg removed from PATH, check that
    it loads whisper.cpp (gigaam-cli --devices), transcribe a short speech file with Whisper
    on the GPU and the CPU (a downloaded model folder linked in, --whisper-model and
-   --whisper-audio; defaults in build/whisper-test), find the speakers of the same file on
+   --whisper-audio; defaults in build/whisper-test), read it with faster-whisper on the CPU
+   (a settings file chooses it, --fast-whisper-model), find the speakers of the same file on
    the GPU and the CPU (the downloaded speaker models linked in, --speaker-model), and start
    the windowed EXE off screen (tools/gui_smoke_test.py);
 5. pack the release assets into build/release/:
@@ -84,6 +85,20 @@ def check_environment():
     import onnxruntime
     if "DmlExecutionProvider" not in onnxruntime.get_available_providers():
         fail("ONNX Runtime has no DirectML provider")
+    check_faster_whisper_packages()
+
+
+def check_faster_whisper_packages():
+    """faster-whisper (vendored in gigaam_app) needs CTranslate2 and tokenizers at the versions
+    of requirements.txt; shared with build_linux.py."""
+    wanted = dict(re.findall(r"^(ctranslate2|tokenizers)==(\S+)", (ROOT / "requirements.txt").read_text(), re.M))
+    for package, version in wanted.items():
+        try:
+            found = importlib.metadata.version(package)
+        except importlib.metadata.PackageNotFoundError:
+            fail(f"{package} is missing: pip install -r requirements-build.txt")
+        if found != version:
+            fail(f"{package} {found} is installed, requirements.txt pins {version}")
 
 
 def check_models(models_root):
@@ -247,6 +262,7 @@ def collect_licences(app, ffmpeg_notices):
     put(WHISPER_CPP / "LICENSE.txt", "whisper.cpp/LICENSE.txt")  # whisper.cpp and ggml: MIT
     put(REPO_LICENCES / "whisper-LICENSE.txt", "whisper-model/LICENSE.txt")  # Whisper weights (downloaded): MIT
     put(REPO_LICENCES / "speaker-models-LICENSE.txt", "speaker-models/LICENSE.txt")  # downloaded: MIT, CC BY 4.0
+    put_faster_whisper_licences(put)
     conda_licences(app, target)
 
 
@@ -280,6 +296,34 @@ def conda_licences(app, target):
                 break
         else:
             fail(f"licence files of conda package {package} not found (it provides {sorted(owned & bundled)})")
+
+
+def check_faster_whisper_files(app, needed):
+    """CTranslate2 and tokenizers must be in the build (faster-whisper, plan 08 C3), with no
+    huggingface_hub. needed: regular expressions for file names, each must match a file.
+    check_no_torch already refuses NVIDIA's cuDNN and cuBLAS."""
+    internal = app / "_internal"
+    names = [path.name for path in internal.rglob("*") if path.is_file()]
+    missing = [pattern for pattern in needed if not any(re.fullmatch(pattern, name) for name in names)]
+    if missing:
+        fail(f"faster-whisper files missing from the build: {missing}")
+    if any(path.name == "huggingface_hub" for path in internal.rglob("*") if path.is_dir()):
+        fail("huggingface_hub ended up in the build (the spec excludes it)")
+
+
+def put_faster_whisper_licences(put):
+    """Licences of faster-whisper (vendored, MIT), CTranslate2 with the parts built into its
+    library (packaging/licenses/ctranslate2/README.txt) and tokenizers (Apache 2.0), plus the
+    packages' software bills of materials (the Rust crates inside tokenizers; on Linux also
+    the libraries auditwheel put into the wheels). put(source, relative) copies one file."""
+    put(ROOT / "gigaam_app" / "faster_whisper" / "LICENSE", "faster-whisper/LICENSE.txt")
+    for source in sorted((REPO_LICENCES / "ctranslate2").iterdir()):
+        put(source, f"ctranslate2/{source.name}")
+    put(REPO_LICENCES / "tokenizers-LICENSE.txt", "tokenizers/LICENSE.txt")
+    for package in ("ctranslate2", "tokenizers"):
+        for item in importlib.metadata.distribution(package).files or []:
+            if "sboms" in item.parts:
+                put(Path(item.locate()), f"{package}/{item.name}")
 
 
 def check_no_torch(app):
@@ -322,28 +366,53 @@ def whisper_test_files(model_folder, audio, skip):
     return model_folder, audio
 
 
-def whisper_smoke_test(cli, model_folder, audio, env, device):
+def fast_whisper_test_files(model_folder, audio, skip):
+    """(faster-whisper model folder, audio) for its smoke test, or None when it is skipped.
+    Like Whisper's test it uses a model downloaded before (default: the plan 08 test area)."""
+    if skip:
+        print("faster-whisper smoke test skipped (--no-fast-whisper-test)", flush=True)
+        return None
+    model_folder, audio = Path(model_folder).expanduser().resolve(), Path(audio).expanduser().resolve()
+    if not (model_folder / "model.json").is_file():
+        fail(f"no faster-whisper model folder at {model_folder}; pass --fast-whisper-model (a downloaded "
+             "faster_whisper_large_v3_turbo_int8 folder) or --no-fast-whisper-test")
+    if not audio.is_file():
+        fail(f"{audio} not found; pass --whisper-audio (a short Russian speech file) or --no-fast-whisper-test")
+    return model_folder, audio
+
+
+def whisper_smoke_test(cli, model_folder, audio, env, device, fast=False):
     """Transcribe a short Russian speech file with Whisper through the built CLI.
 
     The model folder is linked into a temporary download folder (GIGAAM_DOWNLOADS), so
     this also checks that the app finds a downloaded Whisper model and loads the bundled
-    whisper.cpp libraries on DEVICE. The transcript must contain Cyrillic words."""
+    whisper.cpp libraries on DEVICE. The transcript must contain Cyrillic words.
+    fast: model_folder is the faster-whisper model, and a settings file chooses it for
+    Whisper on the processor ("whisper_cpu", plan 08 C3a), so CTranslate2 reads the file;
+    the CLI's first line must name faster-whisper."""
     with tempfile.TemporaryDirectory() as temporary:
         downloads = Path(temporary) / "downloads"
         downloads.mkdir()
-        link_model_folder(model_folder, downloads)
+        from gigaam_app import catalog
+        link_model_folder(model_folder, downloads, catalog.FAST_WHISPER_MODEL.folder if fast else None)
+        settings = Path(temporary) / "gigaam-config.json"
+        settings.write_text(json.dumps({"whisper_cpu": "faster-whisper" if fast else "whisper.cpp"}),
+                            encoding="utf-8")
         copy = Path(temporary) / audio.name
         shutil.copy2(audio, copy)
         started = time.perf_counter()
         run = subprocess.run([cli, str(copy), "--model", "Whisper", "--language", "ru", "--device", device,
-                              "--formats", "txt"], capture_output=True, text=True, encoding="utf-8",
-                             env={**env, "GIGAAM_DOWNLOADS": str(downloads)}, cwd=temporary)
+                              "--formats", "txt", "--config", str(settings)], capture_output=True, text=True,
+                             encoding="utf-8", env={**env, "GIGAAM_DOWNLOADS": str(downloads)}, cwd=temporary)
         text_path = copy.with_name(copy.stem + "-transcript.txt")
         text = text_path.read_text(encoding="utf-8") if text_path.is_file() else ""
         words = text.split()
-        if run.returncode != 0 or not re.search("[а-яё]", text, re.I) or len(words) < 5:
-            fail(f"Whisper smoke test on {device} failed:\n{run.stdout}\n{run.stderr}\ntext: {text!r}")
-        print(f"smoke test Whisper {device}: {run.stdout.splitlines()[0]}; {len(words)} words in "
+        first = run.stdout.splitlines()[0] if run.stdout else ""
+        name = "faster-whisper" if fast else "Whisper"
+        if (run.returncode != 0 or not re.search("[а-яё]", text, re.I) or len(words) < 5
+                or fast != ("faster-whisper" in first)):
+            fail(f"{name} smoke test on {device} failed:\n{run.stdout}\n{run.stderr}\ntext: {text!r}")
+        print(f"smoke test {name} {device}: {first}; {len(words)} words in "
               f"{time.perf_counter() - started:.1f} s: {' '.join(words[:8])} ...", flush=True)
 
 
@@ -389,10 +458,11 @@ def speaker_smoke_test(cli, model_folder, audio, env, device):
               f"{text[:60]!r} ...", flush=True)
 
 
-def smoke_test(app, whisper=None, speakers=None):
+def smoke_test(app, whisper=None, speakers=None, fast_whisper=None):
     """Run the console EXE on 2 s of silence, with no ffmpeg on PATH and no Python around;
     with whisper = (model folder, audio), also transcribe the audio with Whisper; with
-    speakers = (model folder, audio), also find who speaks in it."""
+    speakers = (model folder, audio), also find who speaks in it; with fast_whisper =
+    (model folder, audio), also read it with faster-whisper on the CPU."""
     with tempfile.TemporaryDirectory() as temporary:
         audio = Path(temporary) / "silence.wav"
         subprocess.run([str(app / "ffmpeg.exe"), "-v", "error", "-f", "lavfi", "-i", "anullsrc=r=16000:cl=mono",
@@ -420,6 +490,8 @@ def smoke_test(app, whisper=None, speakers=None):
     if whisper:
         for device in ("auto", "cpu"):
             whisper_smoke_test(cli, *whisper, env, device)
+    if fast_whisper:
+        whisper_smoke_test(cli, *fast_whisper, env, "cpu", fast=True)
     if speakers:
         for device in ("auto", "cpu"):
             speaker_smoke_test(cli, *speakers, env, device)
@@ -491,6 +563,11 @@ def add_whisper_arguments(parser):
     parser.add_argument("--whisper-audio", type=Path, default=test_area / "clips" / "lecture-4.mp3",
                         help="a short Russian speech file for it (default: build/whisper-test/clips/lecture-4.mp3)")
     parser.add_argument("--no-whisper-test", action="store_true", help="do not transcribe with Whisper")
+    parser.add_argument("--fast-whisper-model", type=Path,
+                        default=ROOT / "build" / "cpu-asr-test" / "models" / "fw-turbo-int8",
+                        help="a downloaded faster-whisper model folder for its smoke test on --whisper-audio "
+                             "(default: build/cpu-asr-test/models/fw-turbo-int8)")
+    parser.add_argument("--no-fast-whisper-test", action="store_true", help="do not read with faster-whisper")
     parser.add_argument("--speaker-model", type=Path, default=downloads_dir() / "speakers_community1",
                         help="a downloaded speaker model folder for the speaker smoke test, run on "
                              "--whisper-audio (default: the app's download folder)")
@@ -511,6 +588,7 @@ def main():
     check_whisper_cpp()
     whisper = whisper_test_files(args.whisper_model, args.whisper_audio, args.no_whisper_test)
     speakers = speaker_test_files(args.speaker_model, args.whisper_audio, args.no_speaker_test)
+    fast_whisper = fast_whisper_test_files(args.fast_whisper_model, args.whisper_audio, args.no_fast_whisper_test)
     ffmpeg, ffmpeg_notices = find_ffmpeg(args.ffmpeg)
     out = args.out.resolve()
     dist = out / "app"
@@ -519,12 +597,13 @@ def main():
     app = run_pyinstaller(out / "pyinstaller", dist)
     check_no_torch(app)
     check_dlls(app)
+    check_faster_whisper_files(app, [r"ctranslate2\.dll", r"libiomp5md\.dll", r"_ext\..*\.pyd", r"tokenizers\.pyd"])
     code_size = folder_size(app)
     copy_payload(app, args.models, ffmpeg)
     collect_licences(app, ffmpeg_notices)
     print(f"App folder {app}: {folder_size(app) / 1024 ** 2:.0f} MiB "
           f"(program {code_size / 1024 ** 2:.0f} MiB), built in {time.perf_counter() - started:.0f} s", flush=True)
-    smoke_test(app, whisper, speakers)
+    smoke_test(app, whisper, speakers, fast_whisper)
     if not args.no_zip:
         print("Release assets:", flush=True)
         make_assets(app, out / "release")

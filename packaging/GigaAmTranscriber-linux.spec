@@ -35,6 +35,8 @@ EXCLUDES = [
     "pytest", "_pytest", "sympy", "mpmath", "coloredlogs", "humanfriendly", "flatbuffers",
     "google.protobuf", "psutil", "setuptools", "pkg_resources", "distutils", "lib2to3",
     "pydoc_data", "xmlrpc", "tkinter", "_tkinter",
+    # faster-whisper (plan 08): CTranslate2's model converters and huggingface_hub (see the Windows spec).
+    "ctranslate2.converters", "huggingface_hub",
     # Python's readline module links GNU readline (GPL-3); only an interactive prompt uses it.
     "readline",
     "onnxruntime.quantization", "onnxruntime.transformers", "onnxruntime.tools",

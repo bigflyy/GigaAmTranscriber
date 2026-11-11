@@ -26,7 +26,18 @@ EXCLUDES = [
     "pydoc_data", "xmlrpc",
     "onnxruntime.quantization", "onnxruntime.transformers", "onnxruntime.tools",
     "onnxruntime.datasets", "onnxruntime.backend",
+    # faster-whisper (plan 08): CTranslate2's model converters (they need transformers or torch)
+    # and huggingface_hub (installed with tokenizers; the app downloads models itself).
+    "ctranslate2.converters", "huggingface_hub",
 ]
+
+# CTranslate2's Windows wheel carries NVIDIA's cuDNN loader, but the wheel is built with
+# WITH_CUDNN=OFF and the app runs CTranslate2 on the processor only, so nothing loads it.
+UNUSED_BINARIES = {"cudnn64_9.dll"}
+
+
+def without_unused(binaries):
+    return [entry for entry in binaries if Path(entry[0]).name.lower() not in UNUSED_BINARIES]
 
 
 # pywebview backends other than WebView2 (WinForms) never run on Windows.
@@ -61,6 +72,8 @@ ICON = str(ROOT / "gigaam_app" / "icons" / "gigaam.ico")
 gui = analysis("gui_main.py", datas=[(str(ROOT / "gigaam_app" / "web"), "gigaam_app/web"),
                                      (ICON, "gigaam_app/icons")])
 cli = analysis("cli_main.py")
+gui.binaries = without_unused(gui.binaries)
+cli.binaries = without_unused(cli.binaries)
 
 gui_exe = EXE(PYZ(gui.pure), gui.scripts, [], exclude_binaries=True, name="GigaAmTranscriber",
               console=False, upx=False, icon=ICON, version=version_info("GigaAmTranscriber", "GigaAM Transcriber"))
