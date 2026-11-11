@@ -232,6 +232,55 @@ def test_chunks_are_kept_inside_the_whisper_window():
     assert (fitted.max_duration, fitted.strict_limit_duration, fitted.vad_max_speech_s) == (30.0, 30.0, 20)
 
 
+# ------------------------------------------------------------------ the build's source patches
+
+
+def load_build_tool():
+    """tools/build_whisper_cpp.py as a module (tools/ is not a package)."""
+    import importlib.util
+    path = Path(__file__).resolve().parents[1] / "tools" / "build_whisper_cpp.py"
+    spec = importlib.util.spec_from_file_location("build_whisper_cpp", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+build_tool = load_build_tool()
+
+
+@pytest.mark.skipif(not build_tool.SOURCE_ARCHIVE.is_file(),
+                    reason="the pinned whisper.cpp source archive is not in third_party/ (build_whisper_cpp.py fetches it)")
+def test_source_patches_match_the_pinned_source_once(tmp_path):
+    """Every patch's old text occurs exactly once in the pristine 1.9.5 source, and applying
+    the patches leaves the main loop's encoder call behind the reuse check."""
+    import tarfile
+    with tarfile.open(build_tool.SOURCE_ARCHIVE) as tar:
+        tar.extractall(tmp_path, filter="data",
+                       members=[m for m in tar.getmembers() if m.name.endswith("/src/whisper.cpp")])
+    source = tmp_path / f"whisper.cpp-{build_tool.VERSION}"
+    pristine = (source / "src" / "whisper.cpp").read_text(encoding="utf-8")
+    for replacements in build_tool.PATCHES.values():
+        for _relative, old, _new in replacements:
+            assert pristine.count(old) == 1
+    build_tool.apply_patches(source)
+    patched = (source / "src" / "whisper.cpp").read_text(encoding="utf-8")
+    assert patched.count("int detect_encoded_n_audio_ctx = -1;") == 1
+    assert "if (!reuse_detect_encode && !whisper_encode_internal(*ctx, *state, seek," in patched
+    # The marker is set before the detection's encoder pass, and read after it.
+    assert (patched.index("int detect_encoded_n_audio_ctx = -1;")
+            < patched.index("detect_encoded_n_audio_ctx = state->exp_n_audio_ctx;")
+            < patched.index("const auto lang_id = whisper_lang_auto_detect_internal(ctx, state, 0,")
+            < patched.index("const bool reuse_detect_encode = seek == 0"))
+
+
+def test_a_patch_that_no_longer_matches_stops_the_build(tmp_path, monkeypatch):
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "whisper.cpp").write_text("int main() {}\n", encoding="utf-8")
+    monkeypatch.setattr(build_tool, "PATCHES", {"gone": [("src/whisper.cpp", "missing text", "x")]})
+    with pytest.raises(SystemExit, match="patch gone: expected one match in src/whisper.cpp, found 0"):
+        build_tool.apply_patches(tmp_path)
+
+
 # ------------------------------------------------------------------ the real model
 
 

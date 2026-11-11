@@ -34,8 +34,10 @@ download (one folder per app, `windows/` and `linux/`), and at the sources below
   (`licenses/directml/LICENSE.txt`). Windows only.
 - **whisper.cpp 1.9.5 with ggml:** [ggml-org/whisper.cpp](https://github.com/ggml-org/whisper.cpp), MIT
   (`licenses/whisper.cpp/LICENSE.txt`); runs the Whisper model. The app ships libraries built from
-  the unmodified [v1.9.5 source](https://github.com/ggml-org/whisper.cpp/archive/refs/tags/v1.9.5.tar.gz)
-  by `tools/build_whisper_cpp.py` (in `_internal/whisper_cpp`). The Vulkan loader comes with the
+  the [v1.9.5 source](https://github.com/ggml-org/whisper.cpp/archive/refs/tags/v1.9.5.tar.gz)
+  by `tools/build_whisper_cpp.py` (in `_internal/whisper_cpp`), with one small change listed in
+  that script: with the language "auto", the audio is encoded once instead of twice (the language
+  is found from the same encoder pass the transcription uses). The Vulkan loader comes with the
   GPU driver and is not bundled.
 - **NumPy:** [numpy.org](https://numpy.org/), BSD-3-Clause, with the licenses of the libraries it bundles.
 - **Python:** [Python licensing](https://docs.python.org/3/license.html). Windows: libraries that

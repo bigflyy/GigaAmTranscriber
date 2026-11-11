@@ -103,14 +103,20 @@ def check_models(models_root):
 
 
 def check_whisper_cpp(folder=WHISPER_CPP):
-    """The whisper.cpp build must exist, match its build record and the version the app expects."""
+    """The whisper.cpp build must exist, match its build record and the version the app expects,
+    and carry every source patch of tools/build_whisper_cpp.py (an older, unpatched build is
+    refused: it would encode every "auto" chunk twice)."""
     from gigaam_app.whisper_cpp import WHISPER_CPP_VERSION
+    from build_whisper_cpp import PATCHES  # tools/ is on sys.path: this script's own folder
     record_path = folder / "build-info.json"
     if not record_path.is_file():
         fail(f"{record_path} not found; run tools/build_whisper_cpp.py first")
     record = json.loads(record_path.read_text(encoding="utf-8"))
     if record["version"] != WHISPER_CPP_VERSION:
         fail(f"whisper.cpp {record['version']} in {folder}, the app expects {WHISPER_CPP_VERSION}")
+    if record.get("patches", []) != list(PATCHES):
+        fail(f"whisper.cpp in {folder} was built with the patches {record.get('patches', [])}, "
+             f"expected {list(PATCHES)}; run tools/build_whisper_cpp.py again")
     for name, entry in record["files"].items():
         path = folder / name
         if not path.is_file() or sha256(path) != entry["sha256"]:

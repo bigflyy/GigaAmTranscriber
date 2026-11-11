@@ -24,6 +24,14 @@ Build options, chosen for an app that runs on other people's computers:
   has to be shipped;
 - no examples, tests or server.
 
+Source patches (PATCHES below, applied to the unpacked tarball, each checked to match
+exactly once; their names go into build-info.json):
+- one-encoder-pass-auto-language: with language "auto" whisper_full runs the encoder once
+  to detect the language (whisper_lang_auto_detect_internal, at offset 0) and then again
+  at the same place to transcribe. The decoder reads only the cross-attention cache that
+  the encoder fills, and the detection's single decoder step does not change it, so the
+  transcription's first window reuses the detection's encoder pass. Plan 08 C6.
+
 What the build machine needs:
 - Windows: Visual Studio 2022 with the C++ workload (found with vswhere), CMake and Ninja
   on PATH, and a Vulkan SDK: the LunarG SDK, or a conda env with
@@ -82,6 +90,54 @@ LINUX_OPTIONS = {
     "CMAKE_INSTALL_RPATH": "$ORIGIN",
 }
 
+# Our changes to the whisper.cpp source: {patch name: [(file in the source tree, exact old
+# text, new text), ...]}. Each old text must occur exactly once in the pristine 1.9.5 source.
+PATCHES = {
+    "one-encoder-pass-auto-language": [
+        (
+            "src/whisper.cpp",
+            # Before the detection: remember which audio context its encoder pass will use.
+            "        const auto lang_id = whisper_lang_auto_detect_internal(ctx, state, 0, params.n_threads, "
+            "probs.data(), params.abort_callback, params.abort_callback_user_data);\n",
+            "        // GigaAM patch (one-encoder-pass-auto-language): the detection encodes the audio at\n"
+            "        // offset 0 with the audio context set now; the main loop below reuses that pass.\n"
+            "        detect_encoded_n_audio_ctx = state->exp_n_audio_ctx;\n"
+            "        const auto lang_id = whisper_lang_auto_detect_internal(ctx, state, 0, params.n_threads, "
+            "probs.data(), params.abort_callback, params.abort_callback_user_data);\n",
+        ),
+        (
+            "src/whisper.cpp",
+            # Declare the marker at the start of the detection block.
+            "    // auto-detect language if not specified\n"
+            "    if (params.language == nullptr",
+            "    // GigaAM patch (one-encoder-pass-auto-language): audio context of the language\n"
+            "    // detection's encoder pass at offset 0, or -1 when no detection ran.\n"
+            "    int detect_encoded_n_audio_ctx = -1;\n"
+            "\n"
+            "    // auto-detect language if not specified\n"
+            "    if (params.language == nullptr",
+        ),
+        (
+            "src/whisper.cpp",
+            # The main loop's encoder call: skipped once when the detection already encoded
+            # this very window (offset 0, same audio context).
+            "        // encode audio features starting at offset seek\n"
+            "        if (!whisper_encode_internal(*ctx, *state, seek, params.n_threads, params.abort_callback, "
+            "params.abort_callback_user_data)) {\n",
+            "        // GigaAM patch (one-encoder-pass-auto-language): the first window at offset 0 was\n"
+            "        // already encoded by the language detection with the same audio context; its\n"
+            "        // cross-attention cache is still in place, so it is not encoded a second time.\n"
+            "        const bool reuse_detect_encode = seek == 0 && detect_encoded_n_audio_ctx >= 0 &&\n"
+            "                                         detect_encoded_n_audio_ctx == state->exp_n_audio_ctx;\n"
+            "        detect_encoded_n_audio_ctx = -1;\n"
+            "\n"
+            "        // encode audio features starting at offset seek\n"
+            "        if (!reuse_detect_encode && !whisper_encode_internal(*ctx, *state, seek, params.n_threads, "
+            "params.abort_callback, params.abort_callback_user_data)) {\n",
+        ),
+    ],
+}
+
 
 def fail(message):
     raise SystemExit(f"build_whisper_cpp: {message}")
@@ -117,7 +173,24 @@ def unpack(archive, work):
     with tarfile.open(archive) as tar:
         tar.extractall(work, filter="data")
     (work / f"whisper.cpp-{VERSION}").rename(source)
+    apply_patches(source)
     return source
+
+
+def apply_patches(source):
+    """Apply PATCHES to the fresh source tree; each old text must match exactly once."""
+    for name, replacements in PATCHES.items():
+        for relative, old, new in replacements:
+            path = source / relative
+            # newline="" keeps the file's own line endings (the tarball uses LF).
+            with open(path, encoding="utf-8", newline="") as stream:
+                text = stream.read()
+            count = text.count(old)
+            if count != 1:
+                fail(f"patch {name}: expected one match in {relative}, found {count}")
+            with open(path, "w", encoding="utf-8", newline="") as stream:
+                stream.write(text.replace(old, new))
+        print(f"patch applied: {name}")
 
 
 def msvc_environment():
@@ -222,6 +295,7 @@ def collect(build, source, out, options):
         "version": VERSION,
         "source": SOURCE_URL,
         "source_sha256": SOURCE_SHA256,
+        "patches": list(PATCHES),
         "platform": PLATFORM,
         "cmake_options": options,
         "files": {path.name: {"size": path.stat().st_size, "sha256": sha256(path)}
