@@ -14,6 +14,8 @@ models, Stage E speaker diarization) and plan 02 (D1-D3).
 
 - 2026-11-08: OpenVINO as a faster CPU engine (an ONNX Runtime execution provider for Intel CPUs and Intel GPUs): owner: "we need to remember the openvino idea". For the speaker models' CPU fallback (plan 07) and maybe GigaAM's CPU mode too; weigh the extra download size, and check AMD CPUs.
 
+- 2026-11-11: faster-whisper on the GPU (owner asked "Is faster whisper faster on gpu too?"; measuring it: "not yet"). Published numbers (faster-whisper README, large-v2, RTX 3070 Ti, 13 min, beam 5): whisper.cpp CUDA 1m05s, faster-whisper fp16 1m03s, int8 59s, batch 8 16-17s. NVIDIA only; users would download cuBLAS (527 MB wheel) and cuDNN 9 (664 MB wheel) on top of the 818 MB model, against whisper.cpp's 45 MB Vulkan part for any card. Worth it only batched (the main text reads one chunk at a time). To measure: the cuDNN wheel into the test venv (cuBLAS is in the owner's CUDA Toolkit 12.9), free disk first (13.9 GB free that day).
+
 ## Languages and speakers
 
 - 2026-11-06: detect the language (there, in the selected part or the file).

@@ -1,8 +1,9 @@
 # Handoff: state and findings
 
 Last updated 2026-11-11 (session 26). Plan 08 (faster suggestion search on the CPU): Stage A,
-C1 and C2 (faster-whisper int8 as a CPU option for the search) built; C4 measured, waiting for
-the owner's choice on C5 (faster-whisper for the main text), then C3 (packaging), B1. Plan 07 (speakers) finished up to its Stage E: v0.6.0
+C1 and C2 (faster-whisper int8 as a CPU option for the search) built; C4 measured and the owner
+chose C5 (faster-whisper for the main text, one-pass "auto" detection, fixed seed), then C6
+(whisper.cpp one-pass patch), C3 (packaging), B1. Plan 07 (speakers) finished up to its Stage E: v0.6.0
 published; only Stage F (voice library) is left, for later.
 Plan 06 finished (suggested fixes, models in their own process, release v0.5.0 published as its
 Stage D). Plan 03 (fix a part):
@@ -38,8 +39,10 @@ Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
   queueing jobs); end such chains by killing the sh.exe processes (Get-CimInstance on the
   command line), not only the task. The edit tools turn \u escapes in new text into characters;
   write escapes with a script (chr(92)).
-- Open: owner decides C5 (and whether the one-pass detection also goes to the search's "auto"
-  pieces, and a whisper.cpp patch for the same, about 1.7x, estimated, not measured).
+- Owner's decision (2026-11-11): C5 yes, the one-pass detection also for the search's "auto"
+  pieces yes, the whisper.cpp patch as its own task C6 "ok"; faster-whisper on the GPU "not yet"
+  (an idea in docs/IDEAS.md: NVIDIA's cuBLAS 527 MB + cuDNN 664 MB on top of the 818 MB model).
+  C: had 13.9 GB free that day, below the owner's 20 GB floor.
 
 ## Session 25 (2026-11-11): plan 08 C2, faster-whisper for the search on the CPU
 
