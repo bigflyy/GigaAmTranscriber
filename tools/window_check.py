@@ -633,12 +633,19 @@ def suggest_steps(js, control, item, shoot):
     choose(js, "$('more-button')", "find-suggest")
     wait(lambda: not js("$('task-suggest-cancel').hidden") or item.result.suggestions_searched, 15, "cancel button")
     shoot("04g2-search-cancel")
+    # On the short clip the search can end before the click (a race, seen in sessions 25 and
+    # 29); then the menu rightly offers to search again and only the status line is checked.
+    ended_first = item.result.suggestions_searched
     js("$('task-suggest-cancel').click()")
     wait(lambda: control.suggesting is None, 60, "search stopped")
     wait(lambda: js("$('task-line').hidden"), 10, "status line gone after the cancel")
     offered_item = menu_texts(js, "$('more-button')").get("find-suggest", "")
-    check("Otmenit stops the search, which is not counted as done", not item.result.suggestions_searched
-          and js("$('task-line').hidden") and offered_item.startswith("Найти варианты"), offered_item)
+    if ended_first:
+        check("Otmenit: the search ended before the click, the status line is gone", js("$('task-line').hidden"),
+              offered_item)
+    else:
+        check("Otmenit stops the search, which is not counted as done", not item.result.suggestions_searched
+              and js("$('task-line').hidden") and offered_item.startswith("Найти варианты"), offered_item)
     # "Исправить...": the fix dialog for the offer's words, filled with the offer; the user's
     # own text goes in. If the search found nothing left, one test offer is added.
     if not js("$('text').querySelectorAll('.w.sg').length"):
