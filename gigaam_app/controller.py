@@ -55,9 +55,10 @@ MODEL_NOTES = {
     "Whisper": "Whisper large-v3-turbo: 99 языков, английские термины пишет латиницей. "
                "Медленнее GigaAM примерно в 2,5 раза; на русском GigaAM обычно точнее.",
     # The download question of plan 08 C2 (the mock-up the owner saw); since C5 it also reads
-    # the main text when Whisper is the chosen model (2.8x on the owner's files, plan 08 C4).
+    # the main text when Whisper is the chosen model (1.4x against whisper.cpp with the C6 patch,
+    # lecture on the CPU; 2.8x against the unpatched whisper.cpp of plan 08 C4).
     "faster-whisper": "Whisper large-v3-turbo в формате faster-whisper (int8): на процессоре распознаёт "
-                      "в 2,8 раза быстрее, а варианты для сомнительных слов ищет в 1,6-2 раза быстрее. "
+                      "в 1,4 раза быстрее, а варианты для сомнительных слов ищет в 1,6-2 раза быстрее. "
                       "На видеокарте не используется.",
 }
 # Speech languages offered in the window for Whisper: (code, Russian name). The settings
@@ -435,7 +436,7 @@ class Controller:
         covers the search and, since C5, the main text when Whisper is the chosen model."""
         info = catalog.FAST_WHISPER_MODEL
         installed = self._model_installed(info.key)
-        fast_note = "Быстрее на процессоре: текст в 2,8 раза, поиск вариантов в 1,6-2 раза. " + (
+        fast_note = "Быстрее на процессоре: текст в 1,4 раза, поиск вариантов в 1,6-2 раза. " + (
             "Скачана." if installed else f"Скачивается отдельно, {size_text(info.download_size)}.")
         return [{"key": "whisper.cpp", "title": "whisper.cpp", "note": "Входит в программу вместе с Whisper."},
                 {"key": "faster-whisper", "title": "faster-whisper (int8)", "note": fast_note,
