@@ -1,8 +1,8 @@
 # Handoff: state and findings
 
-Last updated 2026-11-11 (session 25). Plan 08 (faster suggestion search on the CPU): Stage A,
-C1 and C2 (faster-whisper int8 as a CPU option for the search) built; next C4 (measure
-faster-whisper for the main text), then C5, C3 (packaging), B1. Plan 07 (speakers) finished up to its Stage E: v0.6.0
+Last updated 2026-11-11 (session 26). Plan 08 (faster suggestion search on the CPU): Stage A,
+C1 and C2 (faster-whisper int8 as a CPU option for the search) built; C4 measured, waiting for
+the owner's choice on C5 (faster-whisper for the main text), then C3 (packaging), B1. Plan 07 (speakers) finished up to its Stage E: v0.6.0
 published; only Stage F (voice library) is left, for later.
 Plan 06 finished (suggested fixes, models in their own process, release v0.5.0 published as its
 Stage D). Plan 03 (fix a part):
@@ -10,6 +10,36 @@ A and B2 done; B1 and C left. Plan 05 (player) done (C3 in v0.5.0).
 Plan 04 (Whisper) done: v0.4.0. Plan 02 (window) has D for later; plan 01 still
 holds B9, F (Parakeet, Qwen3-ASR, F5 for suggestions) (its E moved to plan 07).
 Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
+
+## Session 26 (2026-11-11): plan 08 C4, faster-whisper for the main text measured
+
+- Scripts: experiments/cpu_asr/main_text.py (whole transcript as the app makes it: engines wcpp
+  = whisper.cpp CPU, wcppg = whisper.cpp Vulkan, fw = faster-whisper int8, fwm = the same with
+  multilingual=True, rnnt; time, RAM via K32GetProcessMemoryInfo, language per chunk) and
+  main_compare.py (pairs, terms, loops, runs GigaAM did not hear / left out, word times,
+  WHISPER_SCALE bands). Transcripts in build/cpu-asr-test/main/ENGINE/NAME.json. Results page
+  (local, quotes the owner's recordings, not published):
+  `C:\MyProjects\GigaAmTranscriber\build\cpu-asr-test\main-results.html`; my conclusions in
+  build/cpu-asr-test/main-notes.html (put at the top of the page with --notes).
+- Found: with language "auto" faster-whisper, like whisper.cpp, encodes every chunk twice
+  (transcribe() detects first, transcribe.py:473, then generate_segments encodes again).
+  multilingual=True with a placeholder language detects per segment from the same encoder
+  output (transcribe.py:1195): lecture text word for word the same, 304 -> 180 s.
+- Numbers (CPU, 8 threads, auto): lecture whisper.cpp 500 s / fwm 180 s; call 1569 / 556 s;
+  interview fwm 1888 s, Аудиозапись fwm 2860 s (whisper.cpp ran on the GPU there, text only:
+  0.89x real time would be about 93 and 138 min). RAM loaded 733 / 889 MB, peak lecture 890 /
+  1196, call 1004 / 1324 MB. whisper.cpp CPU and GPU: same lecture text, 4.4% of the call differs.
+- Quality a draw, read by hand (details on the page). faster-whisper dropped speech in 2 of 421
+  Аудиозапись chunks (2:00:45), whisper.cpp in 1; one real loop each there. Word times clearly
+  better with faster-whisper. WHISPER_SCALE: keep (bands ordered the same way, fewer marks).
+- Two faster-whisper runs differ in noisy places: CTranslate2's temperature fallback sampling is
+  not seeded (whisper.cpp's is). C5 should call ctranslate2.set_random_seed.
+- Tooling: TaskStop on a background `sh script | grep` left the sh loop running (it went on
+  queueing jobs); end such chains by killing the sh.exe processes (Get-CimInstance on the
+  command line), not only the task. The edit tools turn \u escapes in new text into characters;
+  write escapes with a script (chr(92)).
+- Open: owner decides C5 (and whether the one-pass detection also goes to the search's "auto"
+  pieces, and a whisper.cpp patch for the same, about 1.7x, estimated, not measured).
 
 ## Session 25 (2026-11-11): plan 08 C2, faster-whisper for the search on the CPU
 
