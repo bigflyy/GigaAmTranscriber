@@ -1,9 +1,10 @@
 # Handoff: state and findings
 
-Last updated 2026-11-11 (session 28). Plan 08 (faster suggestion search on the CPU): Stage A,
+Last updated 2026-11-12 (session 29). Plan 08 (faster suggestion search on the CPU): Stage A,
 C1, C2 (faster-whisper int8 as a CPU option for the search), C4 (measured), C5 (faster-whisper
-for the main text, one-pass "auto", repeatable sampling) and C6 (whisper.cpp one-pass patch)
-built; next C3 (packaging), B1. Plan 07 (speakers) finished up to its Stage E: v0.6.0
+for the main text, one-pass "auto", repeatable sampling), C6 (whisper.cpp one-pass patch) and
+C3a-C3d (packaging) built; C3e: v0.7.0 builds made, publishing waits for the owner; then B1.
+Plan 07 (speakers) finished up to its Stage E: v0.6.0
 published; only Stage F (voice library) is left, for later.
 Plan 06 finished (suggested fixes, models in their own process, release v0.5.0 published as its
 Stage D). Plan 03 (fix a part):
@@ -12,7 +13,47 @@ Plan 04 (Whisper) done: v0.4.0. Plan 02 (window) has D for later; plan 01 still
 holds B9, F (Parakeet, Qwen3-ASR, F5 for suggestions) (its E moved to plan 07).
 Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
 
-## Session 28 (2026-11-11): plan 08 C6, whisper.cpp encodes "auto" chunks once
+## Session 29 (2026-11-12): plan 08 C3, faster-whisper packaged, v0.7.0 builds
+
+- C3a (d60eb25): gigaam-cli follows Settings.whisper_cpu like the window (cli.reading_model:
+  Whisper + "faster-whisper" + downloaded + device not gpu -> key "faster-whisper"); first line
+  "Whisper on CPU (faster-whisper)". The CLI's --download still offers only catalog keys.
+- C3b (03b1b72): specs exclude ctranslate2.converters and huggingface_hub; the Windows spec drops
+  cudnn64_9.dll (the wheel is built WITH_CUDNN=OFF; dumpbin: ctranslate2.dll imports only
+  libiomp5md.dll and the MSVC runtime; CUDA via nvcuda only on a card). Licences:
+  packaging/licenses/ctranslate2 (README lists what is built into the library: oneMKL static,
+  libiomp5md, oneDNN 3.1.1, spdlog+fmt, cpu_features, CCCL, CUTLASS, CUDA runtime static; texts
+  fetched from GitHub at the v4.8.5 submodule commits; Intel ISSL from the conda mkl 2025.3.1
+  package), tokenizers-LICENSE.txt, both packages' sboms, faster-whisper's LICENSE. Linux also
+  libgomp (Ubuntu's gcc-14 copyright + GPL-3). build_windows.check_faster_whisper_files and a
+  faster-whisper smoke test (settings file with whisper_cpu, model linked in as
+  faster_whisper_large_v3_turbo_int8, --fast-whisper-model default build/cpu-asr-test/models/
+  fw-turbo-int8). Trial: Windows lecture-4 faster-whisper 12.5 s, whisper.cpp CPU 18.2 s; app
+  folder 1303 MiB (+69, program 190 MiB). Linux: 12.0 s against 19.7 s; _internal 135 -> 293 MiB
+  (ctranslate2 _ext 66 MiB + libctranslate2 80 MiB). WSL build venv got ctranslate2/tokenizers.
+- Running agg-queue from Git Bash with a /mnt/c argument for wsl.exe: set MSYS_NO_PATHCONV=1, or
+  Git Bash rewrites it to C:/MyProgramms/Git/mnt/c/... (exit 127).
+- C3d (95e0bf4): window_check fast_main_text_steps (with --whisper and --fast-whisper): device
+  CPU + faster-whisper card, status "Whisper - процессор, faster-whisper", the short file read in
+  6-7 s, file line. 150/150. Screens: this session's scratchpad wcheck/b/shots 08c, 08d.
+- Owner's choice (2026-11-12, AskUserQuestion): a text read by faster-whisper names its model,
+  "Whisper large-v3-turbo (faster-whisper int8)", in the file line (also while it runs,
+  controller.loaded_device), the Markdown header and the llm text; catalog.transcript_title
+  (99d2c2d). Offers found by faster-whisper keep the label "Whisper" (C2 decision).
+- Example settings got whisper_cpu, suggest, speakers, show_speakers (816e91c).
+- window_check: the known race "Otmenit stops the search" (the short clip's search can end before
+  the click) failed once more while the builds ran; the check now accepts it (f1e1098).
+  Last full run before that fix: 149/150, the faster-whisper label check passed.
+- C3e: version 0.7.0, RELEASE_NOTES.md, README. Assets in
+  `C:\MyProjects\GigaAmTranscriber\build\v0.7.0\release` (Windows zip 956.2 MiB, Linux tar.gz
+  888.2 MiB, THIRD_PARTY_LICENSES.zip with windows/ and linux/, FFmpeg source, SHA256SUMS;
+  `sha256sum -c` OK). Windows app build/v0.7.0/app/GigaAmTranscriber (1303 MiB): Whisper Vulkan
+  2.2 s, CPU 13.0 s, faster-whisper CPU OK, speakers, window. Linux ~/gigaam-build-070 in WSL
+  (1265 MiB): Whisper CPU 17.7 s, faster-whisper 10.4 s, speakers, missing-WebKit message, window
+  wrote the file; screens in this session's scratchpad release/shots-linux. WSL build script:
+  scratchpad wsl/build.sh (MSYS_NO_PATHCONV=1 when run from Git Bash).
+- Next: the owner tries the builds; on their go-ahead push main and publish v0.7.0 as v0.6.0 was
+  (tag, release with the five assets, RELEASE_NOTES.md as notes); tick C3. Then plan 08 B1.
 
 - Build: tools/build_whisper_cpp.py (pinned 1.9.5 tarball, MSVC + Ninja, Vulkan toolchain
   `--vulkan-sdk C:/Users/User/.venvs/vulkan-build/Library`; Linux in WSL with
