@@ -7,6 +7,8 @@ Windows and Linux (window and command line) and Linux Docker images.
 second model for other languages and for English terms inside Russian speech.
 Since v0.6.0 it can also find who speaks when and name the speakers in the text
 (pyannote community-1 models rebuilt for ONNX Runtime, a 33 MB download).
+Since v0.7.0 Whisper can run on the processor with faster-whisper as well (an optional
+780 MB download, faster than whisper.cpp there).
 
 Since v0.2.0 the app runs on [ONNX Runtime](https://onnxruntime.ai/) instead of
 PyTorch: the download is a quarter of the old CUDA build, it starts in a few
@@ -16,12 +18,12 @@ and about 25 s on the CPU; see [BENCHMARK.md](BENCHMARK.md).
 
 ## Downloads
 
-- **Windows:** [`GigaAmTranscriber-v0.6.0-windows-x64.zip`](https://github.com/bigflyy/GigaAmTranscriber/releases/latest)
-  (about 930 MB, 1.2 GB unpacked). Unzip it anywhere and run `GigaAmTranscriber.exe`.
+- **Windows:** [`GigaAmTranscriber-v0.7.0-windows-x64.zip`](https://github.com/bigflyy/GigaAmTranscriber/releases/latest)
+  (about 960 MB, 1.3 GB unpacked). Unzip it anywhere and run `GigaAmTranscriber.exe`.
   No Python, CUDA or FFmpeg is needed; both GigaAM models are inside (Whisper is a
   547 MB download the first time it is chosen).
-- **Linux:** [`GigaAmTranscriber-v0.6.0-linux-x64.tar.gz`](https://github.com/bigflyy/GigaAmTranscriber/releases/latest)
-  (about 840 MB, 1 GB unpacked). Unpack it and run `./GigaAmTranscriber/GigaAmTranscriber`.
+- **Linux:** [`GigaAmTranscriber-v0.7.0-linux-x64.tar.gz`](https://github.com/bigflyy/GigaAmTranscriber/releases/latest)
+  (about 890 MB, 1.2 GB unpacked). Unpack it and run `./GigaAmTranscriber/GigaAmTranscriber`.
   Recognition runs on the CPU. The system must have glibc 2.39 or newer (Ubuntu 24.04,
   Debian 13, Fedora 40 and later), FFmpeg and, for the window, WebKitGTK 4.1:
   `sudo apt install ffmpeg gir1.2-webkit2-4.1` (Fedora:
@@ -67,7 +69,11 @@ ones and writes the other formats from the text already recognised. **Настр
 chooses the formats, the model (RNNT by default, CTC, or Whisper), the device (Авто,
 Видеокарта, Процессор) and CPU threads; changes count from the next file.
 Choosing Whisper the first time asks to download it (547 MB); with Whisper the
-settings also show **Язык речи**: automatic detection or a chosen language.
+settings also show **Язык речи**: automatic detection or a chosen language, and
+**Whisper на процессоре**: whisper.cpp (inside the app) or faster-whisper (int8, a separate
+780 MB download). On the processor faster-whisper reads the text about 1.4 times faster
+and finds the other models' suggestions 1.6-2 times faster, with more exact word times; on a
+video card Whisper always runs on whisper.cpp.
 Words the model was unsure of are underlined in the text (dotted: maybe wrong,
 wavy: likely wrong; hover a word for the number); the **Сомнения** switch above
 the text hides the marks, and **Настройки** can colour every word from green to
@@ -127,8 +133,9 @@ gigaam-cli.exe --help
 
 `gigaam-config.json` beside the app holds the defaults for both the window and
 the command line. [`gigaam-config.example.json`](gigaam-config.example.json)
-lists every key; `language` (`"auto"` or a code such as `"en"`) is used only by
-Whisper. Files saved by v0.1 still load (`"CUDA"` now means GPU; the v0.1 multilingual
+lists the keys; `language` (`"auto"` or a code such as `"en"`) is used only by
+Whisper, and `whisper_cpu` (`"whisper.cpp"` or `"faster-whisper"`, the window's **Whisper на
+процессоре**) chooses what reads Whisper on the processor, for the command line too. Files saved by v0.1 still load (`"CUDA"` now means GPU; the v0.1 multilingual
 models are gone, and settings that chose one get RNNT).
 Speech search and chunking settings are in this file and in command-line flags such as
 `--vad-threshold`; the window's **Дополнительно** shows `vad_min_silence_ms`, `vad_threshold`
@@ -170,6 +177,17 @@ decoding and beam search invented text and repeated phrases on a long call. Word
 times come from whisper.cpp's token times. The 7.5-minute lecture takes about 12 s
 on a laptop RTX 4070 (GigaAM: about 6 s). On Russian GigaAM is usually more accurate;
 Whisper writes English terms as written ("fine tuning", "prompt") and knows 99 languages.
+The app's whisper.cpp carries one small change (in `tools/build_whisper_cpp.py`): with the
+language "auto" each chunk is encoded once, not once to detect the language and again to
+transcribe, which makes it 1.9 times faster on the CPU with the same text.
+
+On the processor Whisper can also run on
+[faster-whisper](https://github.com/SYSTRAN/faster-whisper) 1.2.1 (copied into
+`gigaam_app/faster_whisper` without its PyAV, huggingface_hub and onnxruntime parts) with
+[CTranslate2](https://github.com/OpenNMT/CTranslate2) 4.8.5 and an int8 conversion of
+large-v3-turbo. On 8 threads of a Ryzen 7 7840HS the 7.5-minute lecture takes about
+3.5 min (whisper.cpp: about 5 min), with the same quality on the test recordings and
+word times closer to GigaAM's.
 
 ## Building from source
 
@@ -243,7 +261,9 @@ then writes the zip, `THIRD_PARTY_LICENSES.zip`, the FFmpeg source and
 downloaded model folder, `--whisper-model FOLDER` (a `whisper_large_v3_turbo_q5_0`
 folder, for example from `%LOCALAPPDATA%\GigaAmTranscriber\models`) with
 `--whisper-audio FILE`; both default to the test area `build/whisper-test/`, and
-`--no-whisper-test` skips it. The Linux build takes the same options.
+`--no-whisper-test` skips it. The same file is also read with faster-whisper on the CPU, from a
+downloaded `faster_whisper_large_v3_turbo_int8` folder, `--fast-whisper-model FOLDER`
+(`--no-fast-whisper-test` skips it). The Linux build takes the same options.
 
 **Linux release.** Built and tested on Ubuntu 24.04 (WSL works) with the system
 Python 3.12, because the app carries the system's PyGObject, which fits only that
