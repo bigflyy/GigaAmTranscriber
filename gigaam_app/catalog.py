@@ -134,6 +134,20 @@ def model_title(key):
     info = BY_KEY.get(key)
     return (info.title or info.key) if info else key
 
+
+# The device of a transcript that faster-whisper read (FasterWhisperModel.device_label).
+FAST_WHISPER_DEVICE = "CPU (faster-whisper)"
+
+
+def transcript_title(key, device=""):
+    """Full model name of a transcript: model_title, except that Whisper's text read by
+    faster-whisper (plan 08 C5: the transcript keeps the key "Whisper") names that engine's
+    model, "Whisper large-v3-turbo (faster-whisper int8)", not whisper.cpp's q5_0 file
+    (owner 2026-11-12)."""
+    if key == "Whisper" and device == FAST_WHISPER_DEVICE:
+        return FAST_WHISPER_MODEL.title
+    return model_title(key)
+
 # Model names used by v0.1 settings files. The GigaAM multilingual CTC models
 # were dropped in v0.2 (worse than RNNT on Russian, Cyrillic transliteration of
 # English), so settings that chose them load with RNNT.

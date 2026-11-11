@@ -325,6 +325,22 @@ def test_the_model_is_shown_while_running_and_after(app, media):
     assert view["model"] == "Whisper large-v3-turbo (q5_0)" and view["detail"] == "1:01 - готово, Whisper"
 
 
+def test_whisper_read_by_faster_whisper_names_its_model(app, media):
+    """Plan 08 C5 keeps the key "Whisper" for faster-whisper's text; the file line names the
+    model that read it, while it runs and after (owner 2026-11-12)."""
+    app.add_files([str(media[0])])
+    item = app.files[0]
+    app.handle(("loaded", "CPU (faster-whisper)", 2.0, "faster-whisper"))
+    item.model = "Whisper"
+    assert app._file_view(item)["model"] == "Whisper large-v3-turbo (faster-whisper int8)"
+    hello = segment(0.0, 2.0, "Привет.")
+    app.handle(("segment", hello))
+    app.handle(("finished", Transcript(source=str(media[0]), model="Whisper", device="CPU (faster-whisper)",
+                                       audio_seconds=61.0, segments=[hello]), []))
+    view = app._file_view(item)
+    assert view["model"] == "Whisper large-v3-turbo (faster-whisper int8)" and view["detail"] == "1:01 - готово, Whisper"
+
+
 def test_no_speech(app, media):
     app.add_files([str(media[0])])
     finish(app, media[0], [])

@@ -17,7 +17,7 @@ from pathlib import Path
 import re
 import tempfile
 
-from .catalog import model_title
+from .catalog import model_title, transcript_title
 from .paths import replace_file
 
 FORMATS = ("txt", "timestamps", "md", "srt", "json", "llm")
@@ -278,7 +278,7 @@ def markdown_text(transcript, today=None):
     if transcript.audio_seconds:
         info.append(short_clock(transcript.audio_seconds))
     if transcript.model:
-        info.append(model_title(transcript.model))
+        info.append(transcript_title(transcript.model, transcript.device))
     lines = [f"# {markdown_escape(Path(transcript.source).name)}", "",
              "*" + " \u00b7 ".join(markdown_escape(part) for part in info) + "*"]  # middle dot between parts
     sections = markdown_sections(transcript)
@@ -338,7 +338,7 @@ def llm_text(transcript, doubt_below=LLM_DOUBT_BELOW):
     (suggested fixes, plan 06), both versions are given in {...} (owner 2026-11-08)."""
     words = [word for segment in transcript.segments for word in segment.words]
     marked = sum(1 for word in words if word.confidence is not None and word.confidence < doubt_below)
-    title = model_title(transcript.model) if transcript.model else "Основная модель"
+    title = transcript_title(transcript.model, transcript.device) if transcript.model else "Основная модель"
     made_by = f" (модель {title})" if transcript.model else ""
     places = 0
 

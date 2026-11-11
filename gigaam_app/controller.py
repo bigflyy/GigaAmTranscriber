@@ -249,6 +249,7 @@ class Controller:
         self.asking = None           # model key the download question is open for
         self.declined = set()        # models the user said "not now" to
         self.loaded_key = None
+        self.loaded_device = ""      # device label of the loaded model ("CPU (faster-whisper)", ...)
         self.failed_load = None      # model whose load failed; its "error" event follows
         self.reread_ids = itertools.count(1)
         self.rereading = None        # the selected part being recognised again (dict), if any
@@ -341,10 +342,15 @@ class Controller:
 
     def _model_name(self, item):
         """Full name of the model that recognises or recognised the file ("GigaAM v3 RNNT",
-        "Whisper large-v3-turbo (q5_0)"); empty while it waits or when it is unknown."""
+        "Whisper large-v3-turbo (q5_0)"); empty while it waits or when it is unknown. Whisper read
+        by faster-whisper names that model (catalog.transcript_title), also while it runs."""
         if item.state not in (RUNNING, DONE, CANCELLED) or not item.model:
             return ""
-        return catalog.model_title(item.model)
+        if item.result is not None:
+            device = item.result.device
+        else:  # running: the model loaded for it (with "Авто" a video card still gets whisper.cpp)
+            device = self.loaded_device if item is self.running else ""
+        return catalog.transcript_title(item.model, device)
 
     def _detail(self, item):
         """The short line under the name in the list; a finished file also names its model."""
@@ -1833,6 +1839,7 @@ class Controller:
         item = self.running
         if kind == "loading":
             model = "Whisper (faster-whisper)" if args[0] == catalog.FAST_WHISPER_MODEL.key else args[0]
+            self.loaded_device = ""
             self._set_engine("busy", f"Загрузка модели {model}...")
             if item:
                 item.phase = f"Загрузка модели {model}..."
@@ -1840,6 +1847,7 @@ class Controller:
         elif kind == "loaded":
             device, seconds, model = args
             self.loaded_key = self.worker.engine_key
+            self.loaded_device = device
             if model == catalog.FAST_WHISPER_MODEL.key:
                 model = "Whisper"  # the device names the engine: "процессор, faster-whisper"
             self._set_engine("ready", f"{model} - {device_name(device)}", f"Загружена за {seconds:.1f} с")

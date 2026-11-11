@@ -181,7 +181,8 @@ def fast_main_text_steps(js, control, short_audio, shoot):
     js("[...document.querySelectorAll('#files li')].find(li => li.textContent.includes('fast-')).click()")
     time.sleep(0.3)
     model_line = js("$('file-model').hidden ? '' : $('file-model').textContent")
-    check("the faster-whisper file names Whisper as its model", "Whisper large-v3-turbo" in model_line, model_line)
+    check("the faster-whisper file names its model", "Whisper large-v3-turbo (faster-whisper int8)" in model_line,
+          model_line)
     shoot("08d-faster-whisper-file")
     js("$('open-settings').click()")
     js("document.querySelector('#whisper-cpu input[value=\"whisper.cpp\"]').click()")

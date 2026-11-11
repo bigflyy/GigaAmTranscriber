@@ -145,6 +145,19 @@ def test_markdown_layout():
         "## 00:29\n\nХорошо спасибо.\n")
 
 
+@pytest.mark.parametrize("device, title", [
+    ("CPU", "Whisper large-v3-turbo (q5_0)"),
+    ("CPU (faster-whisper)", "Whisper large-v3-turbo (faster-whisper int8)"),
+])
+def test_whisper_files_name_the_model_that_read_them(device, title):
+    """Whisper's text read by faster-whisper keeps the key "Whisper" (plan 08 C5), but the
+    Markdown header and the text for an AI name its model (owner 2026-11-12)."""
+    transcript = make_transcript()
+    transcript.model, transcript.device = "Whisper", device
+    assert f"*2026-11-06 · 0:40 · {title}*" in markdown_text(transcript, today=DAY)
+    assert llm_text(transcript).startswith(f"Автоматическая расшифровка речи (модель {title}).")
+
+
 def test_markdown_sections_join_segments_until_a_minute_or_a_long_pause():
     segments = [Segment(0, 20, "Один."), Segment(21, 50, "Два."), Segment(51, 70, "Три."),
                 Segment(71, 75, "Четыре."),            # 71 s after the section start: new section

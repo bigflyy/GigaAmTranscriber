@@ -34,6 +34,7 @@ import numpy as np
 
 from .asr import Word, default_cpu_threads
 from .audio import SAMPLE_RATE
+from .catalog import FAST_WHISPER_DEVICE
 from .whisper_model import AUTO_LANGUAGE, whisper_confidence
 
 MODEL_TYPE = "faster-whisper"
@@ -102,7 +103,7 @@ class FasterWhisperModel:
     on_gpu = False
     # The status line says "Whisper - процессор, faster-whisper" (controller.DEVICE_NAMES);
     # it has no "GPU" prefix, so a file read with it counts as read on the processor.
-    device_label = "CPU (faster-whisper)"
+    device_label = FAST_WHISPER_DEVICE  # "CPU (faster-whisper)"; it also names the model (catalog.transcript_title)
 
     def __init__(self, folder, device="cpu", cpu_threads=None, language=None):
         """device: only the CPU is supported (faster-whisper's GPU path needs CUDA, which
