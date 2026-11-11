@@ -150,6 +150,16 @@
         <fieldset>
           <legend>Модель</legend>
           <div id="models" class="choices"></div>
+          <!-- Plan 08 C2 (owner 2026-11-11, layout B): what runs Whisper on the processor, for the
+               search and (C5) for the main text when Whisper is the chosen model. Moved here from
+               "Варианты для сомнительных слов" (owner 2026-11-11: "makes sense at model block"). -->
+          <div class="sub-choice">
+            <div class="choice-label">Whisper на процессоре</div>
+            <div id="whisper-cpu" class="choices"></div>
+          </div>
+          <p class="hint">faster-whisper на процессоре быстрее распознаёт текст, когда выбрана модель
+            Whisper, и быстрее ищет варианты для сомнительных слов. На видеокарте всегда работает
+            whisper.cpp.</p>
         </fieldset>
         <fieldset id="language-box" hidden>
           <legend>Язык речи</legend>
@@ -191,18 +201,11 @@
             <option value="always">Искать сразу всегда</option>
             <option value="off">Только по кнопке «Найти варианты»</option>
           </select>
-          <!-- Plan 08 C2 (owner 2026-11-11, layout B): what runs Whisper on the processor, for the
-               search and (C5) for the main text when Whisper is the chosen model. -->
-          <div class="sub-choice">
-            <div class="choice-label">Whisper на процессоре</div>
-            <div id="whisper-cpu" class="choices"></div>
-          </div>
           <p class="hint">Строки с сомнительными словами слушает ещё раз Whisper (с терминами), а текст
             Whisper проверяет GigaAM. Если они слышат иначе, слово подчёркивается синим; щелчок по нему
             показывает вариант, «Взять» ставит его в текст. На процессоре Whisper работает медленнее
             самой записи, поэтому там поиск по умолчанию запускается кнопкой под именем файла.
-            faster-whisper на процессоре быстрее ищет варианты, а если выбрана модель Whisper, то и
-            распознаёт весь текст; на видеокарте всегда работает whisper.cpp.</p>
+            Чем Whisper работает на процессоре, выбирается в блоке «Модель».</p>
         </fieldset>
         <fieldset>
           <legend>Говорящие</legend>
