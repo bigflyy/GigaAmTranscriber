@@ -1,9 +1,9 @@
 # Handoff: state and findings
 
-Last updated 2026-11-11 (session 26). Plan 08 (faster suggestion search on the CPU): Stage A,
-C1 and C2 (faster-whisper int8 as a CPU option for the search) built; C4 measured and the owner
-chose C5 (faster-whisper for the main text, one-pass "auto" detection, fixed seed), then C6
-(whisper.cpp one-pass patch), C3 (packaging), B1. Plan 07 (speakers) finished up to its Stage E: v0.6.0
+Last updated 2026-11-11 (session 27). Plan 08 (faster suggestion search on the CPU): Stage A,
+C1, C2 (faster-whisper int8 as a CPU option for the search), C4 (measured) and C5 (faster-whisper
+for the main text, one-pass "auto", repeatable sampling) built; next C6 (whisper.cpp one-pass
+patch), then C3 (packaging), B1. Plan 07 (speakers) finished up to its Stage E: v0.6.0
 published; only Stage F (voice library) is left, for later.
 Plan 06 finished (suggested fixes, models in their own process, release v0.5.0 published as its
 Stage D). Plan 03 (fix a part):
@@ -11,6 +11,40 @@ A and B2 done; B1 and C left. Plan 05 (player) done (C3 in v0.5.0).
 Plan 04 (Whisper) done: v0.4.0. Plan 02 (window) has D for later; plan 01 still
 holds B9, F (Parakeet, Qwen3-ASR, F5 for suggestions) (its E moved to plan 07).
 Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
+
+## Session 27 (2026-11-11): plan 08 C5, faster-whisper reads the main text on the CPU
+
+- Routing: controller._whisper_engine() gives "faster-whisper" when Settings.whisper_cpu chooses
+  it, it is downloaded and the device is not "Видеокарта"; _engine_key uses it for Whisper, so
+  choosing the engine reloads. engine.Transcriber("faster-whisper"): model_label "Whisper" (the
+  search then asks RNNT, as for Whisper's text); with "auto" it tries whisper.cpp on a Vulkan
+  card first (engine.whisper_cpp_on_gpu: None without the ggml file, without a card, or when
+  only skipped devices are found). "Распознать снова": the job gets faster-whisper, the page
+  and apply_fix keep the key "Whisper" (_reread_event maps it back); Whisper is offered there
+  also when only faster-whisper is downloaded. A file read on a card with "Авто" keeps
+  "Whisper" for the reread (else a second whisper.cpp copy would load on the card under the
+  other key). Status: "Загрузка модели Whisper
+  (faster-whisper)...", "Whisper - процессор, faster-whisper" (device_label
+  "CPU (faster-whisper)"; it has no "GPU" prefix, so _on_gpu stays False).
+- "auto" (main text, search pieces, read_many): language "en" + multilingual=True. Vendored
+  patch: Segment.language (README lists it), so encode() reports the detected language.
+- Seed finding (scratchpad seed_test.py / seed_test2.py / seed_check_off.py): CTranslate2 seeds
+  its random generator once per worker thread, at the first sampling, from the global seed.
+  set_random_seed(7) twice before two calls gave different texts; unload_model / load_model
+  does not reset it; a new ctranslate2.models.Whisper after the seed does (equal across
+  processes). So FasterWhisperModel sets SEED 0 before loading and, after a chunk whose
+  segments have temperature > 0, loads a new CTranslate2 model (old one dropped first, about
+  1 s) before the next chunk. The batched pipeline is greedy only, never samples.
+- Checks: lecture through the app's Transcriber, auto, 8 threads: 173 s (C4 fwm 180 s,
+  whisper.cpp 500 s), 935 words equal to C4's fwm, every chunk now reports "ru". Real-model
+  repeat test: clean lecture speech repeats even without the reload (useless), so the test adds
+  noise as loud as the speech (seed 0); control without reload gave 3 different texts, with it
+  3 equal. 586 tests (582 passed, 4 skipped); real-model tests 2/2 (GIGAAM_FW_MODEL =
+  build/cpu-asr-test/models/fw-turbo-int8, GIGAAM_PARITY_AUDIO = the lecture wav, 2.5 min).
+- Texts: the faster-whisper card note and download question now say "текст в 2,8 раза, поиск
+  вариантов в 1,6-2 раза"; the hint under the block says it also reads the whole text when
+  Whisper is the model. The cards still sit in "Варианты для сомнительных слов" (asked the
+  owner whether to move them). Not run: window_check (a C5 step is listed under C3), builds.
 
 ## Session 26 (2026-11-11): plan 08 C4, faster-whisper for the main text measured
 
