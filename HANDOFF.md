@@ -1,9 +1,9 @@
 # Handoff: state and findings
 
-Last updated 2026-11-11 (session 27). Plan 08 (faster suggestion search on the CPU): Stage A,
-C1, C2 (faster-whisper int8 as a CPU option for the search), C4 (measured) and C5 (faster-whisper
-for the main text, one-pass "auto", repeatable sampling) built; next C6 (whisper.cpp one-pass
-patch), then C3 (packaging), B1. Plan 07 (speakers) finished up to its Stage E: v0.6.0
+Last updated 2026-11-11 (session 28). Plan 08 (faster suggestion search on the CPU): Stage A,
+C1, C2 (faster-whisper int8 as a CPU option for the search), C4 (measured), C5 (faster-whisper
+for the main text, one-pass "auto", repeatable sampling) and C6 (whisper.cpp one-pass patch)
+built; next C3 (packaging), B1. Plan 07 (speakers) finished up to its Stage E: v0.6.0
 published; only Stage F (voice library) is left, for later.
 Plan 06 finished (suggested fixes, models in their own process, release v0.5.0 published as its
 Stage D). Plan 03 (fix a part):
@@ -11,6 +11,32 @@ A and B2 done; B1 and C left. Plan 05 (player) done (C3 in v0.5.0).
 Plan 04 (Whisper) done: v0.4.0. Plan 02 (window) has D for later; plan 01 still
 holds B9, F (Parakeet, Qwen3-ASR, F5 for suggestions) (its E moved to plan 07).
 Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
+
+## Session 28 (2026-11-11): plan 08 C6, whisper.cpp encodes "auto" chunks once
+
+- Build: tools/build_whisper_cpp.py (pinned 1.9.5 tarball, MSVC + Ninja, Vulkan toolchain
+  `--vulkan-sdk C:/Users/User/.venvs/vulkan-build/Library`; Linux in WSL with
+  ~/.local/vulkan-tools/root, venv ~/.venvs/gigaam-build, work ~/whisper-cpp-build/linux-x64;
+  wrapper scratchpad c6/wsl-build.sh, run as `wsl.exe -d Ubuntu --exec bash <script>`) now applies
+  PATCHES (exact replacements, each must match once) and writes "patches" into build-info.json.
+  build_windows.py check_whisper_cpp (also used by build_linux.py) refuses a build without them.
+  THIRD_PARTY_NOTICES.md says the libraries carry one small change.
+- Patch one-encoder-pass-auto-language (d5829f6): whisper_full skips the main loop's encoder call
+  for the window at offset 0 when the detection just encoded it with the same exp_n_audio_ctx.
+  Safe because the decoder reads only kv_cross (persistent buffer), and the detection's single
+  decoder step only touches kv_self, which the main loop resets anyway.
+- Measured (main_text.py, auto, base = old libraries, patched = new, build/cpu-asr-test/c6/):
+  output identical in every run, including word times and confidences. CPU 8 threads, lecture
+  619 -> 318 s and 618 -> 327 s (1.9x, the estimate was 1.7x; PC busy, C4's base was 500 s).
+  Vulkan RTX 4070: lecture 15.0 -> 12.6 s, call 38.5 -> 29.6 s (1.2-1.3x).
+- faster-whisper against the patched whisper.cpp, back to back: lecture 209.7 s against 299.6 s
+  (1.4x, not 2.8x). Card note and download question now say "в 1,4 раза" (4f5bfae); the search's
+  1,6-2 stays (measured with C1's language hint, never encoded twice).
+- third_party/whisper.cpp/windows-x64 and linux-x64 now hold the patched builds (gitignored); the
+  old ones are in build/whisper-cpp-c6/*-unpatched. Linux: 18 libraries, loads (CPU only in WSL);
+  no Linux transcription run yet (the C3 frozen smoke test does one).
+- Tests: 584 passed, 4 skipped (2 new: patches match the pinned source once; a stale patch stops
+  the build). Not run: window_check, app builds (C3).
 
 ## Session 27 (2026-11-11): plan 08 C5, faster-whisper reads the main text on the CPU
 
