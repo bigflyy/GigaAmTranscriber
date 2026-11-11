@@ -20,8 +20,9 @@ Whisper and a chosen language too. Without it only the language choice is checke
 
 --fast-whisper FOLDER names a downloaded faster-whisper model folder (plan 08 C2, with its
 model.json); it is linked in as faster_whisper_large_v3_turbo_int8, chosen in Настройки, and
-the suggestion search reads the short file with it on the CPU. Without it the choice asks
-the download question and "Не сейчас" is checked.
+the suggestion search reads the short file with it on the CPU; with --whisper as well, the
+short file is also transcribed by it (Whisper as the model, device "Процессор", plan 08 C5).
+Without it the choice asks the download question and "Не сейчас" is checked.
 """
 
 import argparse
@@ -151,9 +152,48 @@ def screenshot_function(out):
     return shoot
 
 
-def whisper_steps(js, control, short_audio, shoot, real):
+def fast_main_text_steps(js, control, short_audio, shoot):
+    """Plan 08 C5 (checked since C3d): Whisper is the model, "Whisper на процессоре" is
+    faster-whisper and the device is "Процессор", so faster-whisper reads the main text and
+    the status line says so. Called in Настройки with Whisper chosen; leaves whisper.cpp and
+    the device "Авто" chosen again."""
+    js("document.querySelector('#whisper-cpu input[value=\"faster-whisper\"]').click()")
+    wait(lambda: '"whisper_cpu": "faster-whisper"' in settings_text(), 10, "faster-whisper saved")
+    js("document.querySelector('#devices input[value=CPU]').click()")
+    wait(lambda: control.engine["state"] == "ready" and "faster-whisper" in js("$('engine-text').textContent"),
+         120, "faster-whisper loaded")
+    engine_text = js("$('engine-text').textContent")
+    check("the status line names faster-whisper", engine_text == "Whisper - процессор, faster-whisper", engine_text)
+    js("$('whisper-cpu').scrollIntoView()")
+    shoot("08c-settings-faster-whisper")
+    js("$('close-settings').click()")
+    copy = Path(os.environ["GIGAAM_DOWNLOADS"]) / ("fast-" + Path(short_audio).name)
+    shutil.copy2(short_audio, copy)
+    before = len(control.files)
+    began = time.perf_counter()
+    control.add_files([str(copy)])
+    wait(lambda: len(control.files) > before and control.files[-1].state in ("done", "failed"), 600,
+         "faster-whisper transcription")
+    item = control.files[-1]
+    check("faster-whisper read the main text", item.state == "done" and item.segments
+          and item.result.model == "Whisper" and item.result.device == "CPU (faster-whisper)",
+          f"{item.state}, {item.result.device if item.result else None}, {time.perf_counter() - began:.1f} s")
+    js("[...document.querySelectorAll('#files li')].find(li => li.textContent.includes('fast-')).click()")
+    time.sleep(0.3)
+    model_line = js("$('file-model').hidden ? '' : $('file-model').textContent")
+    check("the faster-whisper file names Whisper as its model", "Whisper large-v3-turbo" in model_line, model_line)
+    shoot("08d-faster-whisper-file")
+    js("$('open-settings').click()")
+    js("document.querySelector('#whisper-cpu input[value=\"whisper.cpp\"]').click()")
+    js("document.querySelector('#devices input[value=Auto]').click()")
+    wait(lambda: '"whisper_cpu": "whisper.cpp"' in settings_text() and '"device": "Auto"' in settings_text(),
+         10, "whisper.cpp and Auto again")
+
+
+def whisper_steps(js, control, short_audio, shoot, real, fast=False):
     """Settings: the language choice shows only for Whisper and is saved; with the real
-    model, SHORT_AUDIO is transcribed by Whisper with the language chosen."""
+    model, SHORT_AUDIO is transcribed by Whisper with the language chosen, and with the
+    faster-whisper model too (fast) also by faster-whisper on the processor."""
     check("no language choice for GigaAM", js("$('language-box').hidden"))
     check("Whisper is offered", js("!!document.querySelector('#models input[value=Whisper]')"))
     if not real:
@@ -188,6 +228,8 @@ def whisper_steps(js, control, short_audio, shoot, real):
     check("Whisper file names its model", "Whisper large-v3-turbo" in model_line, model_line)
     shoot("08b-whisper-file")
     js("$('open-settings').click()")
+    if fast:
+        fast_main_text_steps(js, control, short_audio, shoot)
     js("document.querySelector('#models input[value=RNNT]').click()")
     wait(lambda: js("$('language-box').hidden"), 10, "language choice hidden again")
 
@@ -995,7 +1037,7 @@ def scenario(window, control, long_audio, short_audio, shoot, whisper=False, fas
 
         # Whisper (plan 04 B4): language choice, and a file transcribed with the real model.
         js("$('open-settings').click()")
-        whisper_steps(js, control, short_audio, shoot, whisper)
+        whisper_steps(js, control, short_audio, shoot, whisper, fast)
         js("$('close-settings').click()")
         wait(lambda: control.engine["state"] == "ready" and "RNNT" in js("$('engine-text').textContent"),
              60, "RNNT after Whisper")
@@ -1025,8 +1067,8 @@ def second_session(window, control, short_audio, long_audio):
     try:
         wait(lambda: js("typeof state !== 'undefined' && state.booted"), 30, "page ready again")
         files = js("state.files.map(f => [f.name, f.state])")
-        # The Whisper steps add a third file; it does not change these two.
-        files = [entry for entry in files if not entry[0].startswith(("whisper-", "added-"))]
+        # The Whisper steps add a third file (and a fourth with faster-whisper); they do not change these two.
+        files = [entry for entry in files if not entry[0].startswith(("whisper-", "fast-", "added-"))]
         check("files come back in the next session",
               files[:2] == [[Path(short_audio).name, "done"], [Path(long_audio).name, "cancelled"]], files)
         check("the newest is selected with its text",

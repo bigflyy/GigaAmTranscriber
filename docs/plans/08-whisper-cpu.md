@@ -72,6 +72,6 @@ first (C2), the main text (Whisper as the chosen model on the CPU) only after C4
 - [ ] **C3** Packaging of C2 (and C5) (CTranslate2 in the Windows and Linux builds), window_check (also a step for C5: Whisper as the model, device "Процессор", faster-whisper reads the main text and the status line says so), builds, release notes. Owner 2026-11-12: the card stays "в 1,4 раза" (the 1.4x was not the PC's load: both engines ran back to back; quiet-PC estimate 1.5x). Split:
 - [x] **C3a** gigaam-cli follows Settings.whisper_cpu like the window (Whisper read by faster-whisper on the CPU when chosen and downloaded); tests
 - [x] **C3b** Windows build: CTranslate2 without its unused cuDNN file (the wheel is built WITH_CUDNN=OFF), huggingface_hub kept out, licences (packaging/licenses/ctranslate2: CTranslate2, Intel MKL and OpenMP, oneDNN, spdlog and fmt, cpu_features, Thrust, CUTLASS; tokenizers; faster-whisper), THIRD_PARTY_NOTICES.md, a faster-whisper smoke test of the frozen CLI on the CPU
-- [ ] **C3c** Linux build: the same, plus libgomp's licence (GCC runtime library exception)
-- [ ] **C3d** window_check: the C5 step (Whisper as the model, device "Процессор", faster-whisper reads the main text and the status line says so); run it
+- [x] **C3c** Linux build: the same, plus libgomp's licence (GCC runtime library exception)
+- [x] **C3d** window_check: the C5 step (Whisper as the model, device "Процессор", faster-whisper reads the main text and the status line says so); run it
 - [ ] **C3e** Version, RELEASE_NOTES.md, README; full Windows and Linux builds for the owner to try
