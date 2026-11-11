@@ -14,6 +14,8 @@ int8, timurlexx LingoFlip int8w) and `readings/LABEL/FILE.json`.
 | `read_parakeet.py` | cpu-asr-exp | Parakeet TDT on sherpa-onnx |
 | `compare.py` | dev | Offers per runtime through fix.suggestion_from, times, agreement with a base label; also builds `wcpp-hint` from the auto and ru runs |
 | `common.py` | both | Even piece sample (`--most`), the language hint from GigaAM's script, saving readings |
+| `main_text.py` | dev | Plan 08 C4: whole transcript of a file with `--engine wcpp`, `fw` or `rnnt`, as the app makes the main text; time, RAM, the language of each chunk -> `main/ENGINE/NAME.json` |
+| `main_compare.py` | dev | Plan 08 C4: the two Whispers against each other and RNNT (differing words, terms, loops, invented and left-out text, word times, WHISPER_SCALE bands) -> `main-compare.json`, `main-results.html` |
 
 The cpu-asr-exp venv (`~/.venvs/cpu-asr-exp`, Python 3.13): `pip install faster-whisper sherpa-onnx numpy psutil`
 (faster-whisper 1.2.1, ctranslate2 4.8.5, sherpa-onnx 2.0.1). Run the scripts there with `python -I`.
