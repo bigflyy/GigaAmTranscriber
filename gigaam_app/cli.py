@@ -5,6 +5,8 @@ gigaam-cli --download MODEL fetches an extra model (resumes if interrupted);
 gigaam-cli --devices shows the GPUs and CPU each recognition engine can use;
 gigaam-cli --speakers FILE also finds who speaks when (plan 07): the saved files name the
 speakers ("Говорящий 1: ..."); --speakers 3 when the number of speakers is known.
+Whisper on the processor is read by the engine the settings file chooses (whisper_cpu,
+"Whisper на процессоре" in the window's Настройки): whisper.cpp or faster-whisper.
 """
 
 import argparse
@@ -89,6 +91,19 @@ def speaker_count(value):
     if not text.isdigit() or not 1 <= int(text) <= MAX_SPEAKERS:
         raise ValueError(f"--speakers: expected auto, off or a number from 1 to {MAX_SPEAKERS}")
     return int(text)
+
+
+def reading_model(model, whisper_cpu, device):
+    """The model key that reads the files. For Whisper this is the window's rule
+    (controller._whisper_engine, plan 08 C5): "faster-whisper" when the settings file
+    chooses it (whisper_cpu, set in the window's Настройки), it is downloaded and the
+    device is not "gpu"; with "auto" a Vulkan video card still gets whisper.cpp
+    (engine.Transcriber). Every other case keeps the model as it is."""
+    fast = catalog.FAST_WHISPER_MODEL
+    if (model == "Whisper" and whisper_cpu == fast.key and device != "gpu"
+            and catalog.installed_folder(fast) is not None):
+        return fast.key
+    return model
 
 
 def find_model(key):
@@ -219,12 +234,14 @@ def main(argv=None):
         print("File not found: " + ", ".join(missing), file=sys.stderr)
         return 2
     try:
-        transcriber = Transcriber(model, device=device, cpu_threads=threads, language=language)
+        transcriber = Transcriber(reading_model(model, settings.whisper_cpu, device), device=device,
+                                  cpu_threads=threads, language=language)
     except (ModelNotInstalled, ValueError) as error:  # ValueError: a language Whisper does not know
         print(error, file=sys.stderr)
         return 2
     if args.language and not transcriber.uses_language:
         print(f"Note: --language is for Whisper; {model} recognises Russian only.", file=sys.stderr)
+    # device_label says "CPU (faster-whisper)" when faster-whisper reads Whisper's text.
     say(f"{model} on {transcriber.device_label}, loaded in {transcriber.load_seconds:.1f} s")
     speaker_model = None
     if speakers is not None:

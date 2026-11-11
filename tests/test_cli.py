@@ -55,6 +55,42 @@ def test_language_reaches_the_model(tmp_path, monkeypatch, argv, expected):
     assert FakeTranscriber.made == [expected]
 
 
+@pytest.mark.parametrize("whisper_cpu, downloaded, argv, expected", [
+    ("faster-whisper", True, [], "faster-whisper"),
+    ("faster-whisper", True, ["--device", "cpu"], "faster-whisper"),
+    ("faster-whisper", True, ["--device", "gpu"], "Whisper"),  # a video card: whisper.cpp (Vulkan)
+    ("faster-whisper", False, [], "Whisper"),  # not downloaded: whisper.cpp, as in the window
+    ("whisper.cpp", True, [], "Whisper"),
+])
+def test_whisper_cpu_setting_picks_the_reader(tmp_path, monkeypatch, whisper_cpu, downloaded, argv, expected):
+    """The CLI reads Whisper's text with the engine chosen in the window's Настройки (plan 08 C3a)."""
+    monkeypatch.setattr(cli, "Transcriber", FakeTranscriber)
+    fast = cli.catalog.FAST_WHISPER_MODEL
+    monkeypatch.setattr(cli.catalog, "installed_folder",
+                        lambda info: tmp_path if info is fast and downloaded else None)
+    FakeTranscriber.made.clear()
+    settings = tmp_path / "gigaam-config.json"
+    settings.write_text(f'{{"model": "Whisper", "whisper_cpu": "{whisper_cpu}"}}', encoding="utf-8")
+    audio = tmp_path / "a.wav"
+    audio.write_bytes(b"")
+    with pytest.raises(SystemExit):
+        cli.main([str(audio), *argv, "--config", str(settings)])
+    assert FakeTranscriber.made == [(expected, "auto")]
+
+
+def test_whisper_cpu_setting_leaves_gigaam_alone(tmp_path, monkeypatch):
+    monkeypatch.setattr(cli, "Transcriber", FakeTranscriber)
+    monkeypatch.setattr(cli.catalog, "installed_folder", lambda info: tmp_path)
+    FakeTranscriber.made.clear()
+    settings = tmp_path / "gigaam-config.json"
+    settings.write_text('{"model": "RNNT", "whisper_cpu": "faster-whisper"}', encoding="utf-8")
+    audio = tmp_path / "a.wav"
+    audio.write_bytes(b"")
+    with pytest.raises(SystemExit):
+        cli.main([str(audio), "--config", str(settings)])
+    assert FakeTranscriber.made == [("RNNT", "auto")]
+
+
 def test_unknown_language_exits_2(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(cli, "Transcriber", FakeTranscriber)
     audio = tmp_path / "a.wav"
