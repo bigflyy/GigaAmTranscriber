@@ -17,7 +17,10 @@ Changes from the released files, each marked "GigaAM patch" in the code:
   helpers); the app hands numpy arrays over and never calls them.
 - utils.py: `import huggingface_hub` moved into download_model; tqdm is optional (QuietBar
   stands in for it).
-- transcribe.py: tqdm is optional, as in utils.py.
+- transcribe.py: tqdm is optional, as in utils.py. Segment has a `language` field (default
+  None) that WhisperModel.generate_segments fills with the language the segment was decoded
+  in: with `multilingual=True` that language is detected per segment from the same encoder
+  output, and TranscriptionInfo.language only repeats the language argument (plan 08 C5).
 - The assets folder (silero_vad_v6.onnx, for vad_filter) is left out; the app finds speech
   with its own Silero model and never sets vad_filter.
 

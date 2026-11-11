@@ -53,7 +53,7 @@ class Settings:
     doubt_strong: float = 0.80        # and below this likely wrong (wavy); 0 < strong < light <= 1
     player_volume: float = 1.0        # the window's player, 0..1
     suggest: str = "gpu"              # one of SUGGEST_MODES: look for other readings after each file
-    whisper_cpu: str = "whisper.cpp"  # one of WHISPER_CPU_ENGINES: Whisper on the processor for the search
+    whisper_cpu: str = "whisper.cpp"  # one of WHISPER_CPU_ENGINES: Whisper on the processor (search, main text)
     speakers: bool = False            # find who speaks when after each file (plan 07)
     show_speakers: bool = True        # the window shows the speaker names (switch "Говорящие"); files always have them
     outputs: list = field(default_factory=lambda: list(DEFAULT_FORMATS))

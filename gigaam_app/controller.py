@@ -40,7 +40,8 @@ FILE_DIALOG_TYPES = ("Аудио и видео (" + ";".join("*" + suffix for su
 
 DEVICES = (("Auto", "Авто"), ("GPU", "Видеокарта"), ("CPU", "Процессор"))
 DEVICE_NAMES = {"GPU (DirectML)": "видеокарта (DirectML)", "GPU (CUDA)": "видеокарта (CUDA)",
-                "GPU (Vulkan)": "видеокарта (Vulkan)", "CPU": "процессор"}
+                "GPU (Vulkan)": "видеокарта (Vulkan)", "CPU": "процессор",
+                "CPU (faster-whisper)": "процессор, faster-whisper"}
 FORMAT_LABELS = {"txt": "TXT", "timestamps": "TXT с таймкодами", "md": "Markdown (разделы по времени)",
                  "srt": "SRT (субтитры)", "json": "JSON (слова и время)",
                  "llm": "TXT для ИИ (сомнительные слова отмечены)"}
@@ -53,9 +54,11 @@ MODEL_NOTES = {
     "CTC": "Русский язык, пунктуация и заглавные буквы. Немного быстрее RNNT.",
     "Whisper": "Whisper large-v3-turbo: 99 языков, английские термины пишет латиницей. "
                "Медленнее GigaAM примерно в 2,5 раза; на русском GigaAM обычно точнее.",
-    # The download question of plan 08 C2 (the mock-up the owner saw).
-    "faster-whisper": "Whisper large-v3-turbo в формате faster-whisper (int8): ищет варианты для "
-                      "сомнительных слов на процессоре в 1,6-2 раза быстрее. На видеокарте не используется.",
+    # The download question of plan 08 C2 (the mock-up the owner saw); since C5 it also reads
+    # the main text when Whisper is the chosen model (2.8x on the owner's files, plan 08 C4).
+    "faster-whisper": "Whisper large-v3-turbo в формате faster-whisper (int8): на процессоре распознаёт "
+                      "в 2,8 раза быстрее, а варианты для сомнительных слов ищет в 1,6-2 раза быстрее. "
+                      "На видеокарте не используется.",
 }
 # Speech languages offered in the window for Whisper: (code, Russian name). The settings
 # file and --language take any code Whisper knows; a code not listed here is still shown.
@@ -428,10 +431,11 @@ class Controller:
         }
 
     def _whisper_cpu_options(self):
-        """The two cards of "Whisper на процессоре" (plan 08 C2): key, title, note."""
+        """The two cards of "Whisper на процессоре" (plan 08 C2): key, title, note. The choice
+        covers the search and, since C5, the main text when Whisper is the chosen model."""
         info = catalog.FAST_WHISPER_MODEL
         installed = self._model_installed(info.key)
-        fast_note = "В 1,6-2 раза быстрее на процессоре. " + (
+        fast_note = "Быстрее на процессоре: текст в 2,8 раза, поиск вариантов в 1,6-2 раза. " + (
             "Скачана." if installed else f"Скачивается отдельно, {size_text(info.download_size)}.")
         return [{"key": "whisper.cpp", "title": "whisper.cpp", "note": "Входит в программу вместе с Whisper."},
                 {"key": "faster-whisper", "title": "faster-whisper (int8)", "note": fast_note,
@@ -744,14 +748,21 @@ class Controller:
                 self.settings.terms = terms
                 self._save_settings()
                 self._emit("settings", self._settings_view())
-            models = [key for key in REREAD_MODELS if self._model_installed(key)]
+            # The page knows Whisper by its key "Whisper"; the model process gets the engine that
+            # reads it here (faster-whisper on the processor when chosen, plan 08 C5). A file
+            # read on a video card with "Авто" keeps whisper.cpp under its own key, as the
+            # search does: the same model under the other key would be a second copy on the card.
+            whisper = "Whisper" if self._on_gpu(item) else self._whisper_engine()
+            models = [key for key in REREAD_MODELS
+                      if self._model_installed(key) or (key == "Whisper" and whisper != "Whisper")]
+            engines = [whisper if key == "Whisper" else key for key in models]
             request = next(self.reread_ids)
             self.rereading = {"request": request, "id": item.id, "transcript": item.result, "first": first,
                            "last": last, "readings": {},
                            "context": [fix.word_at(segments, position) for position in context],
                            "selected": (context.index(first), context.index(last)),
                            "current": fix.selected_text(segments, first, last)}
-            self.worker.jobs.put(("reread", request, item.path, windows, models, self.settings.engine_device,
+            self.worker.jobs.put(("reread", request, item.path, windows, engines, self.settings.engine_device,
                                   self.settings.cpu_threads, self.settings.language, terms or None))
             return {"request": request, "current": self.rereading["current"],
                     "models": [{"key": key, "title": catalog.model_title(key)} for key in models],
@@ -824,6 +835,8 @@ class Controller:
         """Worker events of a selected part recognised again; old requests are ignored."""
         if self.rereading is None or self.rereading["request"] != request:
             return
+        if kind in ("reread_loading", "reread_result") and args[0] == catalog.FAST_WHISPER_MODEL.key:
+            args = ("Whisper",) + args[1:]  # the page and apply_fix know Whisper by this key
         data = {"request": request}
         if kind == "reread_range":
             data.update(phase="range", start=args[0], end=args[1])
@@ -1720,8 +1733,22 @@ class Controller:
             self._notice(text)
 
     def _engine_key(self):
+        """(model key, device, threads) the model process loads for the main text. Whisper
+        is "faster-whisper" when Настройки choose it for the processor (plan 08 C5)."""
         s = self.settings
-        return s.model, s.engine_device, s.cpu_threads
+        model = self._whisper_engine() if s.model == "Whisper" else s.model
+        return model, s.engine_device, s.cpu_threads
+
+    def _whisper_engine(self):
+        """The model key that reads Whisper's text for the main text and "Распознать снова"
+        (plan 08 C5, owner 2026-11-11): "faster-whisper" when Настройки choose it, it is
+        downloaded and the device is not "Видеокарта" (with "Авто" the model process still
+        puts whisper.cpp on a Vulkan card, engine.Transcriber); else "Whisper" (whisper.cpp)."""
+        fast = catalog.FAST_WHISPER_MODEL.key
+        if (self.settings.whisper_cpu == "faster-whisper" and self.settings.engine_device != "gpu"
+                and self._model_installed(fast)):
+            return fast
+        return "Whisper"
 
     def _model_installed(self, key):
         return catalog.installed_folder(catalog.find(key)) is not None
@@ -1804,13 +1831,16 @@ class Controller:
         kind, args = event[0], event[1:]
         item = self.running
         if kind == "loading":
-            self._set_engine("busy", f"Загрузка модели {args[0]}...")
+            model = "Whisper (faster-whisper)" if args[0] == catalog.FAST_WHISPER_MODEL.key else args[0]
+            self._set_engine("busy", f"Загрузка модели {model}...")
             if item:
-                item.phase = f"Загрузка модели {args[0]}..."
+                item.phase = f"Загрузка модели {model}..."
                 self._emit_file(item)
         elif kind == "loaded":
             device, seconds, model = args
             self.loaded_key = self.worker.engine_key
+            if model == catalog.FAST_WHISPER_MODEL.key:
+                model = "Whisper"  # the device names the engine: "процессор, faster-whisper"
             self._set_engine("ready", f"{model} - {device_name(device)}", f"Загружена за {seconds:.1f} с")
         elif kind == "load_failed":
             self.loaded_key = None

@@ -1651,7 +1651,8 @@ function renderSettings() {
   $('doubt-light').value = Math.round((settings.doubt_light || 0.97) * 100);
   $('doubt-strong').value = Math.round((settings.doubt_strong || 0.80) * 100);
   $('suggest').value = settings.suggest || 'gpu';
-  // Plan 08 C2: whisper.cpp or faster-whisper for the search on the processor. Choosing
+  // Plan 08 C2: whisper.cpp or faster-whisper on the processor (the search, and since C5 the
+  // main text when Whisper is the chosen model). Choosing
   // faster-whisper before it is downloaded asks the download question (Python decides).
   const engines = $('whisper-cpu');
   engines.textContent = '';

@@ -60,6 +60,9 @@ class Segment:
     no_speech_prob: float
     words: Optional[List[Word]]
     temperature: Optional[float]
+    # GigaAM patch: the language the segment was decoded in. With multilingual=True it is
+    # detected per segment and TranscriptionInfo.language only holds the language argument.
+    language: Optional[str] = None
 
     def _asdict(self):
         warn(
@@ -1370,6 +1373,7 @@ class WhisperModel:
                         if options.word_timestamps
                         else None
                     ),
+                    language=tokenizer.language_code,  # GigaAM patch: see Segment.language
                 )
 
             if (

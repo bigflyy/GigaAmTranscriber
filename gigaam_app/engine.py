@@ -72,11 +72,30 @@ class Transcript:
         return "\n".join(segment.text for segment in self.segments if segment.text)
 
 
+def whisper_cpp_on_gpu(cpu_threads=None, language=None):
+    """Whisper on whisper.cpp loaded on a Vulkan video card, or None when Whisper is not
+    downloaded, no card is found or loading on it fails (then faster-whisper reads on the
+    processor instead, plan 08 C5). A language Whisper does not know still raises."""
+    folder = catalog.installed_folder(catalog.find("Whisper"))
+    if folder is None:
+        return None
+    try:
+        model = WhisperModel(folder, device="gpu", cpu_threads=cpu_threads, language=language)
+    except (OSError, RuntimeError):  # no card or no whisper.cpp library: the processor it is
+        return None
+    if not model.on_gpu:  # Vulkan lists only devices whisper_cpp.preferred_gpu skips
+        model.close()
+        return None
+    return model
+
+
 class Transcriber:
     """A loaded model plus VAD. One transcription at a time per instance."""
 
     def __init__(self, model=DEFAULT_MODEL, device="auto", cpu_threads=None, model_root=None, language=None):
-        """model: a catalog key (or a v0.1 name). model_root: one folder holding the
+        """model: a catalog key (or a v0.1 name); "faster-whisper" is Whisper read by
+        faster-whisper on the processor (plan 08 C5; with device "auto" and a Vulkan card,
+        whisper.cpp on the card). model_root: one folder holding the
         model folder and the VAD model, instead of the normal lookup (tests, experiments).
         language: Whisper only, a code such as "ru", or None / "auto" to detect it per chunk
         (GigaAM models are Russian and ignore it).
@@ -95,7 +114,17 @@ class Transcriber:
                     raise FileNotFoundError(f"Model not found: {root / info.folder}")
                 raise ModelNotInstalled(info)
         self.model_label = model
-        if is_whisper_folder(folder):
+        self.asr = None
+        if model == catalog.FAST_WHISPER_MODEL.key and not model_root:
+            # Plan 08 C5: the key means "Whisper, read by faster-whisper on the processor".
+            # The text is Whisper's (the suggestion search treats it so), and with "auto" a
+            # Vulkan video card still gets whisper.cpp, as Whisper always had.
+            self.model_label = "Whisper"
+            if device == "auto":
+                self.asr = whisper_cpp_on_gpu(cpu_threads, language)
+        if self.asr is not None:
+            pass
+        elif is_whisper_folder(folder):
             self.asr = WhisperModel(folder, device=device, cpu_threads=cpu_threads, language=language)
         elif is_fast_whisper_folder(folder):
             self.asr = FasterWhisperModel(folder, device=device, cpu_threads=cpu_threads, language=language)

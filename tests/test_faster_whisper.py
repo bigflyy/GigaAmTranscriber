@@ -19,6 +19,9 @@ from gigaam_app import catalog, engine, fix
 from gigaam_app.faster_whisper_model import FasterWhisperModel, is_fast_whisper_folder, words_from_fw
 
 
+FAST = catalog.FAST_WHISPER_MODEL.key
+
+
 def fw_word(text, start, end, probability=1.0):
     return SimpleNamespace(word=text, start=start, end=end, probability=probability)
 
@@ -46,15 +49,22 @@ def test_empty_words_are_skipped():
 # ------------------------------------------------------------------ the model with fakes
 
 class FakeFw:
-    """Stands in for faster_whisper.WhisperModel: one word per piece, records the calls."""
+    """Stands in for faster_whisper.WhisperModel: one word per piece, records the calls.
+    temperatures: the temperature of each call's segment (0 greedy, more: the fallback sampled).
+    detected: the language a multilingual call finds."""
 
-    def __init__(self):
+    def __init__(self, temperatures=(), detected="de"):
         self.calls = []
+        self.temperatures = list(temperatures)
+        self.detected = detected
 
     def transcribe(self, audio, **options):
         self.calls.append((len(audio), options))
         number = len(self.calls)
-        segments = iter([SimpleNamespace(words=[fw_word(f" w{number}", 0.1, 0.3)])])
+        temperature = self.temperatures[number - 1] if number <= len(self.temperatures) else 0.0
+        language = self.detected if options.get("multilingual") else options.get("language") or "ru"
+        segments = iter([SimpleNamespace(words=[fw_word(f" w{number}", 0.1, 0.3)], language=language,
+                                         temperature=temperature)])
         return segments, SimpleNamespace(language=options.get("language") or "ru")
 
 
@@ -71,11 +81,13 @@ class FakePipeline:
         return iter(segments), SimpleNamespace(language=options.get("language") or "en")
 
 
-def fake_model(language=None):
+def fake_model(language=None, temperatures=()):
     model = object.__new__(FasterWhisperModel)
-    model.model, model.pipeline = FakeFw(), FakePipeline()
-    model.cpu_threads, model.known_languages = 2, {"ru", "en"}
-    model.language, model.last_language = language, ""
+    model.model, model.pipeline = FakeFw(temperatures), FakePipeline()
+    model.cpu_threads, model.known_languages = 2, {"ru", "en", "de"}
+    model.language, model.last_language, model.sampled = language, "", False
+    model.fresh = []  # chunks before which a new CTranslate2 model was loaded
+    model._fresh_sampler = lambda: (model.fresh.append(len(model.model.calls)), setattr(model, "sampled", False))
     return model
 
 
@@ -92,12 +104,59 @@ def test_encode_reads_each_piece_with_the_app_settings():
     assert [(w.start, w.end, w.text) for w in words] == [(2.1, 2.3, "w2")]
 
 
-def test_auto_language_is_sent_as_none_and_unknown_is_refused():
+def test_auto_language_is_detected_from_the_transcription_pass_and_unknown_is_refused():
+    """Plan 08 C5: no separate detect_language run; the placeholder language with
+    multilingual=True, and the language each segment was decoded in comes back."""
     model = fake_model(language="auto")
+    [result] = model.encode([np.zeros(100, np.float32)])
+    options = model.model.calls[0][1]
+    assert options["language"] == "en" and options["multilingual"] is True
+    assert result[0] == "de" and model.last_language == "de"
+    model.set_language(None)
     model.encode([np.zeros(100, np.float32)])
-    assert model.model.calls[0][1]["language"] is None
+    assert model.model.calls[1][1]["multilingual"] is True
     with pytest.raises(ValueError):
         model.set_language("xx")
+
+
+def test_a_set_language_is_not_detected():
+    model = fake_model(language="ru")
+    [result] = model.encode([np.zeros(100, np.float32)])
+    assert "multilingual" not in model.model.calls[0][1] and result[0] == "ru"
+
+
+def test_a_chunk_after_sampling_gets_a_new_ctranslate2_model():
+    """The fallback sampled in chunk 2: chunk 3 starts from the seed again; greedy chunks
+    (temperature 0) need no reload."""
+    model = fake_model(language="ru", temperatures=(0.0, 0.4, 0.0, 0.0))
+    model.encode([np.zeros(10, np.float32)] * 4)
+    assert model.fresh == [2] and not model.sampled
+    model.model.temperatures = [0.0] * 4 + [1.0]
+    model.encode([np.zeros(10, np.float32)])
+    assert model.sampled  # the next encode() call reloads first
+    model.encode([np.zeros(10, np.float32)])
+    assert model.fresh == [2, 5]
+
+
+def test_fresh_sampler_seeds_before_it_loads_and_drops_the_old_model_first(monkeypatch, tmp_path):
+    steps = []
+
+    class FakeCt2Whisper:
+        def __init__(self, path, **options):
+            steps.append(("load", path, options, holder.model))
+
+    fake_ct2 = SimpleNamespace(set_random_seed=lambda seed: steps.append(("seed", seed)),
+                               models=SimpleNamespace(Whisper=FakeCt2Whisper))
+    monkeypatch.setitem(sys.modules, "ctranslate2", fake_ct2)
+    model = fake_model()
+    model.folder, model.cpu_threads = tmp_path, 3
+    holder = SimpleNamespace(model="old")
+    model.model, model.sampled = holder, True
+    FasterWhisperModel._fresh_sampler(model)
+    assert steps[0] == ("seed", 0)
+    assert steps[1] == ("load", str(tmp_path), {"device": "cpu", "compute_type": "int8", "intra_threads": 3,
+                                                 "inter_threads": 1}, None)  # the old one was already gone
+    assert isinstance(holder.model, FakeCt2Whisper) and not model.sampled
 
 
 def test_cancel_returns_the_pieces_finished_before_it():
@@ -133,6 +192,13 @@ def test_read_many_puts_pieces_end_to_end_and_gives_each_its_own_words():
     assert model.read_many([], []) == []
 
 
+def test_read_many_with_auto_detects_from_the_same_encoder_pass():
+    model = fake_model(language="auto")
+    model.read_many([np.zeros(16000, np.float32)] * 2, offsets=[0.0, 5.0])
+    options = model.pipeline.calls[0][1]
+    assert options["language"] == "en" and options["multilingual"] is True and model.last_language == ""
+
+
 # ------------------------------------------------------------------ the worker's search job
 
 def run_suggest(engine_asr, job_parts, models=("faster-whisper",)):
@@ -166,7 +232,8 @@ def test_worker_reads_a_single_piece_one_at_a_time():
     model = fake_model()
     events = run_suggest(model, [(((10.0, 11.0), (12.0, 13.0)), None)])
     assert model.pipeline.calls == [] and len(model.model.calls) == 1
-    assert model.model.calls[0][1]["language"] is None
+    # Plan 08 C5: an "auto" piece is detected from its own transcription pass.
+    assert model.model.calls[0][1]["multilingual"] is True
     [result] = [event for event in events if event[0] == "suggest_result"]
     assert result[2] == "faster-whisper" and result[5] == 0 and [w.text for w in result[3]] == ["w1"]
 
@@ -228,6 +295,92 @@ def test_transcriber_opens_a_faster_whisper_folder(tmp_path, monkeypatch):
     assert opened == {"folder": tmp_path / "fw", "device": "cpu", "language": "ru"}
 
 
+class LoadRecorder:
+    """Stands in for FasterWhisperModel / WhisperModel in engine.Transcriber: records the load."""
+
+    joins_chunks = False
+    device_label = "CPU (faster-whisper)"
+    loads = []
+
+    def __init__(self, folder, device, cpu_threads, language):
+        LoadRecorder.loads.append((Path(folder).name, device, language))
+
+    def set_language(self, language):
+        pass
+
+
+@pytest.fixture
+def fast_key(tmp_path, monkeypatch):
+    """engine.Transcriber("faster-whisper") with both Whisper folders downloaded and fakes for
+    the models and the VAD; returns the list of whisper_cpp_on_gpu calls."""
+    write_fw_folder(tmp_path / catalog.FAST_WHISPER_MODEL.folder)
+    LoadRecorder.loads = []
+    monkeypatch.setattr(catalog, "installed_folder", lambda info: tmp_path / info.folder)
+    monkeypatch.setattr(engine, "models_dir", lambda: tmp_path)
+    monkeypatch.setattr(engine, "FasterWhisperModel", LoadRecorder)
+    monkeypatch.setattr(engine, "create_session", lambda *args, **kwargs: (None, "CPUExecutionProvider"))
+    monkeypatch.setattr(engine, "SileroVad", lambda session: None)
+    asked = []
+    monkeypatch.setattr(engine, "whisper_cpp_on_gpu", lambda threads, language: asked.append((threads, language)))
+    return asked
+
+
+def test_faster_whisper_key_reads_whisper_on_the_processor(fast_key):
+    transcriber = engine.Transcriber(FAST, device="cpu", cpu_threads=4, language="auto")
+    assert LoadRecorder.loads == [(catalog.FAST_WHISPER_MODEL.folder, "cpu", "auto")]
+    assert fast_key == []  # "Процессор": no video card is tried
+    # The text is Whisper's: the suggestion search then asks GigaAM RNNT, not Whisper again.
+    assert transcriber.model_label == "Whisper"
+
+
+def test_faster_whisper_key_with_auto_takes_whisper_cpp_on_a_video_card(fast_key, monkeypatch):
+    engine.Transcriber(FAST, device="auto", cpu_threads=4, language="ru")
+    assert fast_key == [(4, "ru")] and len(LoadRecorder.loads) == 1  # no card: faster-whisper
+    on_card = SimpleNamespace(joins_chunks=False, device_label="GPU (Vulkan)", set_language=lambda language: None)
+    monkeypatch.setattr(engine, "whisper_cpp_on_gpu", lambda threads, language: on_card)
+    transcriber = engine.Transcriber(FAST, device="auto", cpu_threads=4, language="ru")
+    assert transcriber.asr is on_card and len(LoadRecorder.loads) == 1
+    assert transcriber.device_label == "GPU (Vulkan)" and transcriber.model_label == "Whisper"
+
+
+def test_whisper_cpp_on_gpu_gives_none_without_a_card_or_a_download(tmp_path, monkeypatch):
+    whisper_info = catalog.find("Whisper")
+    folders = {whisper_info.key: tmp_path}
+    monkeypatch.setattr(catalog, "installed_folder", lambda info: folders.get(info.key))
+    closed = []
+
+    class Card:
+        def __init__(self, folder, device, cpu_threads, language):
+            assert device == "gpu"
+            self.on_gpu = Card.on_gpu_next
+
+        def close(self):
+            closed.append(self)
+
+    monkeypatch.setattr(engine, "WhisperModel", Card)
+    Card.on_gpu_next = True
+    assert isinstance(engine.whisper_cpp_on_gpu(2, "ru"), Card)
+    Card.on_gpu_next = False  # Vulkan found only devices preferred_gpu skips: loaded on the CPU
+    assert engine.whisper_cpp_on_gpu(2, "ru") is None and len(closed) == 1
+
+    def no_card(*args, **kwargs):
+        raise RuntimeError("No Vulkan GPU found")
+
+    monkeypatch.setattr(engine, "WhisperModel", no_card)
+    assert engine.whisper_cpp_on_gpu(2, "ru") is None
+    folders.clear()  # whisper.cpp's file is not downloaded
+    monkeypatch.setattr(engine, "WhisperModel", Card)
+    assert engine.whisper_cpp_on_gpu(2, "ru") is None
+
+
+def test_segments_carry_the_language_they_were_decoded_in():
+    """The vendored faster-whisper's patch (README): Segment.language, None by default."""
+    from gigaam_app.faster_whisper.transcribe import Segment
+    segment = Segment(id=0, seek=0, start=0.0, end=1.0, text="", tokens=[], avg_logprob=0.0,
+                      compression_ratio=1.0, no_speech_prob=0.0, words=None, temperature=0.0)
+    assert segment.language is None
+
+
 def test_catalog_entry_is_found_by_key_but_not_in_the_model_list():
     info = catalog.find("faster-whisper")
     assert info is catalog.FAST_WHISPER_MODEL and info not in catalog.CATALOG
@@ -265,3 +418,45 @@ def test_real_model_reads_one_piece_and_a_batch_with_word_times():
     many = model.read_many([samples[:10 * SAMPLE_RATE], samples[10 * SAMPLE_RATE:]], offsets=[0.0, 10.0])
     assert len(many) == 2 and all(many)
     assert all(10.0 <= w.start <= 20.0 for w in many[1])
+
+
+def sampled_texts(model, first, second):
+    """Read `first` three times with sampling forced (temperature 1.0, as the fallback reads
+    noisy audio), with `second` read in between to move the random generator on."""
+    greedy = model.model.transcribe
+    model.model.transcribe = lambda audio, **options: greedy(audio, temperature=1.0, **options)
+    texts = []
+    for _ in range(3):
+        [reading] = model.encode([first])
+        texts.append(" ".join(word.word for word in reading[1]))
+        model.encode([second])
+    model.model.transcribe = greedy
+    return texts
+
+
+@needs_model
+def test_real_model_detects_auto_in_one_pass_and_repeats_sampled_text():
+    """Plan 08 C5 on the real model: "auto" reports a language, and a chunk read with sampling
+    gives the same text every time, whatever was read before it.
+
+    Noise as loud as the speech (fixed seed) gives the sampling real choices: on clean speech
+    it picks the same words anyway. The control run without the fresh CTranslate2 model must
+    differ (measured 2026-11-11 on the lecture: three different texts); if it repeats, this
+    recording cannot show the difference and the test is skipped."""
+    from gigaam_app.audio import SAMPLE_RATE, decode_range
+    samples = decode_range(os.environ["GIGAAM_PARITY_AUDIO"], 0.0, 20.0)
+    noise = np.random.default_rng(0).standard_normal(len(samples)).astype(np.float32)
+    samples = (samples + float(np.sqrt(np.mean(samples ** 2))) * noise).astype(np.float32)
+    first, second = samples[:10 * SAMPLE_RATE], samples[10 * SAMPLE_RATE:]
+    model = FasterWhisperModel(FW_MODEL, cpu_threads=4, language="auto")
+    [(language, words, _)] = model.encode([first])
+    assert language in model.known_languages and words
+    real_fresh_sampler = model._fresh_sampler
+    model._fresh_sampler = lambda: None
+    control = sampled_texts(model, first, second)
+    if control[0] == control[1] == control[2]:
+        pytest.skip("sampling repeats on this recording even without a fresh model")
+    model._fresh_sampler = real_fresh_sampler
+    model.sampled = True  # the control sampled: start from the seed
+    texts = sampled_texts(model, first, second)
+    assert model.sampled and texts[0] == texts[1] == texts[2]

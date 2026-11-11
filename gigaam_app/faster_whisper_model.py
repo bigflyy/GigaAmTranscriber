@@ -1,11 +1,26 @@
 """Whisper on faster-whisper (CTranslate2, int8) on the CPU, behind the same model interface
 as whisper_model.WhisperModel (plan 08 C2).
 
-Used by the suggestion search when Настройки choose faster-whisper for Whisper on the
-processor. Settings as in the measurement of plan 08 A3 (experiments/cpu_asr/read_fw.py):
-greedy decoding (beam 1), nothing carried over from the piece before, word times, no VAD
-(the app has already cut the audio). On the owner's files this was 1.6x faster than
-whisper.cpp q5_0 one piece at a time and 2x when 8 pieces are read at once (read_many).
+Used when Настройки choose faster-whisper for Whisper on the processor: by the suggestion
+search (C2) and, since plan 08 C5, for the main text and "Распознать снова" when Whisper is
+the chosen model (engine.Transcriber picks it). Settings as in the measurement of plan 08 A3
+(experiments/cpu_asr/read_fw.py): greedy decoding (beam 1), nothing carried over from the
+piece before, word times, no VAD (the app has already cut the audio). On the owner's files
+this was 1.6x faster than whisper.cpp q5_0 one piece at a time and 2x when 8 pieces are read
+at once (read_many); with language "auto" the main text was 2.8x faster (plan 08 C4).
+
+Language "auto": faster-whisper's own detection encodes every chunk twice (detect_language,
+then the transcription). Here the chunk is transcribed with multilingual=True and a
+placeholder language instead, so the language is detected per segment from the encoder
+output the transcription uses (one encoder pass; plan 08 C4 measured the same text).
+
+Repeatable text: when a chunk's greedy reading looks wrong (repeats, low probability),
+faster-whisper reads it again with sampling at a higher temperature. CTranslate2 seeds its
+random generator once per worker thread, from ctranslate2.set_random_seed at its first use;
+seeding again later changes nothing, and neither does unload_model / load_model (measured
+2026-11-11, plan 08 C5). So the seed is set before loading, and after a chunk that sampled
+a new CTranslate2 model is loaded (about 1 s) before the next chunk: every chunk then starts
+from the same random state, and the same audio gives the same text whatever came before.
 
 A model folder holds model.json (type "faster-whisper", written by download.py from the
 catalog) and the CTranslate2 files: model.bin, config.json, preprocessor_config.json,
@@ -25,6 +40,12 @@ MODEL_TYPE = "faster-whisper"
 # Pieces per encoder call in read_many: the batch size measured in plan 08 A3 (2754 MB peak
 # on the lecture, against 1879 MB for one piece at a time).
 BATCH_SIZE = 8
+# The seed of CTranslate2's random generator (the temperature fallback samples with it);
+# whisper.cpp also starts every reading from seed 0.
+SEED = 0
+# With language "auto" the transcription starts in this language with multilingual=True;
+# faster-whisper then puts the detected language in its place for every segment.
+PLACEHOLDER_LANGUAGE = "en"
 
 
 def is_fast_whisper_folder(folder):
@@ -79,7 +100,9 @@ class FasterWhisperModel:
     max_chunk_seconds = 30.0
     gpu_name = None
     on_gpu = False
-    device_label = "CPU"
+    # The status line says "Whisper - процессор, faster-whisper" (controller.DEVICE_NAMES);
+    # it has no "GPU" prefix, so a file read with it counts as read on the processor.
+    device_label = "CPU (faster-whisper)"
 
     def __init__(self, folder, device="cpu", cpu_threads=None, language=None):
         """device: only the CPU is supported (faster-whisper's GPU path needs CUDA, which
@@ -100,13 +123,18 @@ class FasterWhisperModel:
             if not path.is_file() or path.stat().st_size != entry["size"]:
                 raise RuntimeError(f"Model file is missing or damaged: {path}")
         # Imported here: loading CTranslate2 takes a moment and only this engine needs it.
+        import ctranslate2
         from .faster_whisper import BatchedInferencePipeline, WhisperModel as _FwModel
         from .faster_whisper.tokenizer import _LANGUAGE_CODES
 
+        self.folder = folder
         self.cpu_threads = cpu_threads or default_cpu_threads()
         self.known_languages = set(_LANGUAGE_CODES)
+        ctranslate2.set_random_seed(SEED)  # before the first sampling (module docstring)
         self.model = _FwModel(str(folder), device="cpu", compute_type="int8", cpu_threads=self.cpu_threads)
         self.pipeline = BatchedInferencePipeline(self.model)
+        # True once a chunk was read with sampling: the next chunk gets a new CTranslate2 model.
+        self.sampled = False
         self.language = None
         self.last_language = ""
         self.set_language(language)
@@ -120,29 +148,57 @@ class FasterWhisperModel:
     def _language(self):
         return None if self.language in (None, "", AUTO_LANGUAGE) else self.language
 
+    def _language_options(self):
+        """transcribe() arguments for the language: the one set, or for "auto" the placeholder
+        with multilingual=True (detection from the transcription's own encoder pass)."""
+        language = self._language()
+        if language is None:
+            return {"language": PLACEHOLDER_LANGUAGE, "multilingual": True}
+        return {"language": language}
+
+    def _fresh_sampler(self):
+        """Load a new CTranslate2 model after setting the seed, so its random generator
+        starts from SEED (see the module docstring). The old one is dropped first: two
+        loaded copies would need about 0.8 GB more."""
+        import ctranslate2
+        self.model.model = None
+        ctranslate2.set_random_seed(SEED)
+        self.model.model = ctranslate2.models.Whisper(str(self.folder), device="cpu", compute_type="int8",
+                                                      intra_threads=self.cpu_threads, inter_threads=1)
+        self.sampled = False
+
     def encode(self, pieces, should_cancel=None, prompt=None):
         """Recognise each chunk on its own -> [(language, words, seconds)]. A cancel is
         checked between Whisper's segments; after one the list is shorter than the input.
-        prompt: text put before every chunk (the user's terms)."""
-        language = self._language()
+        prompt: text put before every chunk (the user's terms). language: the one set, or
+        with "auto" the one detected for the chunk's first segment."""
+        options = self._language_options()
         results = []
         for piece in pieces:
             if should_cancel is not None and should_cancel():
                 break
+            if self.sampled:
+                self._fresh_sampler()
             segments, info = self.model.transcribe(
-                np.asarray(piece, dtype=np.float32), language=language, beam_size=1,
-                condition_on_previous_text=False, word_timestamps=True, vad_filter=False,
-                initial_prompt=prompt or None)
-            found, cancelled = [], False
+                np.asarray(piece, dtype=np.float32), beam_size=1, condition_on_previous_text=False,
+                word_timestamps=True, vad_filter=False, initial_prompt=prompt or None, **options)
+            found, languages, cancelled = [], [], False
             for segment in segments:  # a generator: the work happens while it is read
                 found.extend(segment.words or [])
+                languages.append(segment.language)
+                if segment.temperature:
+                    self.sampled = True  # the fallback sampled: the next chunk needs a new generator
                 if should_cancel is not None and should_cancel():
                     cancelled = True
                     break
             if cancelled:
                 break
-            self.last_language = info.language
-            results.append((info.language, found, len(piece) / SAMPLE_RATE))
+            if options.get("multilingual"):
+                language = next((code for code in languages if code), "")
+            else:
+                language = info.language
+            self.last_language = language
+            results.append((language, found, len(piece) / SAMPLE_RATE))
         return results
 
     def decode(self, encoded):
@@ -159,8 +215,10 @@ class FasterWhisperModel:
         The pieces are put end to end and each one is its own clip (clip_timestamps), so
         BatchedInferencePipeline never reads across two pieces; each word goes back to the
         piece that holds its middle. All pieces get the language set with set_language;
-        with none set, Whisper detects one for the whole call (the controller sends only
-        pieces it knows the language of). As in plan 08 A3 (read_fw.py --mode batch)."""
+        with none set, Whisper detects one for each batch item from the same encoder pass
+        (the controller sends only pieces it knows the language of). As in plan 08 A3
+        (read_fw.py --mode batch). The batched pipeline decodes greedily only (it has no
+        temperature fallback), so it never samples."""
         if not pieces:
             return []
         samples = [np.asarray(piece, dtype=np.float32) for piece in pieces]
@@ -169,9 +227,10 @@ class FasterWhisperModel:
             bounds.append((position, position + len(piece)))
             position += len(piece)
         clips = [{"start": first / SAMPLE_RATE, "end": last / SAMPLE_RATE} for first, last in bounds]
+        options = self._language_options()
         segments, info = self.pipeline.transcribe(
-            np.concatenate(samples), language=self._language(), beam_size=1, word_timestamps=True,
-            clip_timestamps=clips, batch_size=batch_size, initial_prompt=prompt or None)
+            np.concatenate(samples), beam_size=1, word_timestamps=True, clip_timestamps=clips,
+            batch_size=batch_size, initial_prompt=prompt or None, **options)
         per_piece = [[] for _ in samples]
         for segment in segments:
             for fw_word in segment.words or []:
@@ -179,7 +238,9 @@ class FasterWhisperModel:
                 slot = next((index for index, (first, last) in enumerate(bounds) if first <= middle < last),
                             len(bounds) - 1)
                 per_piece[slot].append(fw_word)
-        self.last_language = info.language
+        # With "auto" info.language is only the placeholder; the batched segments do not say
+        # which language each item was found in.
+        self.last_language = "" if options.get("multilingual") else info.language
         results = []
         for slot, fw_words in enumerate(per_piece):
             begin = bounds[slot][0] / SAMPLE_RATE

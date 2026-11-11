@@ -1199,6 +1199,91 @@ def test_faster_whisper_download_keeps_the_status_line_and_a_stop_goes_back(app,
     assert app.settings.whisper_cpu == "whisper.cpp"
 
 
+# ---------------------------------------------------------------------- faster-whisper for the main text (plan 08 C5)
+
+def test_whisper_main_text_is_read_by_faster_whisper_on_the_processor(app, media, monkeypatch):
+    installed = {"RNNT", "Whisper", FAST}
+    monkeypatch.setattr(app, "_model_installed", lambda key: key in installed)
+    app.set_settings({"model": "Whisper", "device": "CPU"})
+    app.fake_worker.take()
+    # Choosing faster-whisper while Whisper is the model loads it at once.
+    app.set_settings({"whisper_cpu": "faster-whisper"})
+    assert ("load", (FAST, "cpu", 0)) in app.fake_worker.take()
+    app.add_files([str(media[0])])
+    [job] = [job for job in app.fake_worker.take() if job[0] == "transcribe"]
+    assert job[2] == (FAST, "cpu", 0) and app.files[0].model == "Whisper"
+    # "Авто" also sends faster-whisper: the model process puts whisper.cpp on a Vulkan card if
+    # there is one (engine.Transcriber); "Видеокарта" is always whisper.cpp.
+    for device, model in (("Auto", FAST), ("GPU", "Whisper")):
+        app.set_settings({"device": device})
+        assert app._engine_key()[0] == model
+    app.set_settings({"device": "CPU"})
+    installed.discard(FAST)
+    assert app._engine_key()[0] == "Whisper"
+    installed.add(FAST)
+    app.set_settings({"whisper_cpu": "whisper.cpp"})
+    assert app._engine_key()[0] == "Whisper"
+    # GigaAM models are never changed.
+    app.set_settings({"model": "RNNT", "whisper_cpu": "faster-whisper"})
+    assert app._engine_key()[0] == "RNNT"
+
+
+def test_the_status_line_names_whisper_and_its_engine(app):
+    app.handle(("loading", FAST))
+    assert app.engine["text"] == "Загрузка модели Whisper (faster-whisper)..."
+    app.fake_worker.engine_key = (FAST, "cpu", 0)
+    app.handle(("loaded", "CPU (faster-whisper)", 1.1, FAST))
+    assert app.engine["text"] == "Whisper - процессор, faster-whisper"
+    app.handle(("loaded", "GPU (Vulkan)", 1.1, FAST))  # "Авто" with a Vulkan card: whisper.cpp
+    assert app.engine["text"] == "Whisper - видеокарта (Vulkan)"
+
+
+def test_reread_reads_whisper_with_faster_whisper_but_the_page_sees_whisper(app, finished, monkeypatch):
+    monkeypatch.setattr(app, "_model_installed", lambda key: key in ("RNNT", "Whisper", FAST))
+    app.set_settings({"whisper_cpu": "faster-whisper", "device": "CPU"})
+    app.fake_worker.take()
+    answer = app.reread(finished.id, [0, 3], [0, 4])
+    assert [model["key"] for model in answer["models"]] == ["RNNT", "Whisper"] and not answer["whisper_missing"]
+    [job] = [job for job in app.fake_worker.take() if job[0] == "reread"]
+    assert job[4] == ["RNNT", FAST] and job[5] == "cpu"
+    request = answer["request"]
+    heard = [Word(text="Tools", start=2.72, end=3.0), Word(text="Calling,", start=3.02, end=3.5)]
+    app.handle(("reread_loading", request, FAST))
+    app.handle(("reread_result", request, FAST, heard, None))
+    readings = [m["data"] for m in app.sent if m["kind"] == "reading"]
+    assert readings[-2] == {"request": request, "phase": "loading", "model": "Whisper"}
+    assert readings[-1]["model"] == "Whisper" and readings[-1]["text"] == "Tools Calling,"
+    # Taking it keeps faster-whisper's word times, as for any other reading.
+    assert app.apply_fix(finished.id, [0, 3], [0, 4], "Tools Calling,", "Whisper")
+    assert [(w.text, w.start) for w in finished.segments[0].words[3:5]] == [("Tools", 2.72), ("Calling,", 3.02)]
+
+
+def test_reread_offers_whisper_through_faster_whisper_alone(app, finished, monkeypatch):
+    """whisper.cpp's file is not downloaded but faster-whisper is: Whisper is still offered."""
+    monkeypatch.setattr(app, "_model_installed", lambda key: key in ("RNNT", FAST))
+    app.set_settings({"whisper_cpu": "faster-whisper", "device": "CPU"})
+    app.fake_worker.take()
+    answer = app.reread(finished.id, [0, 3], [0, 4])
+    assert [model["key"] for model in answer["models"]] == ["RNNT", "Whisper"]
+    app.set_settings({"device": "GPU"})
+    answer = app.reread(finished.id, [0, 3], [0, 4])
+    assert [model["key"] for model in answer["models"]] == ["RNNT"] and answer["whisper_missing"]
+
+
+def test_reread_of_a_file_read_on_a_video_card_keeps_whisper_cpp(app, finished, monkeypatch):
+    """"Авто": the file was read on the card (finish() says DirectML), so Whisper goes there too."""
+    monkeypatch.setattr(app, "_model_installed", lambda key: key in ("RNNT", "Whisper", FAST))
+    app.set_settings({"whisper_cpu": "faster-whisper"})
+    app.fake_worker.take()
+    app.reread(finished.id, [0, 3], [0, 4])
+    [job] = [job for job in app.fake_worker.take() if job[0] == "reread"]
+    assert job[4] == ["RNNT", "Whisper"]
+    finished.result.device = "CPU"  # "Авто" on a PC without a card
+    app.reread(finished.id, [0, 3], [0, 4])
+    [job] = [job for job in app.fake_worker.take() if job[0] == "reread"]
+    assert job[4] == ["RNNT", FAST]
+
+
 def test_a_failed_search_says_so_and_ends(app, searching):
     [job] = suggest_jobs(app)
     app.handle(("suggest_failed", job[1], "no such file"))
