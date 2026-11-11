@@ -43,8 +43,9 @@ Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
   build/cpu-asr-test/models/fw-turbo-int8, GIGAAM_PARITY_AUDIO = the lecture wav, 2.5 min).
 - Texts: the faster-whisper card note and download question now say "текст в 2,8 раза, поиск
   вариантов в 1,6-2 раза"; the hint under the block says it also reads the whole text when
-  Whisper is the model. The cards still sit in "Варианты для сомнительных слов" (asked the
-  owner whether to move them). Not run: window_check (a C5 step is listed under C3), builds.
+  Whisper is the model. Owner: the cards go to the "Модель" block ("i guess it makes sense at
+  model block"): moved there with their own hint; the search block's hint points to it. Not
+  seen in a window yet. Not run: window_check (a C5 step is listed under C3), builds.
 
 ## Session 26 (2026-11-11): plan 08 C4, faster-whisper for the main text measured
 

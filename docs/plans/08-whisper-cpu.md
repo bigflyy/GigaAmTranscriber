@@ -40,7 +40,9 @@ owner 2026-11-11 "yes", C2 goes ahead.
 
 Owner's choices for C2 (2026-11-11, mock-up https://claude.ai/artifact/BWNUwoCShj5L21Gmpqe2Zv, A was my
 recommendation): layout B, two cards "Whisper на процессоре": whisper.cpp / faster-whisper (int8), in
-the "Варианты для сомнительных слов" block; choosing faster-whisper when it is not downloaded asks the
+the "Варианты для сомнительных слов" block (moved to the "Модель" block after C5, owner 2026-11-11: "i guess
+it makes sense at model block", since the choice now also decides what reads Whisper's main text); choosing
+faster-whisper when it is not downloaded asks the
 usual download question, "Не сейчас" moves the choice back to whisper.cpp. On a video card Whisper stays
 on whisper.cpp (Vulkan). Scope: "search and main text but check first the quality and etc": the search
 first (C2), the main text (Whisper as the chosen model on the CPU) only after C4 shows it is as good.
