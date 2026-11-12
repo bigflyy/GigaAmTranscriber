@@ -102,7 +102,8 @@ def test_unknown_language_exits_2(tmp_path, monkeypatch, capsys):
 def test_version(capsys):
     with pytest.raises(SystemExit) as stop:
         cli.main(["--version"])
-    assert stop.value.code == 0 and "0.6.0" in capsys.readouterr().out
+    from gigaam_app import __version__
+    assert stop.value.code == 0 and capsys.readouterr().out.strip() == f"gigaam-cli {__version__}"
 
 
 def test_wildcards_are_expanded(tmp_path):
