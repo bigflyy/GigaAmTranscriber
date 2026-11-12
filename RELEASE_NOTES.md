@@ -35,6 +35,14 @@ processor instead of whisper.cpp. GigaAM's own recognition is the same as in v0.
   no longer guesses it on every short line: about twice as fast per line on the processor. A
   language chosen in **Настройки** is used as before.
 
+## Fixed
+
+- Windows with a DirectX 12 video card: after the model, the device or the number of threads
+  was changed, the recognition process could crash while it looked for speakers or for
+  suggestions ("Процесс распознавания неожиданно завершился", since v0.6.0). The window
+  started it again, but that file's search was lost. A model on the video card is now freed
+  only together with the other models on the card; they load again when next needed.
+
 ## Windows
 
 `GigaAmTranscriber-v0.7.0-windows-x64.zip` (about 960 MB): unzip it anywhere and
