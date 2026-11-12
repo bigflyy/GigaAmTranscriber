@@ -21,6 +21,8 @@ now" - fixes go to main and wait; no release for each one. In main since v0.7.0:
 - The download dialog can be hidden ("Скрыть", or Esc while it downloads); the status line then
   shows "Скачивание модели X: N%" and a click on it shows the dialog again (owner 2026-11-12:
   "we cant hide the download window, we should be able").
+- The suggestion search reads the lines with a wavy word (below doubt_strong) first, then the
+  other doubtful lines, each part in text order (plan 08 B1, owner's choice 2026-11-12).
 
 ## Session 31 (2026-11-12): plan 08 B1 measured
 
@@ -29,9 +31,10 @@ now" - fixes go to main and wait; no release for each one. In main since v0.7.0:
   one): reading only lines with a wavy word (below doubt_strong 0.80) keeps 56-83% of the time
   but loses right offers (lecture: BIM-моделей, UML-промптинга of the 9 terms; the owner's
   files 7-9 offers per 40 pieces). Long runs only is worse. Numbers in plan 08 B1.
-- My suggestion to the owner: keep reading every doubtful line, but read the lines with wavy
-  words first (nothing lost, the likeliest errors get offers sooner). Waiting for the owner's
-  choice; B2 does not depend on it.
+- Owner's choice (AskUserQuestion, my recommendation): keep reading every doubtful line, the
+  lines with wavy words first (controller._suggest_pieces sorts them, stable; test
+  test_lines_with_wavy_words_are_read_first). Full suite 600 passed, 4 skipped.
+- Next: plan 08 B2.
 
 ## Session 30 (2026-11-12): v0.7.0 publishing stopped by a DirectML crash, fix C3f
 

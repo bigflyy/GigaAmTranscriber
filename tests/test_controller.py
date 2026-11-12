@@ -889,6 +889,28 @@ def test_doubtful_words_are_read_again_by_whisper(app, searching):
                     "can_cancel": False, "searched": True}
 
 
+def test_lines_with_wavy_words_are_read_first(app, media, monkeypatch):
+    # Plan 08 B1, owner 2026-11-12: every doubtful line is read, those with a word below
+    # doubt_strong (0.80, the wavy line) first, each part in text order.
+    monkeypatch.setattr(app, "_model_installed", lambda key: key in ("RNNT", "CTC", "Whisper"))
+    app.add_files([str(media[0])])
+    item = app.files[0]
+    finish(app, media[0], [doubtful_line(("вся", 1.0, 1.3, 0.9), ("мозаика.", 1.4, 2.0, 0.99)),
+                           doubtful_line(("наш", 3.0, 3.3, 0.99), ("Tullz", 3.4, 3.8, 0.5)),
+                           doubtful_line(("и", 5.0, 5.2, 0.95)),
+                           doubtful_line(("да", 7.0, 7.2, 0.7), ("нет", 7.3, 7.6, 0.9))])
+    order = []
+    while True:
+        jobs = suggest_jobs(app)
+        if not jobs:
+            break
+        [job] = jobs
+        order.append(job[3][0][1])  # the left cut window's end: the first word's start
+        app.handle(("suggest_done", job[1]))
+    assert order == [3.0, 7.0, 1.0, 5.0]
+    assert app.suggesting is None and item.result.suggestions_searched
+
+
 def test_whisper_is_told_russian_for_a_cyrillic_line_unless_a_language_is_set(app, searching):
     # Plan 08 C1: with language "auto" a line GigaAM wrote in Cyrillic is read as "ru", which
     # spares whisper.cpp its detection pass; a line with much Latin text is left to detection.

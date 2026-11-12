@@ -1019,8 +1019,8 @@ class Controller:
         is read group by group with the context of plan 03's reread.
 
         self.suggesting: {"id", "transcript" (the search ends if the file is recognised
-        again), "pieces" (still to do: {"groups": word objects (first, last), "line": read
-        the whole line}), "total" and "done" (groups), "models", "request" (the job on the
+        again), "pieces" (still to do, from _suggest_pieces: {"groups": word objects (first,
+        last), "line": read the whole line, "index", "wavy"}, wavy ones first), "total" and "done" (groups), "models", "request" (the job on the
         worker, None between jobs), "parts" (the job's pieces, from _next_part: one, or up to
         8 for faster-whisper), "held" (a piece made ready that starts the next job), "loading",
         "cancelled" (cancel_suggestions: no more pieces)}."""
@@ -1034,7 +1034,8 @@ class Controller:
                     continue
                 groups = fix.doubt_groups(item.segments, self.settings.doubt_light)
                 search = self.suggesting = {"id": item.id, "transcript": item.result,
-                                            "pieces": self._suggest_pieces(item.segments, groups),
+                                            "pieces": self._suggest_pieces(item.segments, groups,
+                                                                           self.settings.doubt_strong),
                                             "total": len(groups), "done": 0, "request": None,
                                             "models": self._suggest_models(item)}
             item = self._find(search["id"])
@@ -1117,19 +1118,29 @@ class Controller:
         return fix.language_hint(words) or language
 
     @staticmethod
-    def _suggest_pieces(segments, groups):
+    def _suggest_pieces(segments, groups, strong):
         """Doubtful groups (positions) -> pieces to read: one per line, or one per group on a
-        line longer than fix.MAX_SECONDS. Groups are kept as word objects, which survive edits."""
+        line longer than fix.MAX_SECONDS. Groups are kept as word objects, which survive edits.
+
+        Pieces holding a word below `strong` (Settings.doubt_strong, the words the window
+        marks with a wavy line) come first, the rest after them, each part in text order.
+        Plan 08 B1 measured reading only those lines: 56-83% of the time, but right offers
+        were lost (the lecture's BIM-моделей and UML-промптинга were between doubt_strong
+        and doubt_light); owner 2026-11-12 chose to read every line, the likeliest errors
+        first. The search as a whole takes as long as before."""
         pieces = []
         for first, last in groups:
             words = segments[first[0]].words
             whole = words[-1].end - words[0].start <= fix.MAX_SECONDS
             group = (fix.word_at(segments, first), fix.word_at(segments, last))
+            wavy = any(word.confidence is not None and word.confidence < strong
+                       for word in words[first[1]:last[1] + 1])
             if whole and pieces and pieces[-1]["line"] and pieces[-1]["index"] == first[0]:
                 pieces[-1]["groups"].append(group)
+                pieces[-1]["wavy"] = pieces[-1]["wavy"] or wavy
             else:
-                pieces.append({"groups": [group], "line": whole, "index": first[0]})
-        return pieces
+                pieces.append({"groups": [group], "line": whole, "index": first[0], "wavy": wavy})
+        return sorted(pieces, key=lambda piece: not piece["wavy"])  # stable: text order kept within each part
 
     def _end_search(self, item, error=None, cancelled=False):
         """The search of a file ended: searched, or cancelled (the offers found so far stay),
