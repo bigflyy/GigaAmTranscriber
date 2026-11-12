@@ -56,8 +56,9 @@ now" - fixes go to main and wait; no release for each one. In main since v0.7.0:
 - Published: draft deleted, tag v0.7.0 force-moved 0c13d41 -> 487d1a4 (commit dff9dca), release
   https://github.com/bigflyy/GigaAmTranscriber/releases/tag/v0.7.0 is Latest with the five
   assets from build/v0.7.0-c3f/release; GitHub's digests equal SHA256SUMS.txt.
-- Left on disk: build/v0.7.0 (session 29's superseded build, about 3.2 GB; the owner's app was
-  running from it) - delete it, or rename v0.7.0-c3f to v0.7.0, once the owner agrees.
+- Session 31 (owner agreed): the superseded build/v0.7.0 (3.1 GB) was deleted and
+  build/v0.7.0-c3f renamed to `C:\MyProjects\GigaAmTranscriber\build\v0.7.0` (the published
+  assets are in its release/).
 - Next: plan 08 B1.
 
 ## Session 29 (2026-11-12): plan 08 C3, faster-whisper packaged, v0.7.0 builds
