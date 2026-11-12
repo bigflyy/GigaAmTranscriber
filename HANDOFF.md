@@ -1,9 +1,10 @@
 # Handoff: state and findings
 
-Last updated 2026-11-12 (session 29). Plan 08 (faster suggestion search on the CPU): Stage A,
+Last updated 2026-11-12 (session 30). Plan 08 (faster suggestion search on the CPU): Stage A,
 C1, C2 (faster-whisper int8 as a CPU option for the search), C4 (measured), C5 (faster-whisper
 for the main text, one-pass "auto", repeatable sampling), C6 (whisper.cpp one-pass patch) and
-C3a-C3d (packaging) built; C3e: v0.7.0 builds made, publishing waits for the owner; then B1.
+C3a-C3e (packaging, builds) done; C3f (DirectML crash fix, rebuilt v0.7.0) then publishing
+v0.7.0; then B1.
 Plan 07 (speakers) finished up to its Stage E: v0.6.0
 published; only Stage F (voice library) is left, for later.
 Plan 06 finished (suggested fixes, models in their own process, release v0.5.0 published as its
@@ -12,6 +13,38 @@ A and B2 done; B1 and C left. Plan 05 (player) done (C3 in v0.5.0).
 Plan 04 (Whisper) done: v0.4.0. Plan 02 (window) has D for later; plan 01 still
 holds B9, F (Parakeet, Qwen3-ASR, F5 for suggestions) (its E moved to plan 07).
 Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
+
+## Session 30 (2026-11-12): v0.7.0 publishing stopped by a DirectML crash, fix C3f
+
+- Owner tried v0.7.0 and said go; main (to 4068d42) and the annotated tag v0.7.0 were pushed,
+  `gh release create` started. Then the owner's trial crashed the model process during the
+  suggestion search ("код 3221225477", audio_2026-11-10_19-20-22.ogg, Whisper, device Авто,
+  suggest gpu, speakers on). The upload was stopped: release v0.7.0 is a DRAFT with only
+  THIRD_PARTY_LICENSES.zip, FFmpeg source and SHA256SUMS.txt (the old ones) uploaded.
+- Dump %LOCALAPPDATA%\CrashDumps\GigaAmTranscriber.exe.91808.dmp, read with the Windows Kits
+  cdb (MS symbol server has ORT's pdb): Dml::BucketizedBufferAllocator::Alloc with this = null,
+  from DmlCommandRecorder::ExecuteOperator in a convolution.
+- Rule found (scratchpad crash/release.py, speaker models only, ORT 1.23.0 DirectML): two
+  DirectML sessions, free the NEWER one, run the older one -> access violation. Freeing the
+  older one is safe; opening another DirectML session after the free makes it safe again.
+  Worker-level (crash/worker_seq.py): speakers on, model Whisper -> RNNT -> Whisper (RNNT's
+  main session, the newest, freed; Whisper has no ONNX session), next diarize crashed. Present
+  since v0.6.0 (speaker model + spares); not new in 0.7.0.
+- Fix b174d42: Worker._free_directml frees the main model, spares and speaker models that use
+  DirectML, all together, whenever one of them would be freed (_drop_engine in _ensure, stale
+  spares in _engine_for, speaker reload in _diarize). A dropped main model reloads at the next
+  file (the window's loaded_key is not told). worker_seq sequences pass after the fix.
+  tests/test_worker_directml.py (6). df372d0: test_version read "0.6.0" (failed since the
+  version bump). Full suite before the fix: 598 passed, 4 skipped, 1 failed (that one).
+  Not covered: asr.create_session discarding a DirectML session whose first provider is not
+  DirectML (frees it at once; rare).
+- Notes: RELEASE_NOTES.md "Fixed" section (062eb72).
+- Rebuilt: Windows in `C:\MyProjects\GigaAmTranscriber\build\v0.7.0-c3f` (build_windows.py
+  default --out is build/, so it first wrote build/app and build/release; moved). The old
+  build/v0.7.0 stays: the owner's two GigaAmTranscriber.exe from it were still running.
+  Linux: scratchpad wsl/build.sh, --out ~/gigaam-build-070, --release build/v0.7.0-c3f/release.
+- Owner's choice (AskUserQuestion): fix, rebuild, keep the version v0.7.0 and move the tag to
+  the fix commit (it was public under an hour, no release published).
 
 ## Session 29 (2026-11-12): plan 08 C3, faster-whisper packaged, v0.7.0 builds
 
