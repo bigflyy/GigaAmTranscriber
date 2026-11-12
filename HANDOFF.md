@@ -3,8 +3,7 @@
 Last updated 2026-11-12 (session 30). Plan 08 (faster suggestion search on the CPU): Stage A,
 C1, C2 (faster-whisper int8 as a CPU option for the search), C4 (measured), C5 (faster-whisper
 for the main text, one-pass "auto", repeatable sampling), C6 (whisper.cpp one-pass patch) and
-C3a-C3e (packaging, builds) done; C3f (DirectML crash fix, rebuilt v0.7.0) then publishing
-v0.7.0; then B1.
+C3 done with C3f (DirectML crash fix); v0.7.0 published 2026-11-12. Next: B1.
 Plan 07 (speakers) finished up to its Stage E: v0.6.0
 published; only Stage F (voice library) is left, for later.
 Plan 06 finished (suggested fixes, models in their own process, release v0.5.0 published as its
@@ -45,6 +44,12 @@ Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
   Linux: scratchpad wsl/build.sh, --out ~/gigaam-build-070, --release build/v0.7.0-c3f/release.
 - Owner's choice (AskUserQuestion): fix, rebuild, keep the version v0.7.0 and move the tag to
   the fix commit (it was public under an hour, no release published).
+- Published: draft deleted, tag v0.7.0 force-moved 0c13d41 -> 487d1a4 (commit dff9dca), release
+  https://github.com/bigflyy/GigaAmTranscriber/releases/tag/v0.7.0 is Latest with the five
+  assets from build/v0.7.0-c3f/release; GitHub's digests equal SHA256SUMS.txt.
+- Left on disk: build/v0.7.0 (session 29's superseded build, about 3.2 GB; the owner's app was
+  running from it) - delete it, or rename v0.7.0-c3f to v0.7.0, once the owner agrees.
+- Next: plan 08 B1.
 
 ## Session 29 (2026-11-12): plan 08 C3, faster-whisper packaged, v0.7.0 builds
 
