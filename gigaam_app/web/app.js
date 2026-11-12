@@ -20,6 +20,7 @@ const state = {
   early: [],            // messages that arrived before the snapshot
   files: [],
   engine: { state: 'idle', text: '' },
+  download: null,       // the running download: {model, fraction, hidden} (onDownload)
   settings: {},
   options: { models: [], devices: [], formats: [] },
   selected: null,       // id of the file shown on the right
@@ -1578,6 +1579,13 @@ function renderEngine() {
   box.className = `engine ${state.engine.state}`;
   $('engine-text').textContent = state.engine.text;
   box.title = state.engine.detail || '';
+  const download = state.download;
+  if (download !== null && download.hidden) {
+    // A hidden download: its progress here, and a click shows the dialog again.
+    $('engine-text').textContent = `Скачивание модели ${download.model}: ${Math.round(download.fraction * 100)}%`;
+    box.title = 'Показать скачивание';
+    box.classList.add('clickable');
+  }
 }
 
 function renderSettings() {
@@ -1741,31 +1749,55 @@ async function changeSetting(change) {
 
 // ------------------------------------------------------------------ download dialog
 
+// state.download: the running download ({model, fraction, hidden}) or null. "Скрыть" hides
+// the dialog and the download goes on, like a browser's: the status line shows its percent,
+// and a click on the status line shows the dialog again.
 function onDownload(data) {
   const dialog = $('download');
   if (data.phase === 'ask') {
+    state.download = null;
     $('download-title').textContent = `Скачать модель ${data.model}`;
     $('download-text').textContent = data.text;
     $('download-folder').textContent = data.folder;
     $('download-progress').hidden = true;
     $('download-yes').hidden = $('download-no').hidden = false;
-    $('download-stop').hidden = true;
+    $('download-stop').hidden = $('download-hide').hidden = true;
+    renderEngine();
     if (!dialog.open) dialog.showModal();
     return;
   }
   if (data.phase === 'progress') {
+    const hidden = state.download !== null && state.download.hidden;
+    state.download = { model: data.model, fraction: data.fraction, hidden };
     $('download-progress').hidden = false;
     $('download-yes').hidden = $('download-no').hidden = true;
-    $('download-stop').hidden = false;
+    $('download-stop').hidden = $('download-hide').hidden = false;
     $('download-stop').disabled = false;
     $('download-progress').querySelector('.bar div').style.width = `${Math.round(data.fraction * 100)}%`;
     $('download-status').textContent = data.status;
-    if (!dialog.open) dialog.showModal();
+    renderEngine();
+    if (!hidden && !dialog.open) dialog.showModal();
     return;
   }
   // done, cancelled or failed: close the dialog; the reason shows elsewhere.
+  state.download = null;
+  renderEngine();
   if (dialog.open) dialog.close();
   if (data.text) toast(data.text);
+}
+
+function hideDownload() {
+  if (state.download === null) return;
+  state.download.hidden = true;
+  $('download').close();
+  renderEngine();
+}
+
+function showDownload() {
+  if (state.download === null || !state.download.hidden) return;
+  state.download.hidden = false;
+  renderEngine();
+  $('download').showModal();
 }
 
 // ------------------------------------------------------------------ messages from Python
@@ -1953,10 +1985,12 @@ $('reset-settings').addEventListener('click', async () => {
 $('download-yes').addEventListener('click', () => call('download'));
 $('download-no').addEventListener('click', () => { $('download').close(); call('decline_download'); });
 $('download-stop').addEventListener('click', () => { $('download-stop').disabled = true; call('cancel_download'); });
+$('download-hide').addEventListener('click', hideDownload);
+$('engine').addEventListener('click', showDownload);
 $('download').addEventListener('cancel', (event) => {
-  // Esc: same as "Не сейчас" while asking; ignored while downloading.
+  // Esc: same as "Не сейчас" while asking; "Скрыть" while downloading.
   event.preventDefault();
-  if (!$('download-yes').hidden) { $('download').close(); call('decline_download'); }
+  if (!$('download-yes').hidden) { $('download').close(); call('decline_download'); } else hideDownload();
 });
 
 // Selecting words: the bar appears when the mouse is released (not while dragging) or after

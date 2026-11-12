@@ -208,6 +208,8 @@ button.icon:hover { color: var(--text); background: var(--card); }
 .engine.ready .dot { background: var(--ok); }
 .engine.busy .dot { background: var(--warn); }
 .engine.error .dot { background: var(--danger); }
+.engine.clickable { cursor: pointer; }
+.engine.clickable:hover #engine-text { text-decoration: underline; }
 
 .main { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; position: relative; }
 .view { flex: 1; min-height: 0; display: flex; flex-direction: column; }

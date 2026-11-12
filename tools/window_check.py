@@ -95,7 +95,7 @@ class SlowFile(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         for start in range(0, len(self.data), 65536):
             self.wfile.write(self.data[start:start + 65536])
-            time.sleep(0.03)
+            time.sleep(0.1)  # about 3 s for 2 MB: time to hide and show the dialog
 
     def log_message(self, *args):
         pass
@@ -1028,7 +1028,20 @@ def scenario(window, control, long_audio, short_audio, shoot, whisper=False, fas
         wait(lambda: not js("$('download-progress').hidden"), 10, "download progress")
         time.sleep(0.4)
         shoot("07-download-progress")
+        # "Скрыть": the download goes on without the dialog, its percent in the status line,
+        # and a click on the status line shows the dialog again.
+        js("$('download-hide').click()")
+        check("hide closes the download dialog", not js("$('download').open"))
+        wait(lambda: js("$('engine-text').textContent").startswith("Скачивание модели Test: "), 5,
+             "download percent in the status line")
+        shoot("07b-download-hidden")
+        hidden_text = js("$('engine-text').textContent")
+        check("the status line shows the percent", hidden_text.endswith("%"), hidden_text)
+        js("$('engine').click()")
+        check("a click on the status line shows the download again", js("$('download').open"))
         wait(lambda: not js("$('download').open"), 60, "download finished")
+        check("the status line is plain again", "%" not in js("$('engine-text').textContent"),
+              js("$('engine-text').textContent"))
         check("downloaded", catalog.installed_folder(catalog.BY_KEY["Test"]) is not None)
         # The test model is not a real model, so loading it must fail visibly.
         wait(lambda: js("$('engine').className") == "engine error", 30, "test model fails to load")
