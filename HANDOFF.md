@@ -13,6 +13,15 @@ Plan 04 (Whisper) done: v0.4.0. Plan 02 (window) has D for later; plan 01 still
 holds B9, F (Parakeet, Qwen3-ASR, F5 for suggestions) (its E moved to plan 07).
 Owner's ideas: [docs/IDEAS.md](docs/IDEAS.md).
 
+## Waiting for the next release
+
+Owner 2026-11-12: "maybe we pile up fixes for next release, because releasing would be slow
+now" - fixes go to main and wait; no release for each one. In main since v0.7.0:
+
+- The download dialog can be hidden ("Скрыть", or Esc while it downloads); the status line then
+  shows "Скачивание модели X: N%" and a click on it shows the dialog again (owner 2026-11-12:
+  "we cant hide the download window, we should be able").
+
 ## Session 30 (2026-11-12): v0.7.0 publishing stopped by a DirectML crash, fix C3f
 
 - Owner tried v0.7.0 and said go; main (to 4068d42) and the annotated tag v0.7.0 were pushed,
