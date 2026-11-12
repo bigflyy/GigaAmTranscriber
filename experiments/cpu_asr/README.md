@@ -14,6 +14,7 @@ int8, timurlexx LingoFlip int8w) and `readings/LABEL/FILE.json`.
 | `read_parakeet.py` | cpu-asr-exp | Parakeet TDT on sherpa-onnx |
 | `compare.py` | dev | Offers per runtime through fix.suggestion_from, times, agreement with a base label; also builds `wcpp-hint` from the auto and ru runs |
 | `common.py` | both | Even piece sample (`--most`), the language hint from GigaAM's script, saving readings |
+| `fewer_pieces.py` | dev | Plan 08 B1: reading only the lines with a word below doubt_strong, or with a long doubtful run; time kept and offers lost, from the saved readings (no model runs) -> `fewer-pieces.json` |
 | `main_text.py` | dev | Plan 08 C4: whole transcript of a file with `--engine wcpp`, `fw` or `rnnt`, as the app makes the main text; time, RAM, the language of each chunk -> `main/ENGINE/NAME.json` |
 | `main_compare.py` | dev | Plan 08 C4: the two Whispers against each other and RNNT (differing words, terms, loops, invented and left-out text, word times, WHISPER_SCALE bands) -> `main-compare.json`, `main-results.html` |
 

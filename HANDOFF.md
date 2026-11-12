@@ -22,6 +22,17 @@ now" - fixes go to main and wait; no release for each one. In main since v0.7.0:
   shows "Скачивание модели X: N%" and a click on it shows the dialog again (owner 2026-11-12:
   "we cant hide the download window, we should be able").
 
+## Session 31 (2026-11-12): plan 08 B1 measured
+
+- Old build/v0.7.0 deleted, build/v0.7.0-c3f renamed to build/v0.7.0 (owner agreed).
+- B1 (experiments/cpu_asr/fewer_pieces.py, no model runs: a kept line's reading is the saved
+  one): reading only lines with a wavy word (below doubt_strong 0.80) keeps 56-83% of the time
+  but loses right offers (lecture: BIM-моделей, UML-промптинга of the 9 terms; the owner's
+  files 7-9 offers per 40 pieces). Long runs only is worse. Numbers in plan 08 B1.
+- My suggestion to the owner: keep reading every doubtful line, but read the lines with wavy
+  words first (nothing lost, the likeliest errors get offers sooner). Waiting for the owner's
+  choice; B2 does not depend on it.
+
 ## Session 30 (2026-11-12): v0.7.0 publishing stopped by a DirectML crash, fix C3f
 
 - Owner tried v0.7.0 and said go; main (to 4068d42) and the annotated tag v0.7.0 were pushed,
