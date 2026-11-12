@@ -111,7 +111,7 @@ class Worker(threading.Thread):
             self.engine, self.engine_key = self.spare.pop(key), key
             self.events.put(("loaded", self.engine.device_label, 0.0, model))
             return self.engine
-        self.engine = None
+        self._drop_engine()
         self.events.put(("loading", model))
         try:
             engine = Transcriber(model, device=device, cpu_threads=threads or None)
@@ -121,6 +121,29 @@ class Worker(threading.Thread):
         self.engine, self.engine_key = engine, key
         self.events.put(("loaded", engine.device_label, engine.load_seconds, model))
         return engine
+
+    def _drop_engine(self):
+        """Free the main model before another one loads in its place."""
+        if self.engine is not None and _uses_directml(self.engine):
+            self._free_directml()
+        self.engine = None
+
+    def _free_directml(self):
+        """Free every loaded model that runs on DirectML: the main one, the spares and the
+        speaker models. They load again when they are next needed.
+
+        ONNX Runtime 1.23's DirectML provider: once the newest DirectML session is freed, the
+        next run of any other DirectML session crashes the process (access violation in
+        Dml::BucketizedBufferAllocator::Alloc), until another DirectML session is opened.
+        Freeing an older session is safe. So a model on DirectML is never freed alone while
+        others stay (plan 08 C3f: speakers on, model Whisper -> RNNT -> Whisper, the next
+        speaker run crashed)."""
+        if self.engine is not None and _uses_directml(self.engine):
+            self.engine = None  # the next file loads it again (_ensure)
+        for key in [key for key, engine in self.spare.items() if _uses_directml(engine)]:
+            del self.spare[key]
+        if self.speaker_model is not None and _uses_directml(self.speaker_model[2]):
+            self.speaker_model = None
 
     def _download(self, model):
         """model: a catalog key, or its ModelInfo (WorkerProcess sends the ModelInfo, so a
@@ -167,8 +190,11 @@ class Worker(threading.Thread):
         if self.engine is not None and self.engine_key == key:
             return self.engine
         if key not in self.spare:
-            for other in [other for other in self.spare if other[1:] != key[1:]]:
-                del self.spare[other]
+            stale = [other for other in self.spare if other[1:] != key[1:]]
+            if any(_uses_directml(self.spare[other]) for other in stale):
+                self._free_directml()
+            for other in stale:
+                self.spare.pop(other, None)
             if on_load is not None:
                 on_load()
             model, device, threads = key
@@ -265,6 +291,8 @@ class Worker(threading.Thread):
                 raise catalog.ModelNotInstalled(catalog.SPEAKER_MODEL)
             if self.speaker_model is None or self.speaker_model[:2] != (device, threads):
                 self.events.put(("diarize_loading", request))
+                if self.speaker_model is not None and _uses_directml(self.speaker_model[2]):
+                    self._free_directml()
                 self.speaker_model = None
                 model = diarize.SpeakerModel(folder, device=device, cpu_threads=threads or None)
                 self.speaker_model = (device, threads, model)
@@ -289,6 +317,16 @@ class Worker(threading.Thread):
         turns = [(turn.start, turn.end, turn.speaker) for turn in result.exclusive_turns]
         self.events.put(("diarize_found", request, result.found))
         self.events.put(("diarize_result", request, turns, None))
+
+
+def _uses_directml(model):
+    """True when a loaded model runs an ONNX Runtime session on DirectML: a Transcriber whose
+    GigaAM model is on DirectML (Whisper's engines have no ONNX session of their own; the
+    VAD always runs on the CPU), or the speaker models."""
+    asr = getattr(model, "asr", None)
+    providers = (getattr(asr, "provider", None), getattr(model, "provider", None),
+                 getattr(model, "segmentation_provider", None))
+    return "DmlExecutionProvider" in providers
 
 
 # ---------------------------------------------------------------------- the model process
