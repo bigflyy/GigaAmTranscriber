@@ -40,6 +40,13 @@ now" - fixes go to main and wait; no release for each one. In main since v0.7.0:
   (Upgrade Caption to Graphic, Auto Reframe Sequence, Export > Captions > Burn Captions Into
   Video). Posted window messages (PostMessage) also click Premiere without the mouse. Premiere
   sits on the owner's left monitor (other scaling): tools need per-monitor DPI awareness.
+  Done: `C:\MyProjects\GigaAmTranscriber\build\guide\running-subtitles-guide.pdf` (13 pages,
+  source guide.html + img/ beside it, rendered with Edge headless). App shots show 0.7.0 in the
+  title (taken before the version bump); the guide says v0.8.0.
+- Next: release v0.8.0 (owner chose it; disk had 42 GB free on 2026-11-27): version bump,
+  RELEASE_NOTES.md, Windows build (tools/build_windows.py, out build/v0.8.0), Linux build in WSL
+  (the v0.7.0 WSL script lived in a deleted scratchpad: rebuild it from the session 29 notes),
+  owner tries both builds, then push main, tag, gh release as for v0.7.0.
 
 ## Session 31 (2026-11-12): plan 08 B1 measured
 
