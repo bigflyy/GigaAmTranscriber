@@ -18,11 +18,11 @@ and about 25 s on the CPU; see [BENCHMARK.md](BENCHMARK.md).
 
 ## Downloads
 
-- **Windows:** [`GigaAmTranscriber-v0.7.0-windows-x64.zip`](https://github.com/bigflyy/GigaAmTranscriber/releases/latest)
+- **Windows:** [`GigaAmTranscriber-v0.8.0-windows-x64.zip`](https://github.com/bigflyy/GigaAmTranscriber/releases/latest)
   (about 960 MB, 1.3 GB unpacked). Unzip it anywhere and run `GigaAmTranscriber.exe`.
   No Python, CUDA or FFmpeg is needed; both GigaAM models are inside (Whisper is a
   547 MB download the first time it is chosen).
-- **Linux:** [`GigaAmTranscriber-v0.7.0-linux-x64.tar.gz`](https://github.com/bigflyy/GigaAmTranscriber/releases/latest)
+- **Linux:** [`GigaAmTranscriber-v0.8.0-linux-x64.tar.gz`](https://github.com/bigflyy/GigaAmTranscriber/releases/latest)
   (about 890 MB, 1.2 GB unpacked). Unpack it and run `./GigaAmTranscriber/GigaAmTranscriber`.
   Recognition runs on the CPU. The system must have glibc 2.39 or newer (Ubuntu 24.04,
   Debian 13, Fedora 40 and later), FFmpeg and, for the window, WebKitGTK 4.1:
