@@ -23,6 +23,16 @@ now" - fixes go to main and wait; no release for each one. In main since v0.7.0:
   "we cant hide the download window, we should be able").
 - The suggestion search reads the lines with a wavy word (below doubt_strong) first, then the
   other doubtful lines, each part in text order (plan 08 B1, owner's choice 2026-11-12).
+- Running subtitles, format `srt_words` (name-transcript-words.srt, "Бегущие субтитры"): one
+  word per cue for Adobe Premiere Pro 2024 (owner 2026-11-27, look A of three: one word at a
+  time). A word stays until the next starts when the gap is under 1 s, else at least 0.3 s; a
+  word under 80 ms (two frames) joins the next; no speaker names. Written with a UTF-8 BOM and
+  CRLF (Adobe forum reports: Premiere garbles Cyrillic .srt without a BOM; overlaps and line
+  endings cause "generic error"). Checked without Premiere (not installed here): 13 saved
+  transcripts, no overlaps, ffmpeg 8.0.1 reads every file back with the same cues and text; a
+  60 s burned-in preview of nlp-lab05.mp4 looked right. Waiting for the owner's import test in
+  Premiere 2024. The usual `srt` is unchanged (no BOM, LF): it may need the same if the owner's
+  Premiere garbles it.
 
 ## Session 31 (2026-11-12): plan 08 B1 measured
 

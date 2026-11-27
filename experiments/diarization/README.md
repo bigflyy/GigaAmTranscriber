@@ -21,4 +21,4 @@ conda `newrag` (NeMo 2.7.2). Every model run goes through agg-queue.
 | `run_port.py` | the app's gigaam_app/diarize.py on files, RTTMs like run_pyannote.py, optional step check against the reference |
 | `quantize_probe.py` | int8 (dynamic) copy of an embedding model: CPU time and closeness to float |
 
-Shell drivers used in session 18: `build/diar-data/run_refs.sh`, `run_set.sh`, `run_ami_oracle.sh`, `relabel_rescore.sh`, `run_port_sets.sh` (the port on AMI and kremlin, scored).
+Shell drivers used in session 18: `build/diar-data/run_refs.sh`, `run_set.sh`, `run_ami_oracle.sh`, `relabel_rescore.sh`, `run_port_sets.sh` (the port on AMI and kremlin, scored). Deleted 2026-11-27 with the downloaded data in build/diar-data (disk space; they were not in git): they only called the Python scripts here on the data sets, so a rerun needs new drivers and the data downloaded again.
