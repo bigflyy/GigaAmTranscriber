@@ -30,9 +30,16 @@ now" - fixes go to main and wait; no release for each one. In main since v0.7.0:
   CRLF (Adobe forum reports: Premiere garbles Cyrillic .srt without a BOM; overlaps and line
   endings cause "generic error"). Checked without Premiere (not installed here): 13 saved
   transcripts, no overlaps, ffmpeg 8.0.1 reads every file back with the same cues and text; a
-  60 s burned-in preview of nlp-lab05.mp4 looked right. Waiting for the owner's import test in
-  Premiere 2024. The usual `srt` is unchanged (no BOM, LF): it may need the same if the owner's
-  Premiere garbles it.
+  60 s burned-in preview of nlp-lab05.mp4 looked right. Owner imported it into Premiere Pro 2024
+  (24.3) on 2026-11-27: Russian text and timing correct (commit 5a81049). The usual `srt` is
+  unchanged (no BOM, LF). Owner chose to release it as v0.8.0 with the fixes above.
+- Guide (owner asked, Russian PDF): from install to TikTok-style styling in Premiere. Premiere
+  steps were driven with real clicks on the owner's PC (owner agreed, ~28 min): workspace
+  Captions and Graphics, select all, size 90, bold, all caps, stroke 6, Track Style "TikTok
+  белый" saved in the owner's Untitled project (not saved to disk), menu names checked
+  (Upgrade Caption to Graphic, Auto Reframe Sequence, Export > Captions > Burn Captions Into
+  Video). Posted window messages (PostMessage) also click Premiere without the mouse. Premiere
+  sits on the owner's left monitor (other scaling): tools need per-monitor DPI awareness.
 
 ## Session 31 (2026-11-12): plan 08 B1 measured
 
