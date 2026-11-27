@@ -1,6 +1,6 @@
 # Handoff: state and findings
 
-Last updated 2026-11-27 (session 32): v0.8.0 built, waiting for the owner's trial.
+Last updated 2026-11-27 (session 32): v0.8.0 published (running subtitles, hidden download window).
 As of session 30 (2026-11-12): Plan 08 (faster suggestion search on the CPU): Stage A,
 C1, C2 (faster-whisper int8 as a CPU option for the search), C4 (measured), C5 (faster-whisper
 for the main text, one-pass "auto", repeatable sampling), C6 (whisper.cpp one-pass patch) and
@@ -44,8 +44,7 @@ now" - fixes go to main and wait; no release for each one. In main since v0.7.0:
   Done: `C:\MyProjects\GigaAmTranscriber\build\guide\running-subtitles-guide.pdf` (13 pages,
   source guide.html + img/ beside it, rendered with Edge headless). App shots show 0.7.0 in the
   title (taken before the version bump); the guide says v0.8.0.
-- v0.8.0 built (session 32, below); waiting for the owner's trial and go-ahead, then push main,
-  tag v0.8.0 and the gh release with the five assets, as for v0.7.0.
+- v0.8.0 published 2026-11-27 (session 32, below). Nothing waits for a release now.
 
 ## Session 32 (2026-11-27): v0.8.0 builds
 
@@ -69,6 +68,16 @@ now" - fixes go to main and wait; no release for each one. In main since v0.7.0:
   and DirectML, Whisper Vulkan 3.0 s and CPU 22.7 s, faster-whisper 9.8 s, speakers DirectML and
   CPU, window. Linux ~/gigaam-build-080 in WSL (1265 MiB): CLI, Whisper CPU 24.7 s,
   faster-whisper 16.2 s, speakers, missing-WebKit message, window wrote the file.
+- Owner checked the guide could be shared (no personal details in its 15 pages; its download
+  step needs the published release) and said "go" without a hand trial of the builds. Pushed main
+  (4433e33..1047617), annotated tag v0.8.0, release
+  https://github.com/bigflyy/GigaAmTranscriber/releases/tag/v0.8.0 (Latest, not draft) with the
+  five assets and RELEASE_NOTES.md as notes; GitHub's digests equal SHA256SUMS.txt, the published
+  SHA256SUMS.txt is byte-equal to the local one. The guide PDF is not attached (owner not asked
+  to decide yet).
+- Leftovers deleted on the owner's yes: build/v0.7.0 (1.9 GB) and the WSL builds ~/gigaam-build,
+  -050, -060, -070, -whisper (5.5 GB, freed on C: only after the WSL disk is compacted). C: 48.2 ->
+  50.1 GB free. Kept: build/v0.8.0, ~/gigaam-build-080.
 
 ## Session 31 (2026-11-12): plan 08 B1 measured
 
