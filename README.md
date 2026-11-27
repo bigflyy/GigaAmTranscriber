@@ -61,6 +61,7 @@ Results are saved beside the source file:
 | `timestamps` | `name-transcript-timestamps.txt` | the same lines with `[start - end]` times |
 | `md` | `name-transcript.md` | Markdown: file name, date, length and model, then the text in sections of about a minute under their start times |
 | `srt` | `name-transcript.srt` | subtitles, short cues built from word times |
+| `srt_words` | `name-transcript-words.srt` | running subtitles for a video editor (Adobe Premiere Pro and others): one word at a time, each shown until the next one starts; UTF-8 with a byte order mark and Windows line endings, which Premiere reads Cyrillic from reliably |
 | `json` | `name-transcript.json` | segments and every word with its start and end time and the model's confidence (0 to 1) |
 | `llm` | `name-transcript-llm.txt` | text to paste into a chat with an AI: a note on the marks, then the text with doubtful words marked as `word[?66%]` (below the dotted threshold), and both versions `{GigaAM v3 RNNT: ... \| Whisper ...: ...}` where another model heard otherwise |
 

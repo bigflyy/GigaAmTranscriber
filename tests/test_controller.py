@@ -372,7 +372,8 @@ def test_open_create_and_show_outputs(app, media):
     finish(app, media[0], [segment(0.0, 2.0, "Текст.")])
     view = app._file_view(item)
     assert [(o["format"], bool(o["path"])) for o in view["outputs"]] == [
-        ("txt", True), ("timestamps", True), ("md", False), ("srt", False), ("json", False), ("llm", False)]
+        ("txt", True), ("timestamps", True), ("md", False), ("srt", False), ("srt_words", False), ("json", False),
+        ("llm", False)]
     assert app.open_output(item.id, "txt")
     assert app.desktop.opened == [media[0].with_name("a-transcript.txt").resolve()]
     assert app.create_output(item.id, "srt")

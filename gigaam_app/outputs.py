@@ -1,5 +1,6 @@
-"""Write a Transcript as plain text, timestamped text, Markdown, SRT subtitles, JSON,
-or text for an LLM (doubtful words marked).
+"""Write a Transcript as plain text, timestamped text, Markdown, SRT subtitles, running
+subtitles (one word per cue, for video editors), JSON, or text for an LLM (doubtful words
+marked).
 
 When speakers were looked for (plan 07, Transcript.speakers), every format names them:
 a new paragraph at each change of speaker starts with "Name: "; the timestamped text names
@@ -20,13 +21,26 @@ import tempfile
 from .catalog import model_title, transcript_title
 from .paths import replace_file
 
-FORMATS = ("txt", "timestamps", "md", "srt", "json", "llm")
+FORMATS = ("txt", "timestamps", "md", "srt", "srt_words", "json", "llm")
 DEFAULT_FORMATS = ("txt", "timestamps")
 
 # Subtitle cues: split at these limits, preferring sentence ends.
 CUE_MAX_SECONDS = 6.0
 CUE_MAX_CHARS = 84
 CUE_BREAK_GAP = 1.0  # a pause this long between words always starts a new cue
+
+# Running subtitles (srt_words): each word is its own cue. A word stays on screen until the
+# next one starts when the pause between them is shorter than WORD_HOLD_GAP_MS, so the text does
+# not blink between words; before a longer pause it stays at least WORD_MIN_MS.
+WORD_HOLD_GAP_MS = 1000
+WORD_MIN_MS = 300
+WORD_JOIN_BELOW_MS = 80  # two frames at 25 fps
+
+# How each format is written: (encoding, line ending). Running subtitles are meant for video
+# editors such as Adobe Premiere Pro, which has shown Cyrillic subtitles as garbage when an
+# .srt had no UTF-8 byte order mark, so that file gets the mark and Windows line endings.
+WRITE_STYLE = {"srt_words": ("utf-8-sig", "\r\n")}
+DEFAULT_WRITE_STYLE = ("utf-8", "\n")
 
 # Text for an LLM: a word below this confidence gets a mark (the window's dotted threshold).
 LLM_DOUBT_BELOW = 0.97
@@ -179,6 +193,56 @@ def srt_text(transcript):
     blocks = []
     for number, (start, end, text) in enumerate(subtitle_cues(transcript), 1):
         blocks.append(f"{number}\n{clock(start, ',')} --> {clock(end, ',')}\n{text}\n")
+    return "\n".join(blocks)
+
+
+def word_cues(transcript):
+    """Running subtitles: one cue per word, [(start_ms, end_ms, text)] in time order, never
+    overlapping. Speaker names are left out (a name would flash by as a word of its own).
+    A line without word times (text typed in the window) is one cue over the whole line.
+    Words that start at the same moment share a cue, and so does a word that would be on
+    screen for under WORD_JOIN_BELOW_MS with the word after it."""
+    timed = []
+    for part in line_parts(transcript):
+        if part.words:
+            pieces = [(word.start, word.end, word.text) for word in part.words]
+        else:
+            pieces = [(part.start, part.end, part.text)]
+        timed.extend((round(start * 1000), round(end * 1000), text.strip())
+                     for start, end, text in pieces if text.strip())
+    timed.sort(key=lambda piece: piece[0])  # stable: equal starts keep their order
+    cues = []  # [start_ms, end_ms, text]
+    for start, end, text in timed:
+        if cues and start <= cues[-1][0]:
+            cues[-1][1] = max(cues[-1][1], end)
+            cues[-1][2] += " " + text
+        else:
+            cues.append([start, end, text])
+    for index, cue in enumerate(cues):
+        end = max(cue[1], cue[0] + WORD_MIN_MS)
+        if index + 1 < len(cues):
+            next_start = cues[index + 1][0]
+            if next_start - cue[1] < WORD_HOLD_GAP_MS:
+                end = next_start   # stay until the next word appears
+            end = min(end, next_start)  # never overlap it
+        cue[1] = end
+    # A word on screen for under two frames (very fast speech) is shown together with the
+    # next one instead: an editor that snaps captions to frames could drop it otherwise.
+    joined = []
+    for index, cue in enumerate(cues):
+        if cue[1] - cue[0] < WORD_JOIN_BELOW_MS and index + 1 < len(cues):
+            following = cues[index + 1]
+            following[0], following[2] = cue[0], cue[2] + " " + following[2]
+            continue
+        joined.append(tuple(cue))
+    return joined
+
+
+def srt_words_text(transcript):
+    """Running subtitles as SRT: a numbered cue per word (see word_cues)."""
+    blocks = []
+    for number, (start, end, text) in enumerate(word_cues(transcript), 1):
+        blocks.append(f"{number}\n{clock(start / 1000, ',')} --> {clock(end / 1000, ',')}\n{text}\n")
     return "\n".join(blocks)
 
 
@@ -371,7 +435,7 @@ def llm_text(transcript, doubt_below=LLM_DOUBT_BELOW):
 
 
 RENDERERS = {"txt": plain_text, "timestamps": timestamped_text, "md": markdown_text, "srt": srt_text,
-             "json": json_text, "llm": llm_text}
+             "srt_words": srt_words_text, "json": json_text, "llm": llm_text}
 
 
 def output_paths(source, formats, out_dir=None):
@@ -380,7 +444,8 @@ def output_paths(source, formats, out_dir=None):
     folder = Path(out_dir) if out_dir else source.parent
     stem = source.stem + "-transcript"
     names = {"txt": stem + ".txt", "timestamps": stem + "-timestamps.txt",
-             "md": stem + ".md", "srt": stem + ".srt", "json": stem + ".json", "llm": stem + "-llm.txt"}
+             "md": stem + ".md", "srt": stem + ".srt", "srt_words": stem + "-words.srt",
+             "json": stem + ".json", "llm": stem + "-llm.txt"}
     return {fmt: folder / names[fmt] for fmt in formats}
 
 
@@ -396,7 +461,8 @@ def write_outputs(transcript, formats=DEFAULT_FORMATS, out_dir=None, doubt_below
         # Write to a temporary file first so a crash never leaves half a transcript.
         handle, temporary = tempfile.mkstemp(dir=path.parent, prefix=path.name + ".", suffix=".tmp")
         try:
-            with os.fdopen(handle, "w", encoding="utf-8", newline="\n") as stream:
+            encoding, newline = WRITE_STYLE.get(fmt, DEFAULT_WRITE_STYLE)
+            with os.fdopen(handle, "w", encoding=encoding, newline=newline) as stream:
                 stream.write(llm_text(transcript, doubt_below) if fmt == "llm" else RENDERERS[fmt](transcript))
             replace_file(temporary, path)
         except BaseException:

@@ -8,7 +8,7 @@ import pytest
 from gigaam_app.asr import Word
 from gigaam_app.engine import Segment, Transcript
 from gigaam_app.outputs import clock, ends_sentence, json_text, llm_text, markdown_escape, markdown_text, output_paths, plain_text, \
-    srt_text, subtitle_cues, timestamped_text, write_outputs
+    srt_text, srt_words_text, subtitle_cues, timestamped_text, word_cues, write_outputs
 
 
 def make_transcript(source="talk.mp3"):
@@ -67,6 +67,54 @@ def test_srt_format():
     assert blocks[0] == "1\n00:00:00,500 --> 00:00:01,900\nПривет. Как дела?"
     assert srt.endswith("спасибо.\n")
     assert [block.splitlines()[0] for block in blocks] == [str(n) for n in range(1, len(blocks) + 1)]
+
+
+def test_word_cues_hold_each_word_until_the_next():
+    # Short gaps (< 1 s) are bridged: a word stays until the next one starts. Before the 3 s
+    # pause "Хорошо" keeps its own end; the last word keeps its own end too.
+    assert word_cues(make_transcript()) == [
+        (500, 1000, "Привет."), (1000, 1500, "Как"), (1500, 1900, "дела?"),
+        (30000, 30400, "Хорошо"), (33500, 34000, "спасибо.")]
+
+
+def test_word_cues_minimum_time_and_no_overlaps():
+    words = [Word(0.0, 0.05, "и"), Word(2.0, 2.02, "а"), Word(2.10, 2.30, "то"), Word(2.10, 2.20, "же"),
+             Word(2.25, 2.40, "так"), Word(2.43, 2.50, "вот"), Word(2.60, 2.90, "всё")]
+    transcript = Transcript("x.wav", "RNNT", "CPU", segments=[Segment(0, 3, "и а то же так вот всё", words)])
+    cues = word_cues(transcript)
+    # A lone short word before a long pause stays 0.3 s; equal starts share a cue; a word
+    # whose end runs past the next start is cut there; "так" would last 0.18 s (cut at "вот"),
+    # "вот" 0.17 s, both fine; a word shown under 80 ms would join the next one (below).
+    assert cues == [(0, 300, "и"), (2000, 2100, "а"), (2100, 2250, "то же"), (2250, 2430, "так"),
+                    (2430, 2600, "вот"), (2600, 2900, "всё")]
+    for (start, end, _), (next_start, _, _) in zip(cues, cues[1:]):
+        assert start < end <= next_start
+
+
+def test_word_cues_join_a_word_shorter_than_two_frames_with_the_next():
+    words = [Word(1.00, 1.03, "ну"), Word(1.05, 1.40, "да"), Word(1.50, 1.90, "конечно")]
+    transcript = Transcript("x.wav", "RNNT", "CPU", segments=[Segment(1, 2, "ну да конечно", words)])
+    cues = word_cues(transcript)
+    assert cues == [(1000, 1500, "ну да"), (1500, 1900, "конечно")]
+    for (start, end, _), (next_start, _, _) in zip(cues, cues[1:]):
+        assert start < end <= next_start
+
+
+def test_word_cues_line_without_word_times_and_no_speaker_names():
+    transcript = Transcript("x.wav", "RNNT", "CPU", speakers=["Анна"], segments=[
+        Segment(0.0, 2.0, "Набрано вручную", []),
+        Segment(3.0, 4.0, "Да", [Word(3.0, 3.5, "Да", speaker=0)])])
+    assert word_cues(transcript) == [(0, 2000, "Набрано вручную"), (3000, 3500, "Да")]
+
+
+def test_srt_words_file_has_bom_and_windows_line_endings(tmp_path):
+    written = write_outputs(make_transcript(tmp_path / "talk.mp4"), ["srt_words", "srt"])
+    assert [path.name for path in written] == ["talk-transcript-words.srt", "talk-transcript.srt"]
+    data = written[0].read_bytes()
+    assert data.startswith(b"\xef\xbb\xbf1\r\n00:00:00,500 --> 00:00:01,000\r\n")
+    assert b"\n" not in data.replace(b"\r\n", b"")
+    assert data.decode("utf-8-sig").replace("\r\n", "\n") == srt_words_text(make_transcript())
+    assert not written[1].read_bytes().startswith(b"\xef\xbb\xbf")  # the usual .srt is unchanged
 
 
 def test_json_has_words_and_full_text():

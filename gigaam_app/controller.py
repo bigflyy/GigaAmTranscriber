@@ -43,11 +43,13 @@ DEVICE_NAMES = {"GPU (DirectML)": "видеокарта (DirectML)", "GPU (CUDA)
                 "GPU (Vulkan)": "видеокарта (Vulkan)", "CPU": "процессор",
                 "CPU (faster-whisper)": "процессор, faster-whisper"}
 FORMAT_LABELS = {"txt": "TXT", "timestamps": "TXT с таймкодами", "md": "Markdown (разделы по времени)",
-                 "srt": "SRT (субтитры)", "json": "JSON (слова и время)",
+                 "srt": "SRT (субтитры)", "srt_words": "SRT по одному слову (бегущие субтитры для монтажа)",
+                 "json": "JSON (слова и время)",
                  "llm": "TXT для ИИ (сомнительные слова отмечены)"}
 # Chips under a finished file: (format, short tag, label).
 OUTPUT_CHIPS = (("txt", "TXT", "Текст"), ("timestamps", "TXT", "С таймкодами"), ("md", "MD", "Markdown"),
-                ("srt", "SRT", "Субтитры"), ("json", "JSON", "Слова и время"), ("llm", "TXT", "Для ИИ"))
+                ("srt", "SRT", "Субтитры"), ("srt_words", "SRT", "Бегущие субтитры"), ("json", "JSON", "Слова и время"),
+                ("llm", "TXT", "Для ИИ"))
 # Russian notes for the model choice; catalog descriptions are English.
 MODEL_NOTES = {
     "RNNT": "Русский язык, пунктуация и заглавные буквы. Выбрана по умолчанию.",
