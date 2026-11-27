@@ -1,6 +1,7 @@
 # Handoff: state and findings
 
-Last updated 2026-11-12 (session 30). Plan 08 (faster suggestion search on the CPU): Stage A,
+Last updated 2026-11-27 (session 32): v0.8.0 built, waiting for the owner's trial.
+As of session 30 (2026-11-12): Plan 08 (faster suggestion search on the CPU): Stage A,
 C1, C2 (faster-whisper int8 as a CPU option for the search), C4 (measured), C5 (faster-whisper
 for the main text, one-pass "auto", repeatable sampling), C6 (whisper.cpp one-pass patch) and
 C3 done with C3f (DirectML crash fix); v0.7.0 published 2026-11-12. Next: B1.
@@ -43,10 +44,31 @@ now" - fixes go to main and wait; no release for each one. In main since v0.7.0:
   Done: `C:\MyProjects\GigaAmTranscriber\build\guide\running-subtitles-guide.pdf` (13 pages,
   source guide.html + img/ beside it, rendered with Edge headless). App shots show 0.7.0 in the
   title (taken before the version bump); the guide says v0.8.0.
-- Next: release v0.8.0 (owner chose it; disk had 42 GB free on 2026-11-27): version bump,
-  RELEASE_NOTES.md, Windows build (tools/build_windows.py, out build/v0.8.0), Linux build in WSL
-  (the v0.7.0 WSL script lived in a deleted scratchpad: rebuild it from the session 29 notes),
-  owner tries both builds, then push main, tag, gh release as for v0.7.0.
+- v0.8.0 built (session 32, below); waiting for the owner's trial and go-ahead, then push main,
+  tag v0.8.0 and the gh release with the five assets, as for v0.7.0.
+
+## Session 32 (2026-11-27): v0.8.0 builds
+
+- Version 0.8.0, RELEASE_NOTES.md (running subtitles, hidden download window, wavy lines read
+  first), README file names (95c8ced). The WSL build script is now in the repo:
+  tools/wsl_build.sh (b6b750a); its smoke tests use the models in
+  %LOCALAPPDATA%\GigaAmTranscriber\models.
+- build/whisper-test was deleted in the last cleanup, so the build defaults (--whisper-model,
+  --whisper-audio) point at nothing. New clip: build/release-test/lab-clip.mp3 (gitignored; 15 s
+  of C:\UniProjects\nlp-uni\lab5\nlp-lab05.mp4 from 7 s, mono 16 kHz). Windows command used:
+  tools/build_windows.py --out build/v0.8.0 --whisper-audio build/release-test/lab-clip.mp3
+  --whisper-model <models>/whisper_large_v3_turbo_q5_0 --fast-whisper-model
+  <models>/faster_whisper_large_v3_turbo_int8 (agg-queue build).
+- Owner: the release is top priority, as the guide was ("make this top priority as i said");
+  queue its steps with --priority 1. The builds first waited ~30 min on commit memory (79.7 of
+  91.3 GB committed: Windows kernel paged pool 12.7 GB + nonpaged 5.3 GB, likely a driver leak;
+  25 claude processes 11.9 GB; Premiere 4.75 GB). Told the owner; a restart is theirs to time.
+- Assets in `C:\MyProjects\GigaAmTranscriber\build\v0.8.0\release`: Windows zip 956.2 MiB, Linux
+  tar.gz 888.2 MiB, THIRD_PARTY_LICENSES.zip (windows/ 62 + linux/ 50 entries), FFmpeg source,
+  SHA256SUMS (`sha256sum -c` OK). Windows app build/v0.8.0/app/GigaAmTranscriber (1303 MiB): CPU
+  and DirectML, Whisper Vulkan 3.0 s and CPU 22.7 s, faster-whisper 9.8 s, speakers DirectML and
+  CPU, window. Linux ~/gigaam-build-080 in WSL (1265 MiB): CLI, Whisper CPU 24.7 s,
+  faster-whisper 16.2 s, speakers, missing-WebKit message, window wrote the file.
 
 ## Session 31 (2026-11-12): plan 08 B1 measured
 
