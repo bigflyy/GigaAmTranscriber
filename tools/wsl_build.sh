@@ -3,7 +3,7 @@
 # Windows app downloaded. Run it from Windows, through the work queue, for example:
 #   MSYS_NO_PATHCONV=1 agg-queue.exe run --kind build --what "GigaAM Linux app build with smoke tests" \
 #     -- wsl.exe -d Ubuntu --exec bash /mnt/c/MyProjects/GigaAmTranscriber/tools/wsl_build.sh \
-#     --out /home/bigfly/gigaam-build-080 --release /mnt/c/MyProjects/GigaAmTranscriber/build/v0.8.0/release
+#     --out /home/bigfly/gigaam-build-081 --release /mnt/c/MyProjects/GigaAmTranscriber/build/v0.8.1/release
 # (MSYS_NO_PATHCONV=1 only from Git Bash: it would rewrite the /mnt/c argument.)
 # Build Windows first into the same release folder: the Linux build adds its licences beside
 # the windows/ ones in THIRD_PARTY_LICENSES.zip. Other arguments go to tools/build_linux.py.
