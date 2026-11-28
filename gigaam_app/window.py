@@ -136,6 +136,50 @@ def missing_runtime():
             "Командная строка (gigaam-cli) работает и без неё.", None)
 
 
+# .NET libraries that pywebview loads on Windows, as folders inside the frozen _internal folder:
+# pythonnet's Python.Runtime.dll, clr_loader's ClrLoader.dll and the two WebView2 libraries.
+DOTNET_DIRS = ("pythonnet", "clr_loader", "webview/lib")
+DOWNLOAD_MARK = ":Zone.Identifier"
+
+
+def clear_download_marks(root=None):
+    """Remove the 'downloaded from the internet' mark from the .NET libraries the window loads.
+
+    Windows Explorer copies the mark (an NTFS stream named Zone.Identifier) from a downloaded zip
+    onto every file it extracts, and .NET Framework then refuses to load those libraries:
+    pythonnet fails with "Failed to resolve Python.Runtime.Loader.Initialize" (seen on a user's
+    PC with v0.8.0). Only the frozen Windows build needs this; source runs use the venv's files.
+    Returns the files that still carry the mark (the folder may be read-only).
+    """
+    if root is None:
+        if sys.platform != "win32" or not getattr(sys, "frozen", False):
+            return []
+        root = getattr(sys, "_MEIPASS", None)
+        if root is None:
+            return []
+    still_marked = []
+    for folder in DOTNET_DIRS:
+        for library in sorted((Path(root) / folder).rglob("*.dll")):
+            mark = str(library) + DOWNLOAD_MARK
+            if not os.path.exists(mark):
+                continue
+            try:
+                os.remove(mark)
+            except OSError:
+                still_marked.append(library)
+    return still_marked
+
+
+def blocked_files_message(files):
+    """Text for the case when the marks could not be removed: how to unblock the folder by hand."""
+    folder = Path(sys.executable).resolve().parent
+    return ("Windows заблокировал файлы программы, потому что она скачана из интернета, "
+            f"и снять блокировку не удалось ({len(files)} файлов, например {files[0].name}).\n\n"
+            "Разблокируйте папку и запустите программу снова. В PowerShell:\n"
+            f"  Get-ChildItem -Recurse \"{folder}\" | Unblock-File\n\n"
+            "Или распакуйте архив заново, сначала открыв его свойства и отметив \"Разблокировать\".", None)
+
+
 def show_native_message(text, link):
     """Show the message without the web engine: MessageBox on Windows, zenity or stderr on Linux."""
     if sys.platform == "win32":
@@ -295,6 +339,10 @@ def main(argv=None, scenario=None):
     problem = missing_runtime()
     if problem:
         show_native_message(*problem)
+        return 1
+    blocked = clear_download_marks()
+    if blocked:
+        show_native_message(*blocked_files_message(blocked))
         return 1
     import webview
     from webview.dom import DOMEventHandler

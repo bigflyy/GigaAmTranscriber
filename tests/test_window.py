@@ -100,3 +100,28 @@ def test_window_icon_files():
     # Each directory entry starts with width and height bytes; 0 means 256.
     sizes = sorted((data[6 + 16 * i] or 256) for i in range(count))
     assert sizes == [16, 20, 24, 32, 40, 48, 64, 128, 256]
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="NTFS streams are Windows only")
+def test_download_marks_are_removed_from_dotnet_libraries(tmp_path):
+    """A zip extracted by Explorer marks every file; .NET then refuses pythonnet (v0.8.0 bug)."""
+    marked = [tmp_path / "pythonnet" / "runtime" / "Python.Runtime.dll",
+              tmp_path / "clr_loader" / "ffi" / "dlls" / "amd64" / "ClrLoader.dll",
+              tmp_path / "webview" / "lib" / "Microsoft.Web.WebView2.Core.dll"]
+    other = tmp_path / "numpy" / "other.dll"  # outside the .NET folders: left alone
+    for library in marked + [other]:
+        library.parent.mkdir(parents=True, exist_ok=True)
+        library.write_bytes(b"MZ")
+        with open(str(library) + ":Zone.Identifier", "w") as stream:
+            stream.write("[ZoneTransfer]\nZoneId=3\n")
+    unmarked = tmp_path / "webview" / "lib" / "Microsoft.Web.WebView2.WinForms.dll"
+    unmarked.write_bytes(b"MZ")
+
+    assert window.clear_download_marks(tmp_path) == []
+    for library in marked + [unmarked]:
+        assert library.exists() and not (tmp_path / (str(library) + ":Zone.Identifier")).exists()
+    assert (tmp_path / (str(other) + ":Zone.Identifier")).exists()
+
+
+def test_download_marks_skipped_outside_the_frozen_build():
+    assert window.clear_download_marks() == []
