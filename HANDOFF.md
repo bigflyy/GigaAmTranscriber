@@ -1,6 +1,6 @@
 # Handoff: state and findings
 
-Last updated 2026-11-27 (session 32): v0.8.0 published (running subtitles, hidden download window).
+Last updated 2026-11-28 (session 33): v0.8.1 (fix: window blocked when the zip was unpacked by Explorer).
 As of session 30 (2026-11-12): Plan 08 (faster suggestion search on the CPU): Stage A,
 C1, C2 (faster-whisper int8 as a CPU option for the search), C4 (measured), C5 (faster-whisper
 for the main text, one-pass "auto", repeatable sampling), C6 (whisper.cpp one-pass patch) and
@@ -45,6 +45,36 @@ now" - fixes go to main and wait; no release for each one. In main since v0.7.0:
   source guide.html + img/ beside it, rendered with Edge headless). App shots show 0.7.0 in the
   title (taken before the version bump); the guide says v0.8.0.
 - v0.8.0 published 2026-11-27 (session 32, below). Nothing waits for a release now.
+
+## Session 33 (2026-11-28): v0.8.1, the blocked-download fix
+
+- A user's PC (owner's screenshot): v0.8.0's window failed at start with "Failed to resolve
+  Python.Runtime.Loader.Initialize" (pywebview -> pythonnet -> clr_loader). Cause: Explorer's
+  "Extract all" copies the zip's Zone.Identifier stream (Mark of the Web) onto every file, and
+  .NET Framework refuses marked assemblies. Reproduced with marked copies of the venv's
+  pythonnet: only Python.Runtime.dll matters for that error, but next the WebView2 libraries
+  fail (FileLoadException 0x80131515). A loadFromRemoteSources config via
+  pythonnet.load("netfx", config_file=...) did NOT help. Our own tests never saw it: local and
+  scp-copied builds carry no mark.
+- Fix (43791d4): window.clear_download_marks() removes the streams from *.dll under
+  _internal/pythonnet, clr_loader and webview/lib before `import webview` (frozen Windows only);
+  if any stay (read-only folder), a MessageBox gives the Unblock-File command. Checked on
+  marked real libraries: fails before, loads all after. Workaround for v0.8.0: Unblock-File or
+  Properties -> Unblock on the zip.
+- Windows build build/v0.8.1 (same command as v0.8.0 below, agg-queue priority 1): all smoke
+  tests passed (CPU, DirectML, Whisper Vulkan 3.9 s / CPU 18.7 s, faster-whisper 13.8 s,
+  speakers, window). Then all 248 files of the app folder were given a Zone.Identifier
+  (ZoneId=3) and tools/gui_smoke_test.py ran the real EXE: window after 1.8 s, closed cleanly;
+  afterwards the 4 .NET dlls were unmarked and python312.dll still marked, as intended.
+- Linux build in WSL ~/gigaam-build-081 (tools/wsl_build.sh, priority 1): CLI, Whisper CPU
+  32.2 s, faster-whisper 24.6 s, speakers, missing-WebKit message, window wrote the file.
+  Assets in `C:\MyProjects\GigaAmTranscriberuild0.8.1elease`: Windows zip 956.2 MiB,
+  Linux tar.gz 888.2 MiB, THIRD_PARTY_LICENSES.zip, FFmpeg source, SHA256SUMS (`sha256sum -c` OK).
+- Version 0.8.1 (c77e370). Owner said yes to release it. Leftovers deleted on the owner's yes
+  to make room (C: 19.1 -> 25.2 GB): build/v0.8.0, build/cpu-asr-test/models/{fw-turbo,
+  parakeet-int8, parakeet-lingoflip}, WSL ~/gigaam-build-080 and ~/gigaam-unpacked.
+- Another session (GigaAM v4, plan 09) works in this repo at the same time; agreed by message:
+  it edits no tracked files and commits only after v0.8.1 is pushed and tagged.
 
 ## Session 32 (2026-11-27): v0.8.0 builds
 
