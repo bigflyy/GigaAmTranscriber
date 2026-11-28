@@ -68,7 +68,7 @@ now" - fixes go to main and wait; no release for each one. In main since v0.7.0:
   afterwards the 4 .NET dlls were unmarked and python312.dll still marked, as intended.
 - Linux build in WSL ~/gigaam-build-081 (tools/wsl_build.sh, priority 1): CLI, Whisper CPU
   32.2 s, faster-whisper 24.6 s, speakers, missing-WebKit message, window wrote the file.
-  Assets in `C:\MyProjects\GigaAmTranscriberuild0.8.1elease`: Windows zip 956.2 MiB,
+  Assets in `C:\MyProjects\GigaAmTranscriber\build\v0.8.1\release`: Windows zip 956.2 MiB,
   Linux tar.gz 888.2 MiB, THIRD_PARTY_LICENSES.zip, FFmpeg source, SHA256SUMS (`sha256sum -c` OK).
 - Version 0.8.1 (c77e370). Owner said yes to release it. Leftovers deleted on the owner's yes
   to make room (C: 19.1 -> 25.2 GB): build/v0.8.0, build/cpu-asr-test/models/{fw-turbo,
